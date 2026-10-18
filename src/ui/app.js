@@ -82,27 +82,15 @@ const startIntroMedia = async () => {
 const stopIntroMedia = () => {
   window.clearInterval(introWatchdog);
   introVideo?.pause();
-  if (introVideo) introVideo.currentTime = 0;
+  if (introVideo) {
+    try { introVideo.currentTime = 0; } catch { /* media metadata may not have loaded yet */ }
+  }
 };
-// Warm the intro video buffer while the person completes the human check (poster shows meanwhile).
-const warmIntroVideo = () => { if (introVideo && introVideo.preload !== 'auto') { introVideo.preload = 'auto'; introVideo.load(); } };
-humanCheckBox?.addEventListener('change', warmIntroVideo, { once: true });
-// Warm the 540p faststart rendition as soon as the main thread is idle (skipped on Save-Data / 2g links),
-// so "INICIAR INMERSIÓN" starts playback instantly instead of buffering after the click.
-{
-  const conn = navigator.connection;
-  const constrained = Boolean(conn && (conn.saveData || /(^|-)2g$/.test(String(conn.effectiveType || ''))));
-  if (!constrained) (window.requestIdleCallback || ((fn) => window.setTimeout(fn, 800)))(warmIntroVideo, { timeout: 2500 });
-}
-const humanCode = String(Math.floor(1000 + Math.random() * 9000));
-let humanVerified = false;
-if (humanCheckCode) humanCheckCode.textContent = humanCode;
-const updateHumanCheck = () => {
-  const checked = Boolean(humanCheckBox?.checked);
-  if (humanCheckChallenge) humanCheckChallenge.hidden = !checked;
-  if (humanCheckMark) humanCheckMark.classList.toggle('is-visible', checked);
-  if (humanCheckStatus) humanCheckStatus.textContent = checked ? 'Ahora escribe los 4 números mostrados.' : 'Selecciona el recuadro para comenzar.';
-  if (checked) humanCheckInput?.focus();
+// Warm the intro video buffer after explicit multimedia consent.
+const warmIntroVideo = () => {
+  if (!introVideo || introVideo.preload === 'auto') return;
+  introVideo.preload = 'auto';
+  introVideo.load();
 };
 // This checkbox records multimedia consent only; it is deliberately not presented as
 // bot protection or identity verification. Server-side rate limits remain separate.
@@ -158,16 +146,11 @@ const dismissIntro = () => {
   if (restoreFocus) byId('enterChat')?.focus({ preventScroll: true });
 };
 const getIntroElapsed = () => {
-  if (
-    introMediaClockActive &&
-    introVideo &&
-    Number.isFinite(introVideo.duration) &&
-    introVideo.duration > 1
-  ) {
-    // Tie scene transitions to decoded media time; buffering freezes the story instead
-    // of letting titles outrun the video, then desynchronizing when playback resumes.
-    return (introVideo.currentTime / introVideo.duration) * introTotalMs;
-  }
+  // Keep the narrative attached to the media clock from the first frame. During a
+  // network stall currentTime stops, so the scenes stop too instead of racing ahead.
+  // Use a wall clock only when the browser has conclusively marked the media unavailable.
+  const mediaUnavailable = !introVideo || intro?.classList.contains('media-unavailable');
+  if (!mediaUnavailable) return Math.max(0, introVideo.currentTime * 1000);
   return performance.now() - introStartedAt;
 };
 const advanceIntro = (elapsed = getIntroElapsed()) => {
@@ -274,21 +257,31 @@ if (intro) {
     startImmersion?.addEventListener('click', beginImmersion, { once: true });
   }
 }
+const closeSideRails = (exceptId = '') => {
+  document.querySelectorAll('.side-rail').forEach((rail) => {
+    if (rail.id !== exceptId) rail.classList.remove('is-open');
+    const launcher = document.querySelector(`[aria-controls="${rail.id}"]`);
+    if (launcher) launcher.setAttribute('aria-expanded', String(rail.id === exceptId && rail.classList.contains('is-open')));
+  });
+};
 document.querySelectorAll('.rail-launcher').forEach((launcher) => {
   launcher.addEventListener('click', () => {
     const targetId = launcher.getAttribute('aria-controls');
     const target = targetId ? byId(targetId) : null;
-    const isOpen = target?.classList.toggle('is-open') ?? false;
-    launcher.setAttribute('aria-expanded', String(isOpen));
+    if (!target) return;
+    const opening = !target.classList.contains('is-open');
+    closeSideRails(opening ? target.id : '');
+    target.classList.toggle('is-open', opening);
+    launcher.setAttribute('aria-expanded', String(opening));
   });
 });
 document.querySelectorAll('.side-rail a[href^="#"]').forEach((link) => {
-  link.addEventListener('click', () => {
-    const rail = link.closest('.side-rail');
-    const launcher = rail ? document.querySelector(`[aria-controls="${rail.id}"]`) : null;
-    rail?.classList.remove('is-open');
-    launcher?.setAttribute('aria-expanded', 'false');
-  });
+  link.addEventListener('click', () => closeSideRails());
+});
+document.addEventListener('click', (event) => {
+  if (!(event.target instanceof Element)) return;
+  if (event.target.closest('.side-rail, .rail-launcher')) return;
+  closeSideRails();
 });
 document.querySelectorAll('.workspace-mode').forEach((button) => {
   button.addEventListener('click', () => {
