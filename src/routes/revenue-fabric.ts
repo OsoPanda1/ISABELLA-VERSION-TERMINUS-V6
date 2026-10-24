@@ -40,6 +40,17 @@ function parseMoney(value: unknown, field: string): number {
   return amount;
 }
 
+/**
+ * Financial writes must be retry-safe. Never synthesize a new idempotency key
+ * per request: a network retry would otherwise create a second settlement/event.
+ */
+function parseIdempotencyKey(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const key = value.trim();
+  if (key.length < 8 || key.length > 200 || !/^[A-Za-z0-9._:-]+$/.test(key)) return null;
+  return key;
+}
+
 export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
   const { 
     app, 
@@ -119,6 +130,14 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
 
     try {
       const body = req.body || {};
+      const idempotencyKey = parseIdempotencyKey(body.idempotencyKey);
+      if (!idempotencyKey) {
+        return res.status(400).json({
+          success: false,
+          error: "IDEMPOTENCY_KEY_REQUIRED",
+          message: "Envía una clave idempotente estable (8–200 caracteres) para evitar settlements duplicados al reintentar.",
+        });
+      }
       const stream = body.stream as RevenueStream;
       const creatorId = typeof body.creatorId === "string" ? body.creatorId.trim() : "";
       const creatorWorkspaceId = typeof body.creatorWorkspaceId === "string" ? body.creatorWorkspaceId.trim() : "";
@@ -161,7 +180,7 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
         dataLicenceEvidenceRef: body.dataLicenceEvidenceRef,
         dataVaultCreatorRateBps: body.dataVaultCreatorRateBps,
         currency: body.currency ?? "USD",
-        idempotencyKey: body.idempotencyKey ?? uuidv4(),
+        idempotencyKey,
         externalPaymentId: body.externalPaymentId,
         occurredAt: body.occurredAt,
       };
@@ -251,8 +270,16 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
 
     try {
       const body = req.body || {};
+      const idempotencyKey = parseIdempotencyKey(body.idempotencyKey);
+      if (!idempotencyKey) {
+        return res.status(400).json({
+          success: false,
+          error: "IDEMPOTENCY_KEY_REQUIRED",
+          message: "Envía una clave idempotente estable para evitar registrar el mismo consumo más de una vez.",
+        });
+      }
       const event: UsageEvent = {
-        idempotencyKey: body.idempotencyKey ?? uuidv4(),
+        idempotencyKey,
         userId: body.userId ?? req.header("x-user-id") ?? "anonymous",
         resourceType: body.resourceType,
         resourceId: body.resourceId,
