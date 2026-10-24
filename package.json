@@ -71,11 +71,23 @@
     "mammoth": "^1.13.0",
     "openai": "^7.36.0",
     "pg": "^8.23.1",
+    "serverless-http": "^4.0.0",
     "stripe": "^21.0.1",
     "tsx": "^4.23.15",
     "uuid": "^14.0.3",
     "ws": "^8.22.0",
     "zod": "^4.6.6"
   },
-  "packageManager": "pnpm@10.28.0+sha512.05df71d1421f21399e053fde567cea34d446fa02c76571441bfc1c7956e98e363088982d940465fd34480d4d90a0668bc12362f8aa88000a64e83d0b0e47be48"
+  "packageManager": "pnpm@10.28.0+sha512.05df71d1421f21399e053fde567cea34d446fa02c76571441bfc1c7956e98e363088982d940465fd34480d4d90a0668bc12362f8aa88000a64e83d0b0e47be48",
+  "pnpm": {
+    "overrides": {
+      "hono@<4.13.11": "4.13.11",
+      "@hono/node-server@<1.19.15": "1.19.15",
+      "lodash@<4.18.1": "4.18.1",
+      "valibot@>=1.0.0 <1.4.2": "1.4.2",
+      "body-parser@>=2.0.0 <2.4.0": "2.4.0",
+      "undici@>=7.0.0 <7.30.1": "7.30.1",
+      "fast-uri@>=3.0.0 <3.1.9": "3.1.9"
+    }
+  }
 }
