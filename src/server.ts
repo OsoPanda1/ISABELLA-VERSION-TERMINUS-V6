@@ -3615,25 +3615,30 @@ app.post("/api/v1/learning/train", async (req, res) => {
 
 // Observability endpoints
 app.get("/api/v1/observability/metrics", (req, res) => {
+  if (!authorizeApiToken(req, res, "GENESIS_ADMIN_API_TOKEN")) return;
   res.set("Content-Type", "text/plain; version=0.0.4");
   res.send(observability.exportPrometheusMetrics());
 });
 
 app.get("/api/v1/observability/health", async (req, res) => {
+  if (!authorizeApiToken(req, res, "GENESIS_ADMIN_API_TOKEN")) return;
   const health = await observability.healthChecks.runAll();
   res.json({ success: true, data: health, overall: observability.healthChecks.getOverallStatus() });
 });
 
 app.get("/api/v1/observability/slos", async (req, res) => {
+  if (!authorizeApiToken(req, res, "GENESIS_ADMIN_API_TOKEN")) return;
   const slos = await observability.slos.evaluateAll();
   res.json({ success: true, data: slos });
 });
 
 app.get("/api/v1/observability/alerts", (req, res) => {
+  if (!authorizeApiToken(req, res, "GENESIS_ADMIN_API_TOKEN")) return;
   res.json({ success: true, data: observability.alerts.getActiveAlerts() });
 });
 
 app.get("/api/v1/observability/dashboards", (req, res) => {
+  if (!authorizeApiToken(req, res, "GENESIS_ADMIN_API_TOKEN")) return;
   const type = req.query.type as "system" | "security" | "learning" | undefined;
   res.json({ success: true, data: type ? [observability.getDashboard(type)] : observability.getAllDashboards() });
 });
@@ -3667,14 +3672,17 @@ app.post("/api/v1/federation/cross", async (req, res) => {
 
 // HyperTurbo Pipeline endpoints
 app.get("/api/v1/pipeline/metrics", (req, res) => {
+  if (!authorizeApiToken(req, res, "GENESIS_ADMIN_API_TOKEN")) return;
   res.json({ success: true, data: defaultHyperTurbo.getMetrics() });
 });
 
 app.get("/api/v1/pipeline/stats/hot", (req, res) => {
+  if (!authorizeApiToken(req, res, "GENESIS_ADMIN_API_TOKEN")) return;
   res.json({ success: true, data: defaultHyperTurbo.getHotPathStats() });
 });
 
 app.get("/api/v1/pipeline/stats/cold", (req, res) => {
+  if (!authorizeApiToken(req, res, "GENESIS_ADMIN_API_TOKEN")) return;
   res.json({ success: true, data: defaultHyperTurbo.getColdPathStats() });
 });
 
