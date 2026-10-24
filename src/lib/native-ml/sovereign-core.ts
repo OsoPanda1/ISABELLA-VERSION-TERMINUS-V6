@@ -85,7 +85,22 @@ export function predictRegression(model: RegressionModel, features: number[][], 
   if (!approved && model.model.approvalStatus !== "APPROVED") throw new Error("model_not_approved");
   validateMatrix(features); if (features.some((row) => row.length !== model.weights.length)) throw new Error("feature_width_mismatch");
   const predictions = features.map((row) => dot(row, model.weights, model.bias));
-  return { model: model.model, predictions, confidence: predictions.map(() => 1), explanation: { method: "linear_feature_contribution", weights: [...model.weights] }, riskScore: 0, requiresReview: false, degraded: true };
+  // This baseline has no held-out evaluation or calibrated uncertainty estimate.
+  // Never report synthetic 100% confidence for an uncalibrated regression model.
+  return {
+    model: model.model,
+    predictions,
+    confidence: null,
+    explanation: {
+      method: "linear_feature_contribution",
+      weights: [...model.weights],
+      confidenceStatus: "uncalibrated",
+      limitation: "No held-out evaluation or calibrated prediction interval is available.",
+    },
+    riskScore: 1,
+    requiresReview: true,
+    degraded: true,
+  };
 }
 
 export function detectAnomalies(rows: number[][], threshold = 3): AnomalyResult {
