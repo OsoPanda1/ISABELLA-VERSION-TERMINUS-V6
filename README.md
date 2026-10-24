@@ -14,6 +14,7 @@ Un módulo presente en el código no equivale a una integración externa activa.
 - **Avance global de implementación: no publicado como porcentaje único en esta revisión.** No hay un denominador de requisitos ponderados y reproducible que permita derivar una cifra verificable. El estado de cada subsistema debe evaluarse con pruebas y evidencia separadas; la presencia de código no equivale a integración certificada.
 - La disponibilidad de checkout, la integridad del ledger y la configuración de identidad se exponen como capacidades comprobables en `GET /api/v1/revenue/health`; la ruta devuelve estado degradado si el ledger persistente no se puede verificar.
 - Los pagos a creadores mediante Stripe Connect, el onboarding KYC, las retenciones/impuestos, las devoluciones, los contracargos y la conciliación bancaria **no están habilitados**. El devengo contable no significa que el dinero se haya transferido.
+- `POST /api/v1/revenue/my/wallet/payout` responde `503 PAYOUTS_NOT_CONFIGURED` y no debita saldo hasta que exista un proveedor de payout real, KYC, política fiscal, holdback y conciliación. Las cabeceras `x-user-id` y `x-session-id` no se aceptan como identidad: las rutas de wallet exigen identidad verificada por el host.
 
 ## Arquitectura del repositorio
 
