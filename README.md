@@ -12,7 +12,7 @@ Un módulo presente en el código no equivale a una integración externa activa.
 - Las migraciones deben aplicarse a una base PostgreSQL de prueba y las variables privadas deben configurarse antes de probar el flujo real.
 - La rama de auditoría `audit/ci-revenue-hardening-2026-10-23` endurece los gates de CI, el build de pull requests, el escaneo de dependencias y la validación numérica del reparto. Estos cambios requieren ejecución de CI; no se consideran certificados hasta que los checks remotos terminen correctamente.
 - **Avance global de implementación: no publicado como porcentaje único en esta revisión.** No hay un denominador de requisitos ponderados y reproducible que permita derivar una cifra verificable. El estado de cada subsistema debe evaluarse con pruebas y evidencia separadas; la presencia de código no equivale a integración certificada.
-- La disponibilidad de checkout, la integridad del ledger y la configuración de identidad se exponen como capacidades comprobables en `GET /api/v1/revenue/health`; la ruta devuelve estado degradado si el ledger persistente no se puede verificar.
+- `GET /api/v1/revenue/health` expone solo el estado público del servicio. Los detalles de configuración se restringen a `GET /api/v1/revenue/health/details` (administración); la presencia de variables no certifica conectividad ni migraciones aplicadas. La readiness queda degradada si no se puede verificar el ledger persistente.
 - Los pagos a creadores mediante Stripe Connect, el onboarding KYC, las retenciones/impuestos, las devoluciones, los contracargos y la conciliación bancaria **no están habilitados**. El devengo contable no significa que el dinero se haya transferido.
 - `POST /api/v1/revenue/my/wallet/payout` responde `503 PAYOUTS_NOT_CONFIGURED` y no debita saldo hasta que exista un proveedor de payout real, KYC, política fiscal, holdback y conciliación. Las cabeceras `x-user-id` y `x-session-id` no se aceptan como identidad: las rutas de wallet exigen identidad verificada por el host.
 
@@ -94,7 +94,8 @@ Esto es una regla de configuración, **no un promedio de mercado verificado**. S
 | GET | `/api/v1/revenue/outbox/status` | Estadísticas de outbox persistente |
 | GET | `/api/v1/revenue/outbox/dead-letter` | Eventos fallidos con cinco o más intentos |
 | POST | `/api/v1/revenue/outbox/retry/:eventId` | Reintenta un evento dead-letter |
-| GET | `/api/v1/revenue/health` | Estado del ledger y capacidades configuradas |
+| GET | `/api/v1/revenue/health` | Estado público resumido del servicio |
+| GET | `/api/v1/revenue/health/details` | Diagnóstico detallado, solo administración |
 
 Las rutas de usuario comparan el usuario objetivo con la identidad devuelta por Supabase Auth. Los identificadores enviados en headers no son prueba de identidad. El settlement es una ruta administrativa y requiere el token de administración.
 
