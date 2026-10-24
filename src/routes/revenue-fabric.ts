@@ -445,26 +445,20 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
     }
   });
 
-  // User: Request payout (debit own wallet)
+  // Payouts are intentionally fail-closed until a real payout provider, KYC,
+  // tax/withholding policy, holdback and reconciliation are configured.
+  // A request must never debit a wallet before an external transfer is confirmed.
   app.post("/api/v1/revenue/my/wallet/payout", async (req, res) => {
     if (!enforceRateLimit(req, res, rateLimiter, "wallet-payout")) return;
 
     const userId = await getAuthenticatedWalletUserId(req, res);
     if (!userId) return;
-    try {
-      const body = req.body || {};
-      const wallet = await storage.debitWallet(
-        userId,
-        parseMoney(body.amount, "amount"),
-        "payout",
-        uuidv4(),
-        body.description ?? "User requested payout"
-      );
 
-      res.json({ success: true, wallet });
-    } catch (err) {
-      res.status(400).json({ success: false, error: err instanceof Error ? err.message : "PAYOUT_FAILED" });
-    }
+    res.status(503).json({
+      success: false,
+      error: "PAYOUTS_NOT_CONFIGURED",
+      message: "No hay un proveedor de pagos salientes certificado. El saldo permanece intacto.",
+    });
   });
 
   // ============================================================
