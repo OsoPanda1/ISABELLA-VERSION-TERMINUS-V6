@@ -10,7 +10,8 @@ Un módulo presente en el código no equivale a una integración externa activa.
 
 - La política de reparto v5, la persistencia de suscripciones, el checkout de Stripe, la verificación de webhooks y el libro mayor transaccional están implementados en esta rama.
 - Las migraciones deben aplicarse a una base PostgreSQL de prueba y las variables privadas deben configurarse antes de probar el flujo real.
-- **Avance global de implementación: 100% del alcance de código de esta rama**, verificado por la suite local y el commit de esta revisión (SHA 802e6ee); esto no equivale a producción activa ni sustituye pruebas end-to-end con Stripe y PostgreSQL reales.
+- La rama de auditoría `audit/ci-revenue-hardening-2026-10-23` endurece los gates de CI, el build de pull requests, el escaneo de dependencias y la validación numérica del reparto. Estos cambios requieren ejecución de CI; no se consideran certificados hasta que los checks remotos terminen correctamente.
+- **Avance global de implementación: no publicado como porcentaje único en esta revisión.** No hay un denominador de requisitos ponderados y reproducible que permita derivar una cifra verificable. El estado de cada subsistema debe evaluarse con pruebas y evidencia separadas; la presencia de código no equivale a integración certificada.
 - La disponibilidad de checkout, la integridad del ledger y la configuración de identidad se exponen como capacidades comprobables en `GET /api/v1/revenue/health`; la ruta devuelve estado degradado si el ledger persistente no se puede verificar.
 - Los pagos a creadores mediante Stripe Connect, el onboarding KYC, las retenciones/impuestos, las devoluciones, los contracargos y la conciliación bancaria **no están habilitados**. El devengo contable no significa que el dinero se haya transferido.
 
