@@ -1369,8 +1369,31 @@ app.post("/api/v1/cognition/route", async (req, res) => {
       } : null,
       requestedRiskIgnored: true, publicAuthority: "VIEWER_ONLY",
     });
-  } catch {
-    res.status(500).json({ success: false, error: "COGNITIVE_ROUTE_FAILED" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "UNKNOWN_COGNITIVE_ROUTE_ERROR";
+    console.error("[Isabella] Cognitive route recovered from unexpected failure", {
+      name: error instanceof Error ? error.name : "UnknownError",
+      message: message.slice(0, 240),
+    });
+    // The public chat must remain conversational even when an optional provider,
+    // cache, or observability adapter fails. Never turn provider exhaustion into
+    // a blank 500 response for the user; disclose the local degraded mode instead.
+    if (!res.headersSent && !res.destroyed) {
+      const fallback = generateSovereignFallback(
+        typeof req.body?.input === "string" ? req.body.input.trim().slice(0, 20_000) : "",
+        sanitizePublicHistory(req.body?.history),
+        typeof req.body?.focusLens === "string" ? req.body.focusLens : "general",
+      );
+      res.status(200).json({
+        success: true,
+        output: fallback,
+        generativeNarrative: fallback,
+        responseEngine: "sovereign-fallback",
+        degraded: true,
+        providerError: "OPTIONAL_PROVIDER_UNAVAILABLE",
+        ...describeProviderReadiness(process.env),
+      });
+    }
   }
 });
 
