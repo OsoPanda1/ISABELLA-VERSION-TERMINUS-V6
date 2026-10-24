@@ -679,27 +679,25 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
     };
   }
 
-  // Public health response exposes only the service state, not internal configuration details.
-  app.get("/api/v1/revenue/health", async (_req, res) => {
+  // Public health response exposes only service state. Operators may request details
+  // with ?details=true, but only after admin authentication.
+  app.get("/api/v1/revenue/health", async (req, res) => {
     const diagnostics = await getRevenueHealthDiagnostics();
-    res.status(diagnostics.ready ? 200 : 503).json({
+    if (req.query.details === "true") {
+      if (!authorizeAdmin(req, res)) return;
+      return res.status(diagnostics.ready ? 200 : 503).json({
+        success: diagnostics.ready,
+        service: "revenue-fabric",
+        version: "5.0.0",
+        ...diagnostics,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    return res.status(diagnostics.ready ? 200 : 503).json({
       success: diagnostics.ready,
       status: diagnostics.ready ? "ready" : "degraded",
       service: "revenue-fabric",
       version: "5.0.0",
-      timestamp: new Date().toISOString(),
-    });
-  });
-
-  // Detailed readiness diagnostics are restricted to the operator.
-  app.get("/api/v1/revenue/health/details", async (req, res) => {
-    if (!authorizeAdmin(req, res)) return;
-    const diagnostics = await getRevenueHealthDiagnostics();
-    res.status(diagnostics.ready ? 200 : 503).json({
-      success: diagnostics.ready,
-      service: "revenue-fabric",
-      version: "5.0.0",
-      ...diagnostics,
       timestamp: new Date().toISOString(),
     });
   });
