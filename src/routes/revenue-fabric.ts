@@ -682,9 +682,9 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
   // Public health response exposes only service state. Operators may request details
   // with ?details=true, but only after admin authentication.
   app.get("/api/v1/revenue/health", async (req, res) => {
-    const diagnostics = await getRevenueHealthDiagnostics();
     if (req.query.details === "true") {
       if (!authorizeAdmin(req, res)) return;
+      const diagnostics = await getRevenueHealthDiagnostics();
       return res.status(diagnostics.ready ? 200 : 503).json({
         success: diagnostics.ready,
         service: "revenue-fabric",
@@ -693,6 +693,7 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
         timestamp: new Date().toISOString(),
       });
     }
+    const diagnostics = await getRevenueHealthDiagnostics();
     return res.status(diagnostics.ready ? 200 : 503).json({
       success: diagnostics.ready,
       status: diagnostics.ready ? "ready" : "degraded",
