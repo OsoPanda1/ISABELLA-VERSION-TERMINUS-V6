@@ -203,6 +203,7 @@ try {
   const chatPlusJs = fs.readFileSync(path.join(uiPath, "chat-plus.js"), "utf-8");
   const versioned = rawHtml
     .replace(/(\/styles\/cinematic\.css)\?v=[^"']*/, `$1?v=${contentHash(cinematicCss)}`)
+    .replace(/(\/styles\/command-center\.css)\?v=[^"']*/, `$1?v=${contentHash(commandCenterCss)}`)
     .replace(/(\/ui\/app\.js)\?v=[^"']*/, `$1?v=${contentHash(cinematicJs)}`)
     .replace(/(\/ui\/chat-plus\.js)\?v=[^"']*/, `$1?v=${contentHash(chatPlusJs)}`);
   htmlAsset = buildAsset(versioned, "text/html; charset=utf-8");

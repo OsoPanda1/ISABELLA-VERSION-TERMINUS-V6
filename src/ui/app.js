@@ -303,11 +303,20 @@ if (intro) {
 const closeSideRails = (exceptId = '') => {
   document.querySelectorAll('.side-rail').forEach((rail) => {
     if (rail.id !== exceptId) rail.classList.remove('is-open');
+    syncRailMode(rail, rail.id === exceptId && rail.classList.contains('is-open'));
     const launcher = document.querySelector(`[aria-controls="${rail.id}"]`);
     if (launcher) launcher.setAttribute('aria-expanded', String(rail.id === exceptId && rail.classList.contains('is-open')));
   });
 };
+const syncRailMode = (rail, open) => {
+  if (!rail) return;
+  rail.setAttribute('aria-hidden', String(!open));
+  if (open) rail.removeAttribute('inert'); else rail.setAttribute('inert', '');
+};
 document.querySelectorAll('.rail-launcher').forEach((launcher) => {
+  launcher.style.setProperty('display', 'flex', 'important');
+  const controlledRail = byId(launcher.getAttribute('aria-controls') || '');
+  controlledRail?.style.setProperty('display', 'flex', 'important');
   launcher.addEventListener('click', () => {
     const targetId = launcher.getAttribute('aria-controls');
     const target = targetId ? byId(targetId) : null;
@@ -315,6 +324,7 @@ document.querySelectorAll('.rail-launcher').forEach((launcher) => {
     const opening = !target.classList.contains('is-open');
     closeSideRails(opening ? target.id : '');
     target.classList.toggle('is-open', opening);
+    syncRailMode(target, opening);
     launcher.setAttribute('aria-expanded', String(opening));
   });
 });

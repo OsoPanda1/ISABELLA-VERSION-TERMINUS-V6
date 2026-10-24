@@ -41,3 +41,26 @@ button,.subtle-action,.header-action,.send,.icon-button,.mode{border-radius:12px
 .console-head h2,.wordmark{background:linear-gradient(110deg,#f4ffff,#c9b8ff 48%,#a9f5d0);-webkit-background-clip:text;background-clip:text;color:transparent}
 @media (hover:none){.topbar:active,.console:active,.message:active,.subtle-action:active,.send:active,.icon-button:active,.mode:active{border-color:rgba(159,247,255,.7);box-shadow:0 0 32px rgba(159,247,255,.18)}}
 @media (prefers-reduced-motion:reduce){.topbar,.console,.message,.prompt,.subtle-action,.header-action,.send,.icon-button,.mode{transition:none}.topbar:hover,.console:hover,.message:hover,.subtle-action:hover,.send:hover,.icon-button:hover,.mode:hover{transform:none}}
+
+/* Isabella command lattice: four independent accordion rails, kept discoverable around the primary chat. */
+.stage{max-width:1540px!important;padding-inline:clamp(18px,4vw,64px)!important}
+.side-rail{display:flex!important;position:fixed;top:108px;z-index:20;width:238px;max-height:calc(100vh - 148px);padding:14px;border:1px solid rgba(159,247,255,.24);border-radius:20px;background:linear-gradient(145deg,rgba(18,29,39,.88),rgba(12,17,27,.78));box-shadow:0 20px 70px rgba(0,0,0,.38),0 0 32px rgba(159,247,255,.07);backdrop-filter:blur(26px) saturate(145%);-webkit-backdrop-filter:blur(26px) saturate(145%);opacity:0;pointer-events:none;transform:translateX(-16px);transition:opacity .28s ease,transform .28s ease,border-color .28s ease}
+.side-rail.is-open{opacity:1;pointer-events:auto;transform:translateX(0)}
+.rail-right{transform:translateX(16px)}
+.rail-left{left:18px}.rail-right{right:18px}
+.rail-launcher{display:flex!important;position:fixed;z-index:21;top:148px;min-width:34px;min-height:112px;padding:12px 8px;align-items:center;justify-content:center;gap:6px;border:1px solid rgba(159,247,255,.2);border-radius:12px;background:rgba(11,20,28,.76);color:rgba(235,250,255,.78);box-shadow:0 8px 28px rgba(0,0,0,.26);writing-mode:vertical-rl;letter-spacing:.16em;font:700 9px/1 var(--font-mono,monospace);transition:.25s ease}
+.rail-launcher:hover,.rail-launcher:focus-visible{color:#07131b;background:linear-gradient(150deg,#9ff7ff,#c9b8ff 52%,#a9f5d0);border-color:#d8ffff;box-shadow:0 0 28px rgba(159,247,255,.34);transform:translateY(-2px)}
+.rail-launcher-left{left:0}.rail-launcher-right{right:0}.rail-launcher-history{top:285px}.rail-launcher-system{top:285px}
+.rail-heading{display:flex;justify-content:space-between;margin:2px 4px 10px;padding-bottom:10px;border-bottom:1px solid rgba(159,247,255,.16);color:#e8fbff;font:700 10px/1.2 var(--font-mono,monospace);letter-spacing:.16em}
+.rail-heading span,.rail-index{color:#9ff7ff}.rail-panel{border:1px solid transparent;border-radius:13px;overflow:hidden;transition:.25s ease}.rail-panel[open],.rail-panel:hover{border-color:rgba(159,247,255,.16);background:rgba(255,255,255,.035)}
+.rail-panel summary{display:flex;align-items:center;gap:10px;cursor:pointer;list-style:none;padding:13px 10px;color:rgba(235,250,255,.82);font:700 10px/1.2 var(--font-mono,monospace);letter-spacing:.1em}.rail-panel summary::-webkit-details-marker{display:none}.rail-panel summary::after{content:'＋';margin-left:auto;color:rgba(159,247,255,.62)}.rail-panel[open] summary::after{content:'−'}.rail-panel nav{display:flex;flex-direction:column;gap:2px;padding:0 10px 10px}.rail-panel a{padding:8px 10px;border-radius:9px;color:rgba(220,235,243,.63);font-size:12px;text-decoration:none;transition:.2s ease}.rail-panel a:hover,.rail-panel a:focus-visible{color:#f4ffff;background:linear-gradient(100deg,rgba(159,247,255,.12),rgba(201,184,255,.1));box-shadow:inset 2px 0 #9ff7ff}
+.console{width:min(860px,calc(100% - 360px))!important;max-width:860px!important;margin-left:auto!important;margin-right:auto!important}
+.console::after{content:'';position:absolute;inset:1px;border-radius:inherit;pointer-events:none;background:radial-gradient(circle at 18% 0,rgba(159,247,255,.2),transparent 25%),radial-gradient(circle at 88% 100%,rgba(201,184,255,.15),transparent 24%);mix-blend-mode:screen;opacity:.52}
+.message:hover{transform:translateY(-3px) scale(1.005)!important;box-shadow:0 0 34px rgba(159,247,255,.14),inset 0 1px rgba(255,255,255,.34)!important}
+@media (max-width:900px){.side-rail{width:220px}.console{width:min(760px,calc(100% - 110px))!important}.rail-launcher{min-height:92px}.rail-launcher-history,.rail-launcher-system{top:255px}}
+@media (max-width:600px){.side-rail{top:96px;bottom:12px;max-height:none;width:min(82vw,290px)}.rail-left{left:8px}.rail-right{right:8px}.rail-launcher{top:132px}.rail-launcher-history,.rail-launcher-system{top:242px}.console{width:calc(100% - 44px)!important;margin-inline:22px!important}.rail-launcher span{font-size:8px}}
+@media (prefers-reduced-motion:reduce){.side-rail,.rail-launcher,.rail-panel,.rail-panel a{transition:none}.rail-launcher:hover{transform:none}}
+
+/* Chat focus keeps the chrome available: rails remain collapsed until explicitly opened. */
+html body .rail-launcher{display:flex!important}
+html body .side-rail{display:flex!important}
