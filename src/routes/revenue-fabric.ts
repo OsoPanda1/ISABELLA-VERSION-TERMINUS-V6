@@ -44,7 +44,7 @@ function parseMoney(value: unknown, field: string): number {
  * Financial writes must be retry-safe. Never synthesize a new idempotency key
  * per request: a network retry would otherwise create a second settlement/event.
  */
-function parseIdempotencyKey(value: unknown): string | null {
+export function parseIdempotencyKey(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const key = value.trim();
   if (key.length < 8 || key.length > 200 || !/^[A-Za-z0-9._:-]+$/.test(key)) return null;
