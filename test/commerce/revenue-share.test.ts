@@ -58,6 +58,14 @@ describe("computeRevenueShare 75/25", () => {
     expect(() => computeRevenueShare({ grossCents: 100, refundsCents: 200, participants: [] })).toThrow(/superan/);
     expect(() => computeRevenueShare({ grossCents: 100, participants: [P("a", "vip", "active", 1), P("a", "vip", "active", 1)] })).toThrow(/duplicado/);
     expect(() => computeRevenueShare({ grossCents: 100, participants: [P("a", "vip", "active", -1)] })).toThrow();
+    expect(() => computeRevenueShare({ grossCents: 100, participants: [P("a", "vip", "active", Number.POSITIVE_INFINITY)] })).toThrow();
+    expect(() => computeRevenueShare({
+      grossCents: 100,
+      participants: [
+        P("a", "vip", "active", Number.MAX_SAFE_INTEGER),
+        P("b", "vip", "active", Number.MAX_SAFE_INTEGER),
+      ],
+    })).toThrow(/safe numeric precision/);
     expect(() => computeRevenueShare({ grossCents: 100, userShareBps: 4_999, participants: [] })).toThrow();
     expect(() => computeRevenueShare({ grossCents: 100, userShareBps: 8_001, participants: [] })).toThrow();
     expect(computeRevenueShare({ grossCents: 100, userShareBps: 5_000, participants: [P('u', 'premium', 'active', 1)] }).userPoolCents).toBe(50);
