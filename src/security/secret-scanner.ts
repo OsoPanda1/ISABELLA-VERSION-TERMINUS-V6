@@ -102,8 +102,8 @@ const EXCLUDE_LINE_PATTERNS = [
 
 export class SecretScanner {
   private readonly customPatterns: typeof SECRET_PATTERNS = [];
-  private readonly excludePatterns: RegExp[] = EXCLUDE_PATTERNS;
-  private readonly excludeLinePatterns: RegExp[] = EXCLUDE_LINE_PATTERNS;
+  private readonly excludePatterns: RegExp[] = [...EXCLUDE_PATTERNS];
+  private readonly excludeLinePatterns: RegExp[] = [...EXCLUDE_LINE_PATTERNS];
 
   addCustomPattern(pattern: RegExp, type: string, severity: "critical" | "high" | "medium" | "low"): void {
     this.customPatterns.push({ pattern, type, severity });
@@ -225,7 +225,7 @@ export class SecretScanner {
     
     const allMatches: SecretMatch[] = [];
     
-    async function scanDir(currentPath: string): Promise<void> {
+    const scanDir = async (currentPath: string): Promise<void> => {
       const entries = await fs.readdir(currentPath, { withFileTypes: true });
       
       for (const entry of entries) {
@@ -245,7 +245,7 @@ export class SecretScanner {
           }
         }
       }
-    }
+    };
     
     await scanDir(dirPath);
     

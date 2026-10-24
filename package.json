@@ -34,7 +34,12 @@
     "smoke:production": "tsx scripts/production-smoke.ts",
     "postgres:e2e": "corepack pnpm run build:dist && node scripts/postgres-e2e.mjs",
     "deploy:verify": "docker build --tag isabella-genesisai:verify . && corepack pnpm run smoke:runtime && kubectl apply --dry-run=server -k k8s/",
-    "verify:production": "tsx scripts/verify-production.ts"
+    "verify:production": "tsx scripts/verify-production.ts",
+    "typecheck:layers": "tsc -p tsconfig.layers.json",
+    "check:env": "node scripts/check-env-example.mjs",
+    "check:sops": "node scripts/check-sops-placeholders.mjs",
+    "status:generate": "node scripts/generate-status.mjs",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@eslint/js": "^9.20.1",

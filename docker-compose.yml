@@ -1,5 +1,4 @@
-version: '3.8'
-
+# Compose Specification: the obsolete top-level `version` key is intentionally omitted.
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -72,6 +71,15 @@ services:
       - --memory.allowedPercent=60
       - --search.maxPointsPerTimeseries=100000
       - --maxLabelsPerTimeseries=30
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    deploy:
+      resources:
+        limits:
+          memory: 2G
 
   crowdsec:
     image: crowdsecurity/crowdsec:latest
@@ -90,6 +98,12 @@ services:
       - NET_RAW
     depends_on:
       - caddy
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   caddy:
     image: caddy:2.8-alpine
@@ -107,6 +121,19 @@ services:
       - app
     environment:
       ACME_AGREE: "true"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   otel:
     image: otel/opentelemetry-collector-contrib:0.90.0
@@ -119,13 +146,22 @@ services:
     volumes:
       - ./config/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: isabella-core
-    restart: always
+    restart: unless-stopped
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
@@ -135,7 +171,8 @@ services:
         condition: service_started
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://isabella_admin:secret@postgres:5432/isabella_db
+      # Never commit the connection string: define DATABASE_URL in the untracked .env (see .env.example).
+      DATABASE_URL: ${DATABASE_URL:?define DATABASE_URL in .env, e.g. postgresql://isabella_admin:<password from secrets/db_password.txt>@postgres:5432/isabella_db}
       OLLAMA_BASE_URL: http://ollama:11434
       VICTORIA_METRICS_URL: http://victoriametrics:8428
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel:4318
@@ -144,6 +181,11 @@ services:
     user: "10001:10001"
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
     volumes:
       - ./src:/app/src:ro
       - ./package.json:/app/package.json:ro

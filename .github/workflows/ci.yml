@@ -64,6 +64,21 @@ jobs:
       - name: Run TypeCheck
         run: pnpm run typecheck
 
+      - name: Guard .env.example (duplicates, real-looking secrets, undocumented variables)
+        run: pnpm run check:env
+
+      - name: Guard SOPS placeholders
+        run: pnpm run check:sops
+
+      - name: Guard docs/STATUS.md freshness
+        run: node scripts/generate-status.mjs --check
+
+      # Advisory until the layers are green in CI: these modules are excluded from the main typecheck
+      # (see tsconfig.json). Remove `continue-on-error` and the exclusions together once clean.
+      - name: TypeCheck excluded layers (advisory)
+        run: pnpm run typecheck:layers
+        continue-on-error: true
+
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest

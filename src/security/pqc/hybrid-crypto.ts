@@ -18,6 +18,8 @@ import {
   timingSafeEqual,
   generateKeyPairSync,
   KeyObject,
+  type CipherGCM,
+  type DecipherGCM,
 } from "node:crypto";
 import { 
   mlKemKeyGen, mlKemEncaps, mlKemDecaps, 
@@ -233,7 +235,8 @@ export class HybridCryptoEngine {
     const encryptionKey = this.deriveEncryptionKey(key);
     const nonce = randomBytes(12); // 96-bit nonce for GCM
     
-    const cipher = createCipheriv(this.symmetricAlgorithm, encryptionKey, nonce);
+    // authTagLength is mandatory for ChaCha20-Poly1305 and pins a 128-bit tag for AES-GCM.
+    const cipher = createCipheriv(this.symmetricAlgorithm, encryptionKey, nonce, { authTagLength: 16 }) as CipherGCM;
     if (associatedData) {
       cipher.setAAD(associatedData);
     }
@@ -266,8 +269,9 @@ export class HybridCryptoEngine {
     const decipher = createDecipheriv(
       encrypted.algorithm,
       decryptionKey,
-      encrypted.nonce
-    );
+      encrypted.nonce,
+      { authTagLength: 16 }
+    ) as DecipherGCM;
     
     if (encrypted.associatedData) {
       decipher.setAAD(encrypted.associatedData);
