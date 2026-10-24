@@ -3,6 +3,8 @@
 **Isabella** es un ecosistema de IA gobernada con servicios de inferencia, herramientas, memoria, evidencia, integraciones y una capa económica auditable. Este repositorio contiene el runtime V6 Terminus y sus servicios de servidor; la interfaz comercial puede integrarse con la aplicación Isabella mediante las APIs de este backend.
 
 > **Regla de diseño:** capacidad ≠ autoridad ≠ ejecución ≠ evidencia ≠ aprendizaje ≠ producción.
+>
+> **Contrato de evidencia:** SPECIFIED ≠ IMPLEMENTED ≠ TESTED.
 
 Un módulo presente en el código no equivale a una integración externa activa. Los estados de pago, la elegibilidad, los asientos contables y las transferencias bancarias son hechos diferentes y deben verificarse por separado.
 
