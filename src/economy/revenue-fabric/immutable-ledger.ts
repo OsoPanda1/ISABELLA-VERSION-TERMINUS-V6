@@ -188,7 +188,7 @@ export class ImmutableLedger {
   }
 
   private buildPostings(s: SettlementResult): LedgerPosting[] {
-    return [
+    const postings = ([
       { account: "GATEWAY_CLEARING", direction: "DEBIT", amount: toMinorUnits(s.grossAmount), memo: "Ingreso bruto confirmado (centavos)" },
       { account: "GROSS_REVENUE", direction: "CREDIT", amount: toMinorUnits(s.grossAmount), memo: "Reconocimiento de ingreso bruto (centavos)" },
       { account: "GROSS_REVENUE", direction: "DEBIT", amount: toMinorUnits(s.directCost), memo: "Coste directo atribuible (centavos)" },
@@ -205,7 +205,8 @@ export class ImmutableLedger {
       { account: "PHOENIX_FUND", direction: "CREDIT", amount: toMinorUnits(s.platformPhoenixFund), memo: "20% de la parte de plataforma · Fondo Fénix (centavos)" },
       { account: "INFRASTRUCTURE_REVENUE", direction: "CREDIT", amount: toMinorUnits(s.platformInfrastructure), memo: "30% de la parte de plataforma · Infraestructura (centavos)" },
       { account: "DAO_TREASURY", direction: "CREDIT", amount: toMinorUnits(s.platformDao), memo: "50% de la parte de plataforma · DAO (centavos)" },
-    ].filter((posting) => posting.amount > 0);
+    ] as LedgerPosting[]).filter((posting) => posting.amount > 0);
+    return postings;
   }
 }
 

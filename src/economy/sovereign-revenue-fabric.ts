@@ -119,6 +119,9 @@ export interface RevenueSettlement {
   readonly creatorEligibilityReason: string;
   readonly creatorShare: string;
   readonly platformShare: string;
+  readonly platformPhoenixFund?: string;
+  readonly platformInfrastructure?: string;
+  readonly platformDao?: string;
   readonly iets: IETSResult | null;
   readonly policyVersion: string;
   readonly journal: RevenueJournal;
@@ -297,7 +300,7 @@ export class IsabellaSovereignRevenueFabric {
       ? "PLATFORM_ONLY_STREAM"
       : !eligibility ? "CREATOR_ELIGIBILITY_CONTEXT_MISSING"
       : eligibility.eligible ? "ELIGIBLE"
-      : eligibility.reason.toUpperCase();
+      : (eligibility.reason ?? "INELIGIBLE").toUpperCase();
     const creatorShareMinor = roundedRatio(distributableMinor, creatorRateBps);
     const platformShareMinor = distributableMinor - creatorShareMinor;
     const platformShareCents = Number(platformShareMinor);
@@ -365,6 +368,9 @@ export class IsabellaSovereignRevenueFabric {
       creatorEligibilityReason,
       creatorShare: formatMinor(creatorShareMinor),
       platformShare: formatMinor(platformShareMinor),
+      platformPhoenixFund: formatMinor(phoenixMinor),
+      platformInfrastructure: formatMinor(infrastructureMinor),
+      platformDao: formatMinor(daoMinor),
       iets,
       policyVersion: this.policy.version,
       journal,
@@ -436,7 +442,7 @@ export class IsabellaSovereignRevenueFabric {
 
   private rateFor(stream: RevenueStream, iets: IETSResult | null): number {
     switch (stream) {
-      case "ISA_API": return 7000;
+      case "ISA_API": return 7500;
       case "SKILL_MARKETPLACE":
       case "AGENT_MARKETPLACE":
       case "AGENT_REVENUE_SHARING":

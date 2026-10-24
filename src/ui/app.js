@@ -303,11 +303,20 @@ if (intro) {
 const closeSideRails = (exceptId = '') => {
   document.querySelectorAll('.side-rail').forEach((rail) => {
     if (rail.id !== exceptId) rail.classList.remove('is-open');
+    syncRailMode(rail, rail.id === exceptId && rail.classList.contains('is-open'));
     const launcher = document.querySelector(`[aria-controls="${rail.id}"]`);
     if (launcher) launcher.setAttribute('aria-expanded', String(rail.id === exceptId && rail.classList.contains('is-open')));
   });
 };
+const syncRailMode = (rail, open) => {
+  if (!rail) return;
+  rail.setAttribute('aria-hidden', String(!open));
+  if (open) rail.removeAttribute('inert'); else rail.setAttribute('inert', '');
+};
 document.querySelectorAll('.rail-launcher').forEach((launcher) => {
+  launcher.style.setProperty('display', 'flex', 'important');
+  const controlledRail = byId(launcher.getAttribute('aria-controls') || '');
+  controlledRail?.style.setProperty('display', 'flex', 'important');
   launcher.addEventListener('click', () => {
     const targetId = launcher.getAttribute('aria-controls');
     const target = targetId ? byId(targetId) : null;
@@ -315,6 +324,7 @@ document.querySelectorAll('.rail-launcher').forEach((launcher) => {
     const opening = !target.classList.contains('is-open');
     closeSideRails(opening ? target.id : '');
     target.classList.toggle('is-open', opening);
+    syncRailMode(target, opening);
     launcher.setAttribute('aria-expanded', String(opening));
   });
 });
@@ -425,31 +435,52 @@ const sendMessage = async (text) => {
     const response = await fetch('/api/v1/cognition/route', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input, sessionId, lens: window.IsabellaChatPlus?.getLens?.() || 'general' }),
+      body: JSON.stringify({
+        input,
+        sessionId,
+        modelEngine: 'auto',
+        focusLens: window.IsabellaChatPlus?.getLens?.() || 'general',
+        history: [...messages.querySelectorAll('.message')]
+          .slice(-16)
+          .map((message) => ({
+            role: message.classList.contains('user') ? 'user' : 'assistant',
+            content: message.querySelector('p')?.dataset.raw || message.querySelector('p')?.textContent || ''
+          }))
+          .filter((turn) => turn.content.trim())
+      }),
       signal: abortController.signal
     });
     
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const contentType = response.headers.get('content-type') || '';
+    let payload = null;
+    if (contentType.includes('application/json')) {
+      try { payload = await response.json(); } catch { payload = null; }
+    }
+    if (!response.ok) {
+      const serverError = typeof payload?.error === 'string' ? payload.error : `HTTP ${response.status}`;
+      throw new Error(serverError);
+    }
     
-    const payload = await response.json();
-    
-    if (payload.success === true && payload.output) {
+    const output = typeof payload?.output === 'string'
+      ? payload.output
+      : typeof payload?.generativeNarrative === 'string' ? payload.generativeNarrative : '';
+    if (payload?.success === true && output.trim()) {
       if (window.IsabellaChatPlus?.renderInto) {
-        window.IsabellaChatPlus.renderInto(assistantPara, payload.output, { animate: true });
+        window.IsabellaChatPlus.renderInto(assistantPara, output, { animate: true });
       } else {
-        assistantPara.textContent = payload.output;
+        assistantPara.textContent = output;
       }
       if (window.IsabellaChatPlus?.decorate) {
-        window.IsabellaChatPlus.decorate(assistantPara, { engine: payload.engine, latencyMs: payload.latencyMs });
+        window.IsabellaChatPlus.decorate(assistantPara, { engine: payload.responseEngine || payload.engine, latencyMs: payload.latencyMs });
       }
       if (window.IsabellaChatPlus?.persist) window.IsabellaChatPlus.persist();
     } else {
-      throw new Error(payload.error || 'Respuesta inválida del servidor');
+      throw new Error(typeof payload?.error === 'string' ? payload.error : 'Respuesta inválida del servidor');
     }
   } catch (err) {
     if (err.name === 'AbortError') return;
-    if (window.IsabellaChatPlus?.renderInto) {
-      window.IsabellaChatPlus.renderInto(assistantPara, `Error: ${err.message}`, { animate: false });
+      if (window.IsabellaChatPlus?.renderInto) {
+        window.IsabellaChatPlus.renderInto(assistantPara, `No pude completar la respuesta: ${err.message}. Puedes reintentarlo sin perder el contexto de esta sesión.`, { animate: false });
     } else {
       assistantPara.textContent = `Error: ${err.message}`;
     }
