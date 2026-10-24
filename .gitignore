@@ -14,3 +14,4 @@ data/
 evidence/*.json
 artifacts/
 firebase-applet-config.json
+.vercel
