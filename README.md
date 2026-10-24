@@ -107,6 +107,7 @@ Las rutas de usuario comparan el usuario objetivo con la identidad devuelta por 
 - La persistencia escribe el journal, el settlement y el evento outbox en una sola transacción PostgreSQL.
 - Las escrituras se serializan con un bloqueo transaccional y se verifica la cabeza actual de la cadena antes de añadir un journal.
 - La restauración recorre la cadena por `previous_hash`, no por fecha; verifica hash y balance de débitos/créditos.
+- Los endpoints de settlement y registro de consumo exigen una clave idempotente estable de 8–200 caracteres seguros; no generan una clave aleatoria por petición, porque los reintentos de red podrían duplicar asientos o consumo.
 - Las claves de idempotencia no pueden reutilizarse con un payload económico diferente.
 - Los eventos Stripe se verifican con la firma HMAC de Stripe y una ventana temporal de cinco minutos, se deduplican en inbox y se aplican solo si el evento es más reciente que el estado ya guardado.
 - Los registros monetarios anteriores conservan la marca `legacy_major`; los nuevos usan `minor_v2`. No se reescriben silenciosamente los asientos históricos.
