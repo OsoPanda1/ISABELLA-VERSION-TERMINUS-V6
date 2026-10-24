@@ -662,25 +662,44 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
   // Health / Readiness
   // ============================================================
 
-  app.get("/api/v1/revenue/health", async (_req, res) => {
+  async function getRevenueHealthDiagnostics() {
     const durableDatabaseConfigured = Boolean(process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL);
     const ledgerValid = durableDatabaseConfigured ? await storage.verifyChain().catch(() => false) : false;
-    const stripeCheckoutConfigured = Boolean(process.env.STRIPE_SECRET_KEY && process.env.ISABELLA_PUBLIC_URL);
-    const stripeWebhookConfigured = Boolean(stripeWebhookSecret);
-    const supabaseAuthConfigured = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY);
     const ready = durableDatabaseConfigured && ledgerValid;
-    res.status(ready ? 200 : 503).json({
-      success: ready,
-      status: ready ? "ready" : "degraded",
-      service: "revenue-fabric",
-      version: "5.0.0",
+    return {
+      ready,
       ledgerValid,
       durableDatabaseConfigured,
-      subscriptionPersistenceConfigured: durableDatabaseConfigured,
-      stripeCheckoutConfigured,
-      stripeWebhookConfigured,
-      supabaseAuthConfigured,
+      // A database URL does not prove that the subscription migration is applied.
+      subscriptionPersistenceSchema: "unverified" as const,
+      stripeCheckoutEnvConfigured: Boolean(process.env.STRIPE_SECRET_KEY && process.env.ISABELLA_PUBLIC_URL),
+      stripeWebhookSecretConfigured: Boolean(stripeWebhookSecret),
+      supabaseAuthEnvConfigured: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
       creatorPayoutsEnabled: false,
+    };
+  }
+
+  // Public health response exposes only the service state, not internal configuration details.
+  app.get("/api/v1/revenue/health", async (_req, res) => {
+    const diagnostics = await getRevenueHealthDiagnostics();
+    res.status(diagnostics.ready ? 200 : 503).json({
+      success: diagnostics.ready,
+      status: diagnostics.ready ? "ready" : "degraded",
+      service: "revenue-fabric",
+      version: "5.0.0",
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // Detailed readiness diagnostics are restricted to the operator.
+  app.get("/api/v1/revenue/health/details", async (req, res) => {
+    if (!authorizeAdmin(req, res)) return;
+    const diagnostics = await getRevenueHealthDiagnostics();
+    res.status(diagnostics.ready ? 200 : 503).json({
+      success: diagnostics.ready,
+      service: "revenue-fabric",
+      version: "5.0.0",
+      ...diagnostics,
       timestamp: new Date().toISOString(),
     });
   });
