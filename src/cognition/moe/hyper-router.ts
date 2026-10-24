@@ -275,7 +275,7 @@ export class ExpertRegistry extends EventEmitter {
       sovereign: 0,
     };
     
-    const byCapability: Record<ExpertCapability, number> = {} as any;
+    const byCapability: Record<ExpertCapability, number> = {} as Record<ExpertCapability, number>;
     
     for (const expert of experts) {
       byTier[expert.tier]++;

@@ -144,7 +144,7 @@ export interface GrafanaDashboard {
   readonly tags: string[];
   readonly timezone: string;
   readonly panels: DashboardPanel[];
-  readonly templating?: { list: any[] };
+  readonly templating?: { list: unknown[] };
   readonly time: { from: string; to: string };
   readonly refresh: string;
 }

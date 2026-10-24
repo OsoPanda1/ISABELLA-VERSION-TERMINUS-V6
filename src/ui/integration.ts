@@ -63,12 +63,36 @@ export interface PageMetadata {
   readonly jsonLd?: Record<string, unknown>;
 }
 
+const ATTRIBUTE_NAME = /^[A-Za-z_:][-A-Za-z0-9_:.]*$/;
+
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** JSON that is safe to embed inside an inline <script>: `</script>` and HTML comments cannot be formed. */
+export function safeJsonForScript(value: unknown): string {
+  return (JSON.stringify(value) ?? "null")
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+/** Shape of a loaded UI module: named exports only (no implicit `any`). */
+export type ComponentModule = Record<string, unknown>;
+
 /**
  * Component Loader - Dynamic imports with caching
  */
 export class ComponentLoader extends EventEmitter {
   private manifests: Map<string, ComponentManifest> = new Map();
-  private moduleCache: Map<string, Promise<any>> = new Map();
+  private moduleCache: Map<string, Promise<ComponentModule>> = new Map();
   private categories: Map<ComponentCategory, Set<string>> = new Map();
 
   registerManifest(manifest: ComponentManifest): void {
@@ -81,7 +105,7 @@ export class ComponentLoader extends EventEmitter {
     this.emit("manifest:registered", manifest);
   }
 
-  async loadComponent(category: ComponentCategory, name: string): Promise<any> {
+  async loadComponent(category: ComponentCategory, name: string): Promise<ComponentModule> {
     const manifest = this.manifests.get(name);
     if (!manifest || manifest.category !== category) {
       throw new Error(`COMPONENT_NOT_FOUND: ${category}/${name}`);
@@ -105,7 +129,7 @@ export class ComponentLoader extends EventEmitter {
     }
   }
 
-  private async importModule(path: string): Promise<any> {
+  private async importModule(path: string): Promise<ComponentModule> {
     // In production, would use dynamic import with proper bundler
     // For now, return mock module structure
     return {
@@ -114,9 +138,9 @@ export class ComponentLoader extends EventEmitter {
     };
   }
 
-  private createMockExports(path: string): Record<string, any> {
+  private createMockExports(path: string): ComponentModule {
     // Generate mock exports based on path
-    const exports: Record<string, any> = {};
+    const exports: ComponentModule = {};
     
     if (path.includes("ui")) {
       exports.Button = () => null;
@@ -169,7 +193,7 @@ export class ComponentLoader extends EventEmitter {
     }
     
     if (path.includes("lib")) {
-      exports.cn = (...args: any[]) => args.filter(Boolean).join(" ");
+      exports.cn = (...args: unknown[]) => args.filter(Boolean).join(" ");
       exports.formatDate = (date: Date) => date.toISOString();
       exports.generateId = () => Math.random().toString(36).slice(2);
     }
@@ -282,13 +306,19 @@ export class SSRRenderer extends EventEmitter {
     return result;
   }
 
-  private mockRender(module: any, name: string, props: Record<string, unknown>, context: RenderContext): string {
-    // Mock rendering - in production uses ReactDOMServer
+  private mockRender(module: ComponentModule, name: string, props: Record<string, unknown>, context: RenderContext): string {
+    // Mock rendering - in production uses ReactDOMServer. Every interpolated value is escaped:
+    // component names and props can originate from manifests or request data.
     const propsStr = Object.entries(props)
-      .map(([k, v]) => `${k}="${JSON.stringify(v).replace(/"/g, '"')}"`)
+      .filter(([k]) => ATTRIBUTE_NAME.test(k))
+      .map(([k, v]) => `${k}="${escapeHtml(JSON.stringify(v) ?? "null")}"`)
       .join(" ");
-    
-    return `<div data-component="${name}" data-category="${Object.keys(module).find(k => module[k]?.name === name) || 'unknown'}" ${propsStr}><!-- ${name} --></div>`;
+    const category = Object.keys(module).find((k) => {
+      const exported = module[k];
+      return typeof exported === "function" && exported.name === name;
+    }) ?? "unknown";
+
+    return `<div data-component="${escapeHtml(name)}" data-category="${escapeHtml(category)}" ${propsStr}><!-- ${escapeHtml(name).replace(/--/g, "- -")} --></div>`;
   }
 
   private assembleHTML(
@@ -297,7 +327,10 @@ export class SSRRenderer extends EventEmitter {
     context: RenderContext
   ): string {
     const layout = this.getLayout(pageName);
-    return layout.replace("{{content}}", components.join("\n"));
+    // Function replacer: `$&`/`$1` sequences inside component HTML must not be interpreted as patterns.
+    // Slots after the first stay empty instead of leaking the literal `{{content}}` marker.
+    const joined = components.join("\n");
+    return layout.replace("{{content}}", () => joined).split("{{content}}").join("");
   }
 
   private getLayout(pageName: string): string {
@@ -334,7 +367,7 @@ export class SSRRenderer extends EventEmitter {
   }
 
   private prepareHydrationData(
-    components: Array<{ module: any; props: Record<string, unknown>; name: string; category: ComponentCategory }>,
+    components: Array<{ module: ComponentModule; props: Record<string, unknown>; name: string; category: ComponentCategory }>,
     context: RenderContext
   ): Record<string, unknown> {
     return {
@@ -432,7 +465,7 @@ export class HydrationManager extends EventEmitter {
   }
 
   private findContainer(root: Element, componentName: string): Element | null {
-    return root.querySelector(`[data-component="${componentName}"]`);
+    return root.querySelector(`[data-component="${componentName.replace(/["\\]/g, "\\$&")}"]`);
   }
 
   private async hydrateComponent(task: HydrationTask, loader: ComponentLoader): Promise<void> {
@@ -521,11 +554,11 @@ export class APIIntegration extends EventEmitter {
   }
 
   // Identity & Auth APIs
-  async login(credentials: { email: string; password: string }): Promise<{ token: string; user: any }> {
+  async login(credentials: { email: string; password: string }): Promise<{ token: string; user: Record<string, unknown> }> {
     return this.request("POST", "/api/auth/login", credentials);
   }
 
-  async register(data: { email: string; password: string; name: string }): Promise<{ user: any }> {
+  async register(data: { email: string; password: string; name: string }): Promise<{ user: Record<string, unknown> }> {
     return this.request("POST", "/api/auth/register", data);
   }
 
@@ -534,58 +567,58 @@ export class APIIntegration extends EventEmitter {
   }
 
   // Cognitive APIs
-  async queryRAG(query: string, config?: any): Promise<any> {
+  async queryRAG(query: string, config?: unknown): Promise<unknown> {
     return this.request("POST", "/api/cognition/rag/query", { query, config });
   }
 
-  async routeToExpert(task: string, context?: any): Promise<any> {
+  async routeToExpert(task: string, context?: unknown): Promise<unknown> {
     return this.request("POST", "/api/cognition/moe/route", { task, context });
   }
 
   // Memory APIs
-  async searchMemory(query: string, filters?: any): Promise<any> {
+  async searchMemory(query: string, filters?: unknown): Promise<unknown> {
     return this.request("POST", "/api/memory/search", { query, filters });
   }
 
-  async addMemory(content: string, metadata?: any): Promise<any> {
+  async addMemory(content: string, metadata?: unknown): Promise<unknown> {
     return this.request("POST", "/api/memory/add", { content, metadata });
   }
 
   // Governance APIs
-  async evaluatePolicy(domain: string, input: any): Promise<any> {
+  async evaluatePolicy(domain: string, input: unknown): Promise<unknown> {
     return this.request("POST", "/api/governance/evaluate", { domain, input });
   }
 
-  async getAuditTrail(filters?: any): Promise<any> {
+  async getAuditTrail(filters?: unknown): Promise<unknown> {
     return this.request("GET", "/api/governance/audit", filters);
   }
 
   // Learning APIs
-  async startTraining(config: any): Promise<any> {
+  async startTraining(config: unknown): Promise<unknown> {
     return this.request("POST", "/api/learning/train", config);
   }
 
-  async getTrainingStatus(jobId: string): Promise<any> {
+  async getTrainingStatus(jobId: string): Promise<unknown> {
     return this.request("GET", `/api/learning/status/${jobId}`);
   }
 
   // Federation APIs
-  async getFederationStatus(federationId: string): Promise<any> {
+  async getFederationStatus(federationId: string): Promise<unknown> {
     return this.request("GET", `/api/federation/${federationId}/status`);
   }
 
-  async crossFederationRequest(request: any): Promise<any> {
+  async crossFederationRequest(request: unknown): Promise<unknown> {
     return this.request("POST", "/api/federation/cross", request);
   }
 
   // Pipeline APIs
-  async executePipeline(pipelineId: string, input: any): Promise<any> {
+  async executePipeline(pipelineId: string, input: unknown): Promise<unknown> {
     return this.request("POST", `/api/pipeline/${pipelineId}/execute`, input);
   }
 
   // WebSocket Connections
   connectWebSocket(endpoint: string, handlers: {
-    onMessage?: (data: any) => void;
+    onMessage?: (data: unknown) => void;
     onOpen?: () => void;
     onClose?: () => void;
     onError?: (error: Event) => void;

@@ -571,7 +571,7 @@ export class EvidenceSynthesizer {
     query: string,
     documents: Document[],
     onChunk: (chunk: string) => void
-  ): Promise<{ answer: string; citations: any[] }> {
+  ): Promise<{ answer: string; citations: unknown[] }> {
     // Streaming synthesis
     return { answer: "", citations: [] };
   }

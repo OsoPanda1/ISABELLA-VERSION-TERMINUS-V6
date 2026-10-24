@@ -102,6 +102,8 @@ export interface FederationMessage {
 
 export interface ConsensusProposal {
   readonly id: string;
+  /** Raft term in which the entry was created (needed for log up-to-date comparison). */
+  readonly term: number;
   readonly federationId: FederationId;
   readonly proposer: string;
   readonly payload: unknown;
@@ -116,6 +118,57 @@ export interface ConsensusVote {
   readonly vote: "yes" | "no" | "abstain";
   readonly signature: string;
   readonly timestamp: number;
+}
+
+export interface RequestVotePayload {
+  readonly type: "request_vote";
+  readonly term: number;
+  readonly candidateId: string;
+  readonly lastLogIndex: number;
+  readonly lastLogTerm: number;
+}
+export interface AppendEntriesPayload {
+  readonly type: "append_entries";
+  readonly term: number;
+  readonly leaderId: string;
+  readonly entries: readonly ConsensusProposal[];
+  readonly commitIndex: number;
+}
+export interface VoteResponsePayload {
+  readonly type: "vote_response";
+  readonly voter: string;
+  readonly voteGranted: boolean;
+  readonly term: number;
+}
+export type ConsensusPayload = RequestVotePayload | AppendEntriesPayload | VoteResponsePayload;
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
+const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+
+/** Network input is untrusted: validate shape and primitive types before it touches consensus state. */
+export function parseConsensusPayload(raw: unknown): ConsensusPayload | null {
+  if (!isRecord(raw)) return null;
+  switch (raw.type) {
+    case "request_vote":
+      return isNum(raw.term) && typeof raw.candidateId === "string" && isNum(raw.lastLogIndex) && isNum(raw.lastLogTerm)
+        ? { type: "request_vote", term: raw.term, candidateId: raw.candidateId, lastLogIndex: raw.lastLogIndex, lastLogTerm: raw.lastLogTerm }
+        : null;
+    case "append_entries": {
+      if (!isNum(raw.term) || typeof raw.leaderId !== "string" || !isNum(raw.commitIndex) || !Array.isArray(raw.entries)) return null;
+      const entries: ConsensusProposal[] = [];
+      for (const e of raw.entries as unknown[]) {
+        if (!isRecord(e) || typeof e.id !== "string" || !isNum(e.term) || typeof e.proposer !== "string") return null;
+        entries.push(e as unknown as ConsensusProposal);
+      }
+      return { type: "append_entries", term: raw.term, leaderId: raw.leaderId, entries, commitIndex: raw.commitIndex };
+    }
+    case "vote_response":
+      return isNum(raw.term) && typeof raw.voter === "string" && typeof raw.voteGranted === "boolean"
+        ? { type: "vote_response", term: raw.term, voter: raw.voter, voteGranted: raw.voteGranted }
+        : null;
+    default:
+      return null;
+  }
 }
 
 export interface FederationState {
@@ -241,13 +294,13 @@ export class ConsensusEngine extends EventEmitter {
       term: this.state.term,
       candidateId: this.getSelfId(),
       lastLogIndex: lastLog ? this.state.log.indexOf(lastLog) : 0,
-      lastLogTerm: lastLog ? lastLog.id : 0,
+      lastLogTerm: lastLog ? lastLog.term : 0,
     };
     
     this.broadcast("consensus", { type: "request_vote", ...request });
   }
 
-  handleRequestVote(request: any): { voteGranted: boolean; term: number } {
+  handleRequestVote(request: RequestVotePayload): { voteGranted: boolean; term: number } {
     if (request.term > this.state.term) {
       this.state.term = request.term;
       this.becomeFollower();
@@ -308,6 +361,7 @@ export class ConsensusEngine extends EventEmitter {
 
       const proposal: ConsensusProposal = {
         id: `prop_${randomBytes(12).toString("hex")}`,
+        term: this.state.term,
         federationId: this.config.id,
         proposer: this.getSelfId(),
         payload,
@@ -350,7 +404,7 @@ export class ConsensusEngine extends EventEmitter {
     });
   }
 
-  handleAppendEntries(request: any): { success: boolean; term: number } {
+  handleAppendEntries(request: AppendEntriesPayload): { success: boolean; term: number } {
     if (request.term >= this.state.term) {
       this.state.term = request.term;
       this.becomeFollower();
@@ -525,7 +579,8 @@ export class FederationRuntime extends EventEmitter {
   }
 
   private async handleConsensus(message: FederationMessage): Promise<void> {
-    const payload = message.payload as any;
+    const payload = parseConsensusPayload(message.payload);
+    if (!payload) return; // malformed or unknown consensus message: drop, never act on it
     
     switch (payload.type) {
       case "request_vote":
@@ -891,7 +946,7 @@ export class HeptafederatedMesh extends EventEmitter {
   }
 
   getMeshHealth(): { overall: "healthy" | "degraded" | "unhealthy"; federations: Record<FederationId, FederationHealth> } {
-    const federations: Record<FederationId, FederationHealth> = {} as any;
+    const federations: Record<FederationId, FederationHealth> = {} as Record<FederationId, FederationHealth>;
     let overall: "healthy" | "degraded" | "unhealthy" = "healthy";
     
     for (const [id, fed] of this.federations) {

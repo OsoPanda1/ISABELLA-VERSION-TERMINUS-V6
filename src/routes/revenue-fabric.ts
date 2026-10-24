@@ -17,6 +17,7 @@ import type { IETSTier, RevenueStream } from "../economy/revenue-fabric/types";
 import type { PlanId, SubscriptionStatus } from "../commerce/types";
 import { verifyStripeWebhookSignature } from "../commerce/webhook";
 import type { RevenueFabricStorage } from "../economy/revenue-fabric/storage";
+import type { FixedWindowRateLimiter } from "../security/rate-limit";
 
 export interface RevenueFabricDeps {
   readonly app: Application;
@@ -24,9 +25,9 @@ export interface RevenueFabricDeps {
   readonly authorizeProviderRoute: (req: Request, res: Response) => boolean;
   readonly authorizeUserRoute?: (req: Request, res: Response, targetUserId: string) => boolean | Promise<boolean>;
   readonly resolveAuthenticatedUserId?: (req: Request) => Promise<string | null>;
-  readonly enforceRateLimit: (req: Request, res: Response, limiter: any, bucket: string) => boolean;
-  readonly rateLimiter: any;
-  readonly publicCognitionLimiter: any;
+  readonly enforceRateLimit: (req: Request, res: Response, limiter: FixedWindowRateLimiter, bucket: string) => boolean;
+  readonly rateLimiter: FixedWindowRateLimiter;
+  readonly publicCognitionLimiter: FixedWindowRateLimiter;
   readonly providerTimeoutMs: number;
   readonly storage?: RevenueFabricStorage;
   readonly stripePublicKey?: string;

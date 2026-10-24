@@ -160,6 +160,19 @@ export interface Transaction {
   rollback(): Promise<void>;
 }
 
+/** Minimal structural shapes of the optional drivers (the real packages are injected at deploy time). */
+interface RedisClientLike { quit(): Promise<unknown> }
+interface PgClientLike { query(sql: string): Promise<unknown>; release(): void }
+interface PgPoolLike { end(): Promise<void>; connect(): Promise<PgClientLike> }
+interface Neo4jSessionLike { commitTransaction(): Promise<void>; rollbackTransaction(): Promise<void>; close(): Promise<void> }
+interface Neo4jDriverLike { close(): Promise<void>; session(): Neo4jSessionLike }
+
+/** A backend whose driver was never injected must fail loudly, not with `Cannot read properties of null`. */
+function requireDriver<T>(driver: T | null, backend: string): T {
+  if (driver === null) throw new Error(`BACKEND_NOT_CONNECTED: ${backend} driver has not been initialized`);
+  return driver;
+}
+
 /**
  * Redis Backend - Episodic Memory (Fast, TTL-based)
  */
@@ -167,7 +180,7 @@ export class RedisBackend extends MemoryBackendAdapter {
   readonly type: MemoryBackend = "redis";
   readonly config: MemoryBackendConfig;
 
-  private client: any = null; // Redis client
+  private client: RedisClientLike | null = null; // Redis client
   private connected: boolean = false;
 
   constructor(config: MemoryBackendConfig) {
@@ -271,7 +284,7 @@ export class PostgresBackend extends MemoryBackendAdapter {
   readonly type: MemoryBackend = "postgresql";
   readonly config: MemoryBackendConfig;
 
-  private pool: any = null; // pg Pool
+  private pool: PgPoolLike | null = null; // pg Pool
   private connected: boolean = false;
 
   constructor(config: MemoryBackendConfig) {
@@ -350,7 +363,7 @@ export class PostgresBackend extends MemoryBackendAdapter {
   }
 
   async beginTransaction(): Promise<Transaction> {
-    const client = await this.pool.connect();
+    const client = await requireDriver(this.pool, "postgres").connect();
     await client.query('BEGIN');
     return {
       id: crypto.randomUUID(),
@@ -377,7 +390,7 @@ export class QdrantBackend extends MemoryBackendAdapter {
   readonly type: MemoryBackend = "qdrant";
   readonly config: MemoryBackendConfig;
 
-  private client: any = null;
+  private client: unknown = null;
   private connected: boolean = false;
 
   constructor(config: MemoryBackendConfig) {
@@ -469,7 +482,7 @@ export class Neo4jBackend extends MemoryBackendAdapter {
   readonly type: MemoryBackend = "neo4j";
   readonly config: MemoryBackendConfig;
 
-  private driver: any = null;
+  private driver: Neo4jDriverLike | null = null;
   private connected: boolean = false;
 
   constructor(config: MemoryBackendConfig) {
@@ -537,7 +550,7 @@ export class Neo4jBackend extends MemoryBackendAdapter {
   }
 
   async beginTransaction(): Promise<Transaction> {
-    const session = this.driver.session();
+    const session = requireDriver(this.driver, "neo4j").session();
     return {
       id: crypto.randomUUID(),
       backend: this,
@@ -563,7 +576,7 @@ export class ObjectStorageBackend extends MemoryBackendAdapter {
   readonly type: MemoryBackend = "object_storage";
   readonly config: MemoryBackendConfig;
 
-  private client: any = null;
+  private client: unknown = null;
   private connected: boolean = false;
 
   constructor(config: MemoryBackendConfig) {
@@ -654,7 +667,7 @@ export class LedgerBackend extends MemoryBackendAdapter {
   readonly type: MemoryBackend = "ledger";
   readonly config: MemoryBackendConfig;
 
-  private ledger: any = null; // BookPI or similar
+  private ledger: unknown = null; // BookPI or similar (not yet wired)
   private connected: boolean = false;
 
   constructor(config: MemoryBackendConfig) {
@@ -1124,7 +1137,7 @@ export class MemoryMesh extends EventEmitter {
    * Health check all backends
    */
   async healthCheck(): Promise<Record<MemoryBackend, boolean>> {
-    const results: Record<MemoryBackend, boolean> = {} as any;
+    const results: Record<MemoryBackend, boolean> = {} as Record<MemoryBackend, boolean>;
     for (const [type, backend] of this.backends) {
       results[type] = await backend.healthCheck();
     }

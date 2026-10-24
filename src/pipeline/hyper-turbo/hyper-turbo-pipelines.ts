@@ -387,7 +387,7 @@ interface SpeculativeResult {
 export class ColdPathExecutor extends EventEmitter {
   private executor: StageExecutor;
   private config: ColdPathConfig;
-  private batchQueue: BatchedRequest<any>[] = [];
+  private batchQueue: BatchedRequest[] = [];
   private processing = false;
   private checkpoints: Map<string, Checkpoint[]> = new Map();
 
@@ -415,7 +415,8 @@ export class ColdPathExecutor extends EventEmitter {
         enqueuedAt: Date.now(),
       };
 
-      this.batchQueue.push(request);
+      // The queue is heterogeneous: each request keeps its own typed resolve(); erase T only at this boundary.
+      this.batchQueue.push(request as unknown as BatchedRequest);
       this.emit("request:queued", { pipelineId, queueLength: this.batchQueue.length });
 
       if (!this.processing) {
@@ -458,7 +459,7 @@ export class ColdPathExecutor extends EventEmitter {
     this.processing = false;
   }
 
-  private async processBatch(batch: BatchedRequest<any>[]): Promise<PipelineResult<any>[]> {
+  private async processBatch(batch: BatchedRequest[]): Promise<PipelineResult[]> {
     // Group by pipeline for efficiency
     const byPipeline = new Map<string, BatchedRequest[]>();
     for (const req of batch) {
@@ -470,7 +471,7 @@ export class ColdPathExecutor extends EventEmitter {
     const results: PipelineResult[] = [];
 
     for (const [pipelineId, requests] of byPipeline) {
-      const pipelineResults = await this.executePipeline<any>(pipelineId, requests as BatchedRequest<any>[]);
+      const pipelineResults = await this.executePipeline<unknown>(pipelineId, requests);
       results.push(...pipelineResults);
     }
 

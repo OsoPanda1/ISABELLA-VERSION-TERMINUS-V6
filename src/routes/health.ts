@@ -55,7 +55,7 @@ router.get('/healthz', async (_req: Request, res: Response) => {
  * Comprehensive readiness probe - checks all critical dependencies
  */
 router.get('/readyz', async (_req: Request, res: Response) => {
-    const checks: Record<string, { healthy: boolean; latencyMs?: number; details?: any }> = {};
+    const checks: Record<string, { healthy: boolean; latencyMs?: number; details?: unknown }> = {};
     let allHealthy = true;
 
     const startTime = Date.now();

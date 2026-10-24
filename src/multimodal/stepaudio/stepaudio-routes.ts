@@ -6,8 +6,9 @@
  * Express routes for StepAudio 3 Music integration
  */
 
-import { Router, Request, Response } from "express";
+import { Router, type Application, type Request, type Response } from "express";
 import { StepAudioTool, StepAudioGenerateOptions } from "./stepaudio-music";
+import { describeError, toHttpError } from "../http-error";
 
 const router: Router = Router();
 
@@ -121,14 +122,10 @@ router.post("/generate", async (req: Request, res: Response) => {
         timestamp: Date.now(),
       },
     });
-  } catch (error: any) {
-    console.error("StepAudio generation error:", error);
-    
-    const statusCode = error.statusCode || 500;
-    res.status(statusCode).json({
-      error: error.type || "GENERATION_FAILED",
-      message: error.message || String(error),
-    });
+  } catch (error: unknown) {
+    console.error("[StepAudio] route error:", describeError(error));
+    const { status, body } = toHttpError(error, "GENERATION_FAILED");
+    res.status(status).json(body);
   }
 });
 
@@ -157,11 +154,10 @@ router.post("/song", async (req: Request, res: Response) => {
       success: true,
       data: result,
     });
-  } catch (error: any) {
-    res.status(error.statusCode || 500).json({
-      error: error.type || "GENERATION_FAILED",
-      message: error.message || String(error),
-    });
+  } catch (error: unknown) {
+    console.error("[StepAudio] route error:", describeError(error));
+    const { status, body } = toHttpError(error, "GENERATION_FAILED");
+    res.status(status).json(body);
   }
 });
 
@@ -190,11 +186,10 @@ router.post("/instrumental", async (req: Request, res: Response) => {
       success: true,
       data: result,
     });
-  } catch (error: any) {
-    res.status(error.statusCode || 500).json({
-      error: error.type || "GENERATION_FAILED",
-      message: error.message || String(error),
-    });
+  } catch (error: unknown) {
+    console.error("[StepAudio] route error:", describeError(error));
+    const { status, body } = toHttpError(error, "GENERATION_FAILED");
+    res.status(status).json(body);
   }
 });
 
@@ -226,11 +221,10 @@ router.post("/cover", async (req: Request, res: Response) => {
       success: true,
       data: result,
     });
-  } catch (error: any) {
-    res.status(error.statusCode || 500).json({
-      error: error.type || "GENERATION_FAILED",
-      message: error.message || String(error),
-    });
+  } catch (error: unknown) {
+    console.error("[StepAudio] route error:", describeError(error));
+    const { status, body } = toHttpError(error, "GENERATION_FAILED");
+    res.status(status).json(body);
   }
 });
 
@@ -262,11 +256,10 @@ router.post("/vocal-to-music", async (req: Request, res: Response) => {
       success: true,
       data: result,
     });
-  } catch (error: any) {
-    res.status(error.statusCode || 500).json({
-      error: error.type || "GENERATION_FAILED",
-      message: error.message || String(error),
-    });
+  } catch (error: unknown) {
+    console.error("[StepAudio] route error:", describeError(error));
+    const { status, body } = toHttpError(error, "GENERATION_FAILED");
+    res.status(status).json(body);
   }
 });
 
@@ -288,11 +281,10 @@ router.post("/submit", async (req: Request, res: Response) => {
       success: true,
       data: { taskId },
     });
-  } catch (error: any) {
-    res.status(error.statusCode || 500).json({
-      error: error.type || "SUBMIT_FAILED",
-      message: error.message || String(error),
-    });
+  } catch (error: unknown) {
+    console.error("[StepAudio] route error:", describeError(error));
+    const { status, body } = toHttpError(error, "SUBMIT_FAILED");
+    res.status(status).json(body);
   }
 });
 
@@ -314,11 +306,10 @@ router.post("/query", async (req: Request, res: Response) => {
       success: true,
       data: result,
     });
-  } catch (error: any) {
-    res.status(error.statusCode || 500).json({
-      error: error.type || "QUERY_FAILED",
-      message: error.message || String(error),
-    });
+  } catch (error: unknown) {
+    console.error("[StepAudio] route error:", describeError(error));
+    const { status, body } = toHttpError(error, "QUERY_FAILED");
+    res.status(status).json(body);
   }
 });
 
@@ -352,7 +343,7 @@ router.get("/capabilities", (_req: Request, res: Response) => {
   });
 });
 
-export function registerStepAudioRoutes(app: any): void {
+export function registerStepAudioRoutes(app: Pick<Application, "use">): void {
   app.use("/api/v1/multimodal/stepaudio", router);
 }
 

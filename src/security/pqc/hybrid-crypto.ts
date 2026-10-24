@@ -18,8 +18,6 @@ import {
   timingSafeEqual,
   generateKeyPairSync,
   KeyObject,
-  type CipherGCM,
-  type DecipherGCM,
 } from "node:crypto";
 import { 
   mlKemKeyGen, mlKemEncaps, mlKemDecaps, 
@@ -33,6 +31,18 @@ import {
   type MLDSKeyPair, type MLDSParameterSet,
   type HybridDSResult, type HybridKeyPair,
 } from "./ml-dsa";
+
+type AeadAlgorithm = "AES-256-GCM" | "ChaCha20-Poly1305";
+
+/** Typed AEAD constructors (a tag length of 16 bytes is mandatory for ChaCha20-Poly1305). */
+const aeadEncryptor = (alg: AeadAlgorithm, key: Uint8Array, nonce: Uint8Array) =>
+  alg === "AES-256-GCM"
+    ? createCipheriv("aes-256-gcm", key, nonce, { authTagLength: 16 })
+    : createCipheriv("chacha20-poly1305", key, nonce, { authTagLength: 16 });
+const aeadDecryptor = (alg: AeadAlgorithm, key: Uint8Array, nonce: Uint8Array) =>
+  alg === "AES-256-GCM"
+    ? createDecipheriv("aes-256-gcm", key, nonce, { authTagLength: 16 })
+    : createDecipheriv("chacha20-poly1305", key, nonce, { authTagLength: 16 });
 
 export type HybridKeyExchangeResult = {
   readonly sharedSecret: Uint8Array;
@@ -236,7 +246,7 @@ export class HybridCryptoEngine {
     const nonce = randomBytes(12); // 96-bit nonce for GCM
     
     // authTagLength is mandatory for ChaCha20-Poly1305 and pins a 128-bit tag for AES-GCM.
-    const cipher = createCipheriv(this.symmetricAlgorithm, encryptionKey, nonce, { authTagLength: 16 }) as CipherGCM;
+    const cipher = aeadEncryptor(this.symmetricAlgorithm, encryptionKey, nonce);
     if (associatedData) {
       cipher.setAAD(associatedData);
     }
@@ -266,12 +276,7 @@ export class HybridCryptoEngine {
   ): Uint8Array {
     const decryptionKey = this.deriveEncryptionKey(key);
     
-    const decipher = createDecipheriv(
-      encrypted.algorithm,
-      decryptionKey,
-      encrypted.nonce,
-      { authTagLength: 16 }
-    ) as DecipherGCM;
+    const decipher = aeadDecryptor(encrypted.algorithm, decryptionKey, encrypted.nonce);
     
     if (encrypted.associatedData) {
       decipher.setAAD(encrypted.associatedData);

@@ -6,8 +6,9 @@
  * Express routes for WAN 2.2 I2V integration
  */
 
-import { Router, Request, Response } from "express";
-import { WANTool, WANImageInput, WANGenerateParams } from "./wan-i2v";
+import { Router, type Application, type Request, type Response } from "express";
+import { WANTool, WANImageInput, WANGenerateParams, type WANFileData } from "./wan-i2v";
+import { describeError, toHttpError } from "../http-error";
 
 const router: Router = Router();
 
@@ -99,12 +100,10 @@ router.post("/generate", async (req: Request, res: Response) => {
         timestamp: Date.now(),
       },
     });
-  } catch (error) {
-    console.error("WAN generation error:", error);
-    res.status(500).json({
-      error: "GENERATION_FAILED",
-      message: String(error),
-    });
+  } catch (error: unknown) {
+    console.error("[WAN] route error:", describeError(error));
+    const { status, body } = toHttpError(error, "GENERATION_FAILED");
+    res.status(status).json(body);
   }
 });
 
@@ -114,16 +113,29 @@ router.post("/generate", async (req: Request, res: Response) => {
  */
 router.post("/extract-frame", async (req: Request, res: Response) => {
   try {
-    const { video, timestamp } = req.body;
+    const { video, timestamp } = req.body as { video?: { path?: unknown; url?: unknown; size?: unknown; origName?: unknown }; timestamp?: unknown };
 
-    if (!video || !video.path) {
+    // Input comes from the network: accept only a bounded relative path (no traversal, no scheme, no NUL).
+    const path = video?.path;
+    if (typeof path !== "string" || path.length === 0 || path.length > 512 || path.includes("..") || path.includes("\0") || /^[a-z][a-z0-9+.-]*:/i.test(path)) {
       return res.status(400).json({
         error: "INVALID_INPUT",
-        message: "video must contain path",
+        message: "video.path must be a bounded relative path",
       });
     }
+    const at = timestamp === undefined ? 0 : timestamp;
+    if (typeof at !== "number" || !Number.isFinite(at) || at < 0 || at > 86_400) {
+      return res.status(400).json({ error: "INVALID_INPUT", message: "timestamp must be a finite number of seconds in [0, 86400]" });
+    }
+    const file: WANFileData = {
+      path,
+      url: typeof video?.url === "string" ? video.url : null,
+      size: typeof video?.size === "number" && Number.isFinite(video.size) ? video.size : null,
+      origName: typeof video?.origName === "string" ? video.origName.slice(0, 255) : null,
+      meta: { _type: "gradio.FileData" },
+    };
 
-    const result = await wanTool.extractFrame(video as any, timestamp || 0);
+    const result = await wanTool.extractFrame(file, at);
 
     res.json({
       success: true,
@@ -134,12 +146,10 @@ router.post("/extract-frame", async (req: Request, res: Response) => {
         timestamp: Date.now(),
       },
     });
-  } catch (error) {
-    console.error("Frame extraction error:", error);
-    res.status(500).json({
-      error: "EXTRACTION_FAILED",
-      message: String(error),
-    });
+  } catch (error: unknown) {
+    console.error("[WAN] route error:", describeError(error));
+    const { status, body } = toHttpError(error, "EXTRACTION_FAILED");
+    res.status(status).json(body);
   }
 });
 
@@ -179,12 +189,10 @@ router.post("/upload", async (req: Request, res: Response) => {
       success: true,
       data: uploaded,
     });
-  } catch (error) {
-    console.error("Upload error:", error);
-    res.status(500).json({
-      error: "UPLOAD_FAILED",
-      message: String(error),
-    });
+  } catch (error: unknown) {
+    console.error("[WAN] route error:", describeError(error));
+    const { status, body } = toHttpError(error, "UPLOAD_FAILED");
+    res.status(status).json(body);
   }
 });
 
@@ -199,10 +207,11 @@ router.get("/health", async (_req: Request, res: Response) => {
       success: true,
       data: health,
     });
-  } catch (error) {
+  } catch (error: unknown) {
+    console.error("[WAN] health check failed:", describeError(error));
     res.status(503).json({
       error: "HEALTH_CHECK_FAILED",
-      message: String(error),
+      message: "WAN provider health check failed.",
     });
   }
 });
@@ -232,7 +241,7 @@ router.get("/schedulers", (_req: Request, res: Response) => {
   });
 });
 
-export function registerWANRoutes(app: any): void {
+export function registerWANRoutes(app: Pick<Application, "use">): void {
   app.use("/api/v1/multimodal/wan", router);
 }
 
