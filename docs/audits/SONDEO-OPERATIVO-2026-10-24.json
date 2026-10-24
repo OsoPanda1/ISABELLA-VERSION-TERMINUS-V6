@@ -1,0 +1,218 @@
+{
+  "state": "draft",
+  "authorship": "engine-generated",
+  "generatedAt": "2026-10-24T17:30:37.176Z",
+  "scope": "local in-process Netlify HTTP adapter; not the published deployment",
+  "catalogEvidence": {
+    "controls": {
+      "declared": 6996,
+      "wired": 3,
+      "verified": 0,
+      "blocked": 1
+    },
+    "platformEntries": 32,
+    "platformHttpCountInSource": 30
+  },
+  "probes": [
+    {
+      "path": "/",
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "evidence": {
+        "bodyNotRecorded": true
+      }
+    },
+    {
+      "path": "/health",
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "evidence": {
+        "responseKeys": [
+          "status",
+          "runtime",
+          "version",
+          "invariant",
+          "timestamp"
+        ],
+        "status": "healthy"
+      }
+    },
+    {
+      "path": "/api/v1/health",
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "evidence": {
+        "responseKeys": [
+          "status",
+          "app",
+          "version",
+          "node",
+          "invariants",
+          "inferenceMode"
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "path": "/api/v1/healthz",
+      "status": 503,
+      "contentType": "application/json; charset=utf-8",
+      "evidence": {
+        "responseKeys": [
+          "status",
+          "ready",
+          "scope",
+          "limitation",
+          "blockers",
+          "evidence",
+          "checkedAt"
+        ],
+        "status": "degraded",
+        "scope": "deep-dependency-readiness",
+        "dependencyStates": [
+          {
+            "name": "bookpi-ledger",
+            "status": "degraded",
+            "required": true
+          },
+          {
+            "name": "inference-provider",
+            "status": "degraded",
+            "required": false
+          },
+          {
+            "name": "atlas-persistence",
+            "status": "degraded",
+            "required": false
+          },
+          {
+            "name": "signing-authority",
+            "status": "degraded",
+            "required": true
+          },
+          {
+            "name": "observability",
+            "status": "degraded",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "path": "/api/v1/runtime/capabilities",
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "evidence": {
+        "responseKeys": [
+          "runtime",
+          "status",
+          "capabilities",
+          "limitations",
+          "checkedAt"
+        ],
+        "status": "operational-with-degraded-external-dependencies"
+      }
+    },
+    {
+      "path": "/api/v1/yun/events",
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "evidence": {
+        "responseKeys": [
+          "schemaVersion",
+          "count",
+          "events"
+        ],
+        "count": 0
+      }
+    },
+    {
+      "path": "/api/v1/reina/status",
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "evidence": {
+        "responseKeys": [
+          "success",
+          "name",
+          "state",
+          "claims",
+          "disclaimers",
+          "logSize"
+        ],
+        "success": true
+      }
+    },
+    {
+      "path": "/api/v1/integrations/graph",
+      "status": 503,
+      "contentType": "application/json; charset=utf-8",
+      "evidence": {
+        "responseKeys": [
+          "success",
+          "error"
+        ],
+        "success": false
+      }
+    },
+    {
+      "path": "/api/v1/platform/capabilities",
+      "status": 503,
+      "contentType": "application/json; charset=utf-8",
+      "evidence": {
+        "responseKeys": [
+          "success",
+          "error"
+        ],
+        "success": false
+      }
+    },
+    {
+      "path": "/api/v1/revenue/health",
+      "status": 503,
+      "contentType": "application/json; charset=utf-8",
+      "evidence": {
+        "responseKeys": [
+          "success",
+          "status",
+          "service",
+          "version",
+          "timestamp"
+        ],
+        "status": "degraded",
+        "success": false
+      }
+    },
+    {
+      "path": "/healthz",
+      "status": 404,
+      "contentType": "text/html; charset=utf-8",
+      "evidence": {
+        "bodyNotRecorded": true
+      }
+    },
+    {
+      "path": "/readyz",
+      "status": 404,
+      "contentType": "text/html; charset=utf-8",
+      "evidence": {
+        "bodyNotRecorded": true
+      }
+    },
+    {
+      "path": "/status",
+      "status": 404,
+      "contentType": "text/html; charset=utf-8",
+      "evidence": {
+        "bodyNotRecorded": true
+      }
+    },
+    {
+      "path": "/metrics",
+      "status": 404,
+      "contentType": "text/html; charset=utf-8",
+      "evidence": {
+        "bodyNotRecorded": true
+      }
+    }
+  ]
+}
