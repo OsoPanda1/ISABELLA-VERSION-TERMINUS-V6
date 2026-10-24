@@ -67,4 +67,5 @@ EXPOSE 8080
 
 # Entry point with dumb-init for proper signal handling
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "dist/server.js"]
+# Bundled production entrypoint.
+CMD ["dist/server.js"]

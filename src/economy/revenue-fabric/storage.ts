@@ -425,22 +425,22 @@ export class RevenueFabricStorage {
         journalId = priorJournal.rows[0].journal_id;
       } else {
         const heads = await client.query(
-          \`SELECT head.entry_hash
+          `SELECT head.entry_hash
            FROM revenue_ledger_journals AS head
            WHERE NOT EXISTS (
              SELECT 1 FROM revenue_ledger_journals AS child
              WHERE child.previous_hash = head.entry_hash
            )
-           LIMIT 2\`,
+           LIMIT 2`,
         );
         if (heads.rows.length > 1) throw new Error("LEDGER_CHAIN_MULTIPLE_HEADS_REQUIRES_RECONCILIATION");
         const currentHead = heads.rows[0]?.entry_hash ?? "GENESIS";
         if (journal.previousHash !== currentHead) throw new Error("LEDGER_CHAIN_HEAD_CHANGED_RETRY");
 
         await client.query(
-          \`INSERT INTO revenue_ledger_journals
+          `INSERT INTO revenue_ledger_journals
            (journal_id, idempotency_key, settlement_id, postings, previous_hash, entry_hash, occurred_at, policy_version)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [journal.journalId, journal.idempotencyKey, journal.settlementId ?? null,
             JSON.stringify(journal.postings), journal.previousHash, journal.entryHash,
             journal.occurredAt, journal.policyVersion],
@@ -448,12 +448,12 @@ export class RevenueFabricStorage {
       }
 
       await client.query(
-        \`INSERT INTO revenue_settlements
+        `INSERT INTO revenue_settlements
          (idempotency_key, stream, currency, gross_amount, direct_cost, tax_amount, gateway_fee,
           operating_income, emergency_amount, innovation_amount, treasury_amount, distributable_pool,
           user_rate, platform_rate, user_share, platform_share, platform_phoenix_fund, platform_infrastructure, platform_dao, creator_id, creator_eligible, creator_eligibility_reason, amount_unit,
           iets_score, iets_tier, policy_version, occurred_at, external_payment_id, journal_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)\`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)`,
         [
           settlement.idempotencyKey, settlement.stream, settlement.currency,
           toMinorUnits(settlement.grossAmount), toMinorUnits(settlement.directCost),
@@ -920,9 +920,9 @@ export class RevenueFabricStorage {
     const client = await this.pool.connect();
     try {
       await client.query(
-        \`INSERT INTO stripe_checkout_sessions (session_id, user_id, plan_code, status, metadata)
+        `INSERT INTO stripe_checkout_sessions (session_id, user_id, plan_code, status, metadata)
          VALUES ($1, $2, $3, 'pending', $4)
-         ON CONFLICT (session_id) DO NOTHING\`,
+         ON CONFLICT (session_id) DO NOTHING`,
         [session.id, userId, planCode, JSON.stringify({ userId, planCode, stripeMode: "subscription" })],
       );
       return { sessionId: session.id, url: session.url };
@@ -943,9 +943,9 @@ export class RevenueFabricStorage {
     let customerId: string | undefined;
     try {
       const result = await client.query(
-        \`SELECT provider_customer_id FROM commerce_subscriptions
+        `SELECT provider_customer_id FROM commerce_subscriptions
          WHERE workspace_id = $1 AND provider_customer_id IS NOT NULL
-         ORDER BY updated_at DESC LIMIT 1\`,
+         ORDER BY updated_at DESC LIMIT 1`,
         [userId],
       );
       customerId = result.rows[0]?.provider_customer_id;
@@ -973,10 +973,10 @@ export class RevenueFabricStorage {
     try {
       await client.query("BEGIN");
       const claimed = await client.query(
-        \`INSERT INTO inbox_events (event_id, consumer_name, processed_at)
+        `INSERT INTO inbox_events (event_id, consumer_name, processed_at)
          VALUES ($1, 'stripe-revenue-fabric', NOW())
          ON CONFLICT (event_id) DO NOTHING
-         RETURNING event_id\`,
+         RETURNING event_id`,
         ["stripe:" + event.id],
       );
       if (claimed.rowCount === 0) {
@@ -998,9 +998,9 @@ export class RevenueFabricStorage {
             throw new Error("STRIPE_CHECKOUT_METADATA_INVALID");
           }
           await client.query(
-            \`UPDATE stripe_checkout_sessions
+            `UPDATE stripe_checkout_sessions
              SET status = 'completed', completed_at = NOW(), status_detail = 'checkout_completed_waiting_for_subscription_event'
-             WHERE session_id = $1 AND user_id = $2 AND plan_code = $3\`,
+             WHERE session_id = $1 AND user_id = $2 AND plan_code = $3`,
             [session.id ?? "", userId, planCode],
           );
         }
@@ -1040,7 +1040,7 @@ export class RevenueFabricStorage {
           : subscription.customer?.id ?? null;
 
         await client.query(
-          \`INSERT INTO commerce_subscriptions
+          `INSERT INTO commerce_subscriptions
            (workspace_id, plan_code, status, provider, external_ref, provider_customer_id,
             current_period_end, provider_event_created, created_at, updated_at)
            VALUES ($1, $2, $3, 'stripe', $4, $5, $6, $7, NOW(), NOW())
@@ -1053,12 +1053,12 @@ export class RevenueFabricStorage {
              current_period_end = EXCLUDED.current_period_end,
              provider_event_created = EXCLUDED.provider_event_created,
              updated_at = NOW()
-           WHERE commerce_subscriptions.provider_event_created < EXCLUDED.provider_event_created\`,
+           WHERE commerce_subscriptions.provider_event_created < EXCLUDED.provider_event_created`,
           [userId, planCode, status, subscriptionId, customerId, periodEnd, event.created],
         );
 
         await client.query(
-          \`INSERT INTO wallet_eligibility
+          `INSERT INTO wallet_eligibility
            (user_id, can_earn, tier, subscription_status, subscription_provider,
             subscription_external_id, subscription_current_period_end, provider_event_created)
            VALUES ($1, $2, 'STARTER', $3, 'stripe', $4, $5, $6)
@@ -1071,15 +1071,15 @@ export class RevenueFabricStorage {
              provider_event_created = EXCLUDED.provider_event_created,
              last_verified_at = NOW(),
              updated_at = NOW()
-           WHERE wallet_eligibility.provider_event_created < EXCLUDED.provider_event_created\`,
+           WHERE wallet_eligibility.provider_event_created < EXCLUDED.provider_event_created`,
           [userId, eligible, status, subscriptionId, periodEnd, event.created],
         );
       }
 
       await client.query(
-        \`INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, event_id, payload, status)
+        `INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, event_id, payload, status)
          VALUES ('StripeEvent', $1, $2, $3, $4::jsonb, 'PENDING')
-         ON CONFLICT (event_id) DO NOTHING\`,
+         ON CONFLICT (event_id) DO NOTHING`,
         [event.id, event.type, "stripe:" + event.id, JSON.stringify(event)],
       );
       await client.query("COMMIT");
@@ -1128,12 +1128,12 @@ export class RevenueFabricStorage {
 
   async getOutboxStats(): Promise<{ pending: number; published: number; failed: number; deadLetter: number }> {
     const result = await this.pool.query(
-      \`SELECT
+      `SELECT
          COUNT(*) FILTER (WHERE status = 'PENDING')::int AS pending,
          COUNT(*) FILTER (WHERE status = 'PUBLISHED')::int AS published,
          COUNT(*) FILTER (WHERE status = 'FAILED')::int AS failed,
          COUNT(*) FILTER (WHERE status = 'FAILED' AND attempts >= 5)::int AS dead_letter
-       FROM outbox_events\`,
+       FROM outbox_events`,
     );
     const row = result.rows[0] ?? {};
     return {
@@ -1148,11 +1148,11 @@ export class RevenueFabricStorage {
     id: string; eventId: string; eventType: string; payload: unknown; attempts: number; lastError: string | null;
   }>> {
     const result = await this.pool.query(
-      \`SELECT id, event_id, event_type, payload, attempts, last_error
+      `SELECT id, event_id, event_type, payload, attempts, last_error
        FROM outbox_events
        WHERE status = 'FAILED' AND attempts >= 5
        ORDER BY created_at DESC
-       LIMIT $1\`,
+       LIMIT $1`,
       [Math.max(1, Math.min(100, Math.floor(limit)))],
     );
     return result.rows.map((row) => ({
@@ -1167,10 +1167,10 @@ export class RevenueFabricStorage {
 
   async retryDeadLetterOutboxEvent(eventId: string): Promise<boolean> {
     const result = await this.pool.query(
-      \`UPDATE outbox_events
+      `UPDATE outbox_events
        SET status = 'PENDING', attempts = 0, last_error = NULL
        WHERE id = $1 AND status = 'FAILED' AND attempts >= 5
-       RETURNING id\`,
+       RETURNING id`,
       [eventId],
     );
     return result.rowCount === 1;

@@ -425,7 +425,19 @@ const sendMessage = async (text) => {
     const response = await fetch('/api/v1/cognition/route', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input, sessionId, lens: window.IsabellaChatPlus?.getLens?.() || 'general' }),
+      body: JSON.stringify({
+        input,
+        sessionId,
+        modelEngine: 'auto',
+        focusLens: window.IsabellaChatPlus?.getLens?.() || 'general',
+        history: [...messages.querySelectorAll('.message')]
+          .slice(-16)
+          .map((message) => ({
+            role: message.classList.contains('user') ? 'user' : 'assistant',
+            content: message.querySelector('p')?.dataset.raw || message.querySelector('p')?.textContent || ''
+          }))
+          .filter((turn) => turn.content.trim())
+      }),
       signal: abortController.signal
     });
     
@@ -440,7 +452,7 @@ const sendMessage = async (text) => {
         assistantPara.textContent = payload.output;
       }
       if (window.IsabellaChatPlus?.decorate) {
-        window.IsabellaChatPlus.decorate(assistantPara, { engine: payload.engine, latencyMs: payload.latencyMs });
+        window.IsabellaChatPlus.decorate(assistantPara, { engine: payload.responseEngine || payload.engine, latencyMs: payload.latencyMs });
       }
       if (window.IsabellaChatPlus?.persist) window.IsabellaChatPlus.persist();
     } else {
@@ -448,8 +460,8 @@ const sendMessage = async (text) => {
     }
   } catch (err) {
     if (err.name === 'AbortError') return;
-    if (window.IsabellaChatPlus?.renderInto) {
-      window.IsabellaChatPlus.renderInto(assistantPara, `Error: ${err.message}`, { animate: false });
+      if (window.IsabellaChatPlus?.renderInto) {
+        window.IsabellaChatPlus.renderInto(assistantPara, `No pude completar la respuesta: ${err.message}. Puedes reintentarlo sin perder el contexto de esta sesión.`, { animate: false });
     } else {
       assistantPara.textContent = `Error: ${err.message}`;
     }

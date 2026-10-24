@@ -147,7 +147,7 @@ export function normalizeSettlement(inputs: SettlementInputs): SettlementResult 
     : !inputs.creatorId ? "CREATOR_ID_MISSING"
     : !eligibility ? "SUBSCRIPTION_STATE_MISSING"
     : eligibility.eligible ? "ELIGIBLE"
-    : eligibility.reason.toUpperCase();
+    : (eligibility.reason ?? "INELIGIBLE").toUpperCase();
 
   if (inputs.stream === "DATA_VAULT") {
     if (!inputs.consentEvidenceRef?.trim() || !inputs.dataLicenceEvidenceRef?.trim()) {
@@ -166,7 +166,7 @@ export function normalizeSettlement(inputs: SettlementInputs): SettlementResult 
     else creatorRateBps = creatorShareBpsForTier(iets.tier, inputs.stream === "HYPERAUTOMATION" ? "hyperautomation" : "standard");
   }
   const userRate = creatorRateBps / 10_000;
-  const platformRate = 1 - userRate;
+  const platformRate = round2(1 - userRate);
   const { tier } = iets;
 
   const userShare = round2(distributablePool * userRate);

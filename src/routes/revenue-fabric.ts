@@ -243,7 +243,7 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
   // Metering / Usage Events (Provider routes for recording, User routes for viewing)
   // ============================================================
 
-  app.post("/api/v1/revenue/usage", (req, res) => {
+  app.post("/api/v1/revenue/usage", async (req, res) => {
     if (!authorizeProviderRoute(req, res)) return;
     if (!enforceRateLimit(req, res, publicCognitionLimiter, "usage-record")) return;
 
