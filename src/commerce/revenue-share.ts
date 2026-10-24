@@ -151,13 +151,20 @@ export function computeRevenueShare(input: RevenueShareInput): RevenueShareResul
   // BigInt evita desbordar 2^53 al multiplicar centavos × bps.
   const userPool = Number((BigInt(net) * BigInt(bps)) / BigInt(BPS_DENOMINATOR));
   const eligible = decided.filter((d) => d.eligible).sort((a, b) => (a.p.userId < b.p.userId ? -1 : 1));
-  const totalPoints = eligible.reduce((s, d) => s + d.p.points, 0);
+  const totalPoints = eligible.reduce((sum, d) => sum + d.p.points, 0);
+  // A finite input can still overflow when aggregated. Reject rather than silently
+  // allocating money with Infinity or a denominator beyond safe numeric precision.
+  if (eligible.length > 0 && (!Number.isFinite(totalPoints) || totalPoints > Number.MAX_SAFE_INTEGER)) {
+    throw new Error("REVENUE_SHARE: total contribution points exceed safe numeric precision.");
+  }
 
   const payouts = new Map<string, number>();
   let distributed = 0;
   if (eligible.length > 0 && totalPoints > 0) {
     const rows = eligible.map((d) => {
-      const exact = (userPool * d.p.points) / totalPoints;
+      // Divide first: multiplying cents by a large points value first can lose
+      // integer precision even when the final share is bounded by userPool.
+      const exact = userPool * (d.p.points / totalPoints);
       const base = Math.floor(exact);
       return { id: d.p.userId, base, frac: exact - base };
     });
