@@ -18,20 +18,79 @@ Un módulo presente en el código no equivale a una integración externa activa.
 - Los pagos a creadores mediante Stripe Connect, el onboarding KYC, las retenciones/impuestos, las devoluciones, los contracargos y la conciliación bancaria **no están habilitados**. El devengo contable no significa que el dinero se haya transferido.
 - `POST /api/v1/revenue/my/wallet/payout` responde `503 PAYOUTS_NOT_CONFIGURED` y no debita saldo hasta que exista un proveedor de payout real, KYC, política fiscal, holdback y conciliación. Las cabeceras `x-user-id` y `x-session-id` no se aceptan como identidad: las rutas de wallet exigen identidad verificada por el host.
 
+## Motores nativos (in-process)
+
+Estos motores calculan dentro del proceso. Ninguno concede autoridad ni ejecuta efectos gobernados: son superficies de cómputo, no de decisión.
+
+| Motor | Archivo | Qué hace de verdad | Qué NO es |
+| --- | --- | --- | --- |
+| LLM nativo | `src/inference/local-engine.ts` | Coincidencia determinista de intenciones con traza de términos, puntaje de coincidencia y distribución de intenciones servidas | Un modelo neuronal entrenado |
+| MoE nativo | `src/lib/native-ml/moe-native.ts` | Router top-k con SGD puro en TypeScript; exportación/importación de artefactos con verificación de hash; diagnóstico real de balance (entropía, Gini, desviación de carga) | Un MoE de producción con miles de expertos |
+| TTS nativo | `src/tts/` | Normalización es-MX, prosodia, pistas culturales, emoción de 12 ejes (heurística), enrutamiento con fairness, memoria de pronunciación, gobernanza anti-replay | Vocoder neural (AMoSE/BigVGAN) |
+| Hyper Core Turbo | `src/hypercore/turbo-optimizer.ts` | Memoizador acotado con desalojo LRU real, `hitRate` como fracción (0..1), latencia p50/p95 y muestras de contexto en buffer aparte | Una caché distribuida o un benchmark de throughput |
+| Router cognitivo de voz | `src/tts/router.ts` | Softmax top-k con término de fairness `−β·share` sobre backends reales | Expertos neuronales aprendidos |
+
+### Honestidad de métricas
+
+- `hitRate` es una fracción de operaciones del proceso (0..1); `cacheHitRate` es el mismo valor en porcentaje (0..100). Nunca puede superar 1.
+- Las cifras de latencia son mediciones de reloj de pared del trabajo envuelto, no de la red ni del proveedor.
+- El diagnóstico MoE reporta el router **inicial (no entrenado)** como línea base; entrenar es una operación gobernada y separada, con aprobación `PENDING_REVIEW`.
+
 ## Arquitectura del repositorio
 
 | Área | Responsabilidad |
 | --- | --- |
 | `src/server.ts` | Runtime HTTP, integración de servicios, límites y wiring de dependencias |
 | `src/commerce/` | Planes, suscripciones, política de reparto, webhooks, autenticación de usuario |
+| `src/economy/` | Núcleo económico aditivo: valuación SCER, precios dinámicos, regalías, tesorería, afiliados y **flujos nativos de monetización** |
+| `src/economy/monetization-streams.ts` | Ocho flujos nativos medidos por unidades reales (tokens LLM, rutas MoE, caracteres TTS, segundos ASR, sellos de evidencia, bóveda de datos, capacidad de federación, tareas de agente) con reparto exacto en puntos base |
 | `src/economy/revenue-fabric/` | Cálculo de devengos, IETS, ledger de doble entrada, persistencia PostgreSQL, inbox/outbox |
 | `src/economy/sovereign-revenue-fabric.ts` | Motor de dominio con validación, política de reparto y evidencias de settlement |
 | `src/routes/revenue-fabric.ts` | APIs de settlement, billing, uso, wallet, outbox y readiness |
+| `src/routes/economy.ts` | API v3 de economía: valuación, cotización dinámica, regalías, ledger y flujos/quote de monetización |
+| `src/routes/native-engines.ts` | API de motores nativos: inventario, generación LLM local, diagnóstico MoE |
+| `src/hypercore/` | Runtime de hiperaceleración: predicción, caché semántica gobernada, router adaptativo y memoizador Turbo |
+| `src/tts/` | Motor de voz es-MX: normalización, prosodia, router con fairness, gobernanza anti-replay y adaptador nativo resiliente |
+| `src/inference/` | Enrutamiento y políticas de proveedores de IA, motor local determinista, límites de tiempo y multimodalidad |
+| `src/lib/native-ml/` | ML nativo gobernado: clasificadores, MoE top-k, artefactos con hash y contratos de identidad de modelo |
 | `src/crown/`, `src/identity/`, `src/bookpi/`, `src/ige-omega/` | Gobernanza, identidad, evidencia y runtime cognitivo |
-| `src/inference/` | Enrutamiento y políticas de proveedores de IA, límites de tiempo y multimodalidad |
 | `test/` | Pruebas unitarias y de integración; deben ejecutarse en CI para certificar este cambio |
 
 Los motores de monetización heredados que producen simulaciones o estructuras en memoria no deben usarse como fuente de verdad financiera. Los nuevos settlements pasan por la política compartida de `src/commerce/revenue-share.ts` y el motor normalizado de Revenue Fabric.
+
+## APIs de motores nativos
+
+| Método | Endpoint | Función |
+| --- | --- | --- |
+| GET | `/api/v1/native/engines` | Inventario de motores nativos con su estado y límites declarados |
+| GET | `/api/v1/native/llm/status` | Estado del LLM nativo y distribución de intenciones servidas |
+| POST | `/api/v1/native/llm/generate` | Generación determinista con traza; requiere administración |
+| POST | `/api/v1/native/moe/diagnostics` | Diagnóstico real de balance del router MoE; requiere administración |
+| GET | `/api/v1/hf/references` | Referencias verificadas del Hub por dominio nativo (`?domain=llm\|moe\|tts\|asr`) |
+
+Las respuestas declaran `authorizationPerformed:false` y `executionPerformed:false`. Generar texto o diagnosticar un router no concede autoridad ni produce efectos gobernados.
+
+## Flujos nativos de monetización
+
+`src/economy/monetization-streams.ts` define ocho flujos medidos por unidades que el runtime nativo puede contar de verdad. Todos usan aritmética entera sobre unidades menores (centavos) y reparto exacto en puntos base; el remanente de redondeo lo absorbe la plataforma.
+
+| ID | Flujo | Unidad | Cadencia |
+| --- | --- | --- | --- |
+| `M-21-native-llm-tokens` | LLM nativo por token | `inference_token` | uso |
+| `M-22-moe-routing` | Enrutamiento MoE por consulta | `moe_route` | uso |
+| `M-23-native-tts-chars` | TTS nativo por carácter | `tts_character` | uso |
+| `M-24-native-asr-seconds` | ASR nativo por segundo | `asr_second` | uso |
+| `M-25-evidence-seals` | Sellos de evidencia BookPI | `evidence_seal` | uso |
+| `M-26-sovereign-data-vault` | Bóveda de datos soberana | `vault_gb_month` | recurrente |
+| `M-27-federation-capacity` | Capacidad de federación | `federation_hour` | recurrente |
+| `M-28-agent-tasks` | Tareas de agente verificadas | `agent_task` | evento |
+
+| Método | Endpoint | Función |
+| --- | --- | --- |
+| GET | `/api/v3/economy/streams` | Catálogo de flujos con resumen por cadencia |
+| POST | `/api/v3/economy/quote` | Cotiza un flujo; `fundsMoved:false`, sin cobro ni transferencia |
+
+Los precios son referencias de configuración, **no un promedio de mercado verificado** ni una garantía de ingresos. La participación del creador se limita al rango de política 50–80%. La cotización calcula; no cobra, no debita y no transfiere.
 
 ## Política de reparto v5
 
@@ -194,5 +253,6 @@ Revisa la licencia de cada modelo, dataset, herramienta, proveedor y dependencia
 - Añadir políticas de moderación de ofertas y disputas de marketplace.
 - Confirmar el procesamiento de la outbox persistente y alertas operativas.
 - Revisar el historial existente del ledger: si hay ramas múltiples, conciliarlas mediante un procedimiento auditado antes de habilitar nuevos settlements.
+- Conectar el medidor real de los flujos nativos (tokens, rutas MoE, caracteres TTS, sellos) al ledger económico: hoy la cotización existe, la medición persistida no.
 
-**No confundir:** catálogo ≠ disponibilidad; sesión de checkout ≠ suscripción activa; devengo ≠ dinero pagado al creador; código implementado ≠ despliegue verificado.
+**No confundir:** catálogo ≠ disponibilidad; sesión de checkout ≠ suscripción activa; devengo ≠ dinero pagado al creador; código implementado ≠ despliegue verificado; cotización ≠ cobro.

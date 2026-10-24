@@ -48,6 +48,10 @@ export interface LocalEngineResult {
   intent: string;
   confidence: "HIGH" | "MEDIUM" | "LOW";
   template: string;
+  /** Match quality in 0..1 for the winning pattern (0 for the fallback). */
+  score: number;
+  /** Terms of the prompt that the winning pattern matched (explainability). */
+  matchedTerms: readonly string[];
 }
 
 interface IntentPattern {
@@ -209,6 +213,22 @@ const INTENT_PATTERNS: readonly IntentPattern[] = [
   },
 ];
 
+/** Keyword → grounded short answer, used when no full intent pattern matches. */
+const PARTIAL_KEYWORDS: Readonly<Record<string, string>> = {
+  "real del monte": "Real del Monte (Mineral del Monte) es el ancla territorial del ecosistema TAMV, en Hidalgo, México, a 2,660 msnm.",
+  real: "Real del Monte es el ancla territorial del ecosistema TAMV, ubicado en Hidalgo, México, a 2,660 msnm.",
+  monte: "Real del Monte (Mineral del Monte) alberga patrimonio minero cornish del siglo XIX.",
+  mina: "Las minas de Acosta y La Dificultad son patrimonio industrial de Real del Monte.",
+  paste: "El paste es patrimonio gastronómico heredado de los mineros de Cornualles. El Museo del Paste (2012) lo preserva.",
+  panteon: "El Panteón Inglés (1851) es un cementerio histórico con tumbas orientadas al este.",
+  seguridad: "La seguridad opera bajo Triple Blockade: ontológico, semántico y comportamental. Es heurístico, no probabilístico.",
+  memoria: "La memoria IKES escala de E0 (sin verificar) a E6 (establecido con evidencia).",
+  crown: "La red CROWN tiene 12 nodos cognitivos en 7 federaciones.",
+  libro: "BookPI es una hash-chain SHA-256 volátil, no WORM durable.",
+  ayuda: "Puedes preguntarme sobre territorio, gobernanza, capacidades, memoria o el estado del sistema.",
+  hola: "¡Hola! Soy Isabella Villaseñor AI. ¿En qué puedo asistirte?",
+};
+
 const FALLBACK_RESPONSES = [
   "Entiendo tu consulta. Como Isabella Villaseñor AI, opero con rigor académico y sobriedad. No tengo suficiente contexto para responder con precisión, pero puedo ayudarte con:\n\n- Territorio de Real del Monte\n- Gobernanza y invariante operativo\n- Capacidades del ecosistema TAMV\n- Memoria epistemológica IKES\n\n¿Te gustaría explorar alguno de estos temas?",
   "Recibido. Mi arquitectura me distingue entre hechos, inferencias y especulación. Para responder con mayor precisión, podrías especificar si tu consulta se relaciona con el patrimonio territorial, la gobernanza cognitiva, las capacidades técnicas o la memoria epistemológica del ecosistema.",
@@ -218,6 +238,7 @@ const FALLBACK_RESPONSES = [
 export class LocalInferenceEngine {
   private readonly config: LocalEngineConfig;
   private fallbackIndex = 0;
+  private readonly intentCounts = new Map<string, number>();
 
   constructor(config?: Partial<LocalEngineConfig>) {
     this.config = { ...getConfigFromEnv(), ...config };
@@ -226,6 +247,7 @@ export class LocalInferenceEngine {
   async generate(request: GenerationRequest): Promise<{ text: string; intent: string; confidence: "HIGH" | "MEDIUM" | "LOW" }> {
     const prompt = request.prompt.trim();
     const result = this.matchIntent(prompt);
+    this.intentCounts.set(result.intent, (this.intentCounts.get(result.intent) ?? 0) + 1);
     const text = result.text.slice(0, this.config.maxResponseLength);
     return {
       text,
@@ -247,6 +269,8 @@ export class LocalInferenceEngine {
             intent: pattern.intent,
             confidence: "HIGH",
             template: pattern.intent,
+            score: 1,
+            matchedTerms: this.matchedTerms(pattern, normalizedPrompt),
           };
         }
       }
@@ -255,10 +279,12 @@ export class LocalInferenceEngine {
     const partialMatch = this.findPartialMatch(normalizedPrompt);
     if (partialMatch) {
       return {
-        text: partialMatch,
+        text: partialMatch.text,
         intent: "partial",
         confidence: "MEDIUM",
         template: "partial",
+        score: partialMatch.score,
+        matchedTerms: [partialMatch.keyword],
       };
     }
 
@@ -269,35 +295,41 @@ export class LocalInferenceEngine {
       intent: "unknown",
       confidence: "LOW",
       template: "fallback",
+      score: 0,
+      matchedTerms: [],
     };
   }
 
-  private findPartialMatch(prompt: string): string | null {
-    const keywords: Record<string, string> = {
-      real: "Real del Monte es el ancla territorial del ecosistema TAMV, ubicado en Hidalgo, México, a 2,660 msnm.",
-      monte: "Real del Monte (Mineral del Monte) alberga patrimonio minero cornish del siglo XIX.",
-      mina: "Las minas de Acosta y La Dificultad son patrimonio industrial de Real del Monte.",
-      paste: "El paste es patrimonio gastronómico heredado de los mineros de Cornualles. El Museo del Paste (2012) lo preserva.",
-      panteon: "El Panteón Inglés (1851) es un cementerio histórico con tumbas orientadas al este.",
-      seguridad: "La seguridad opera bajo Triple Blockade: ontológico, semántico y comportamental. Es heurístico, no probabilístico.",
-      memoria: "La memoria IKES escala de E0 (sin verificar) a E6 (establecido con evidencia).",
-      crown: "La red CROWN tiene 12 nodos cognitivos en 7 federaciones.",
-      libro: "BookPI es una hash-chain SHA-256 volátil, no WORM durable.",
-      ayuda: "Puedes preguntarme sobre territorio, gobernanza, capacidades, memoria o el estado del sistema.",
-      hola: "¡Hola! Soy Isabella Villaseñor AI. ¿En qué puedo asistirte?",
-    };
-
-    for (const [key, value] of Object.entries(keywords)) {
-      if (prompt.includes(key)) {
-        return value;
-      }
+  /** Prompt terms (length >= 4) that appear literally in the winning pattern source. */
+  private matchedTerms(pattern: IntentPattern, normalizedPrompt: string): readonly string[] {
+    const source = pattern.patterns.map((re) => re.source).join(" ").toLowerCase();
+    const terms = new Set<string>();
+    for (const token of normalizedPrompt.match(/[\p{L}\p{N}]{4,}/gu) ?? []) {
+      if (source.includes(token)) terms.add(token);
     }
+    return Object.freeze([...terms].slice(0, 8));
+  }
 
-    return null;
+  /** Best partial keyword hit, scored by relative keyword length (longer = more specific). */
+  private findPartialMatch(prompt: string): { text: string; keyword: string; score: number } | null {
+    let best: { text: string; keyword: string; score: number } | null = null;
+    for (const [key, value] of Object.entries(PARTIAL_KEYWORDS)) {
+      if (!prompt.includes(key)) continue;
+      const score = key.length / prompt.length;
+      if (!best || score > best.score) best = { text: value, keyword: key, score };
+    }
+    return best;
   }
 
   getSnapshot(): LocalEngineConfig {
     return { ...this.config };
+  }
+
+  /** Which intents this process actually served, most frequent first. */
+  intentDistribution(): readonly { intent: string; count: number }[] {
+    return [...this.intentCounts.entries()]
+      .map(([intent, count]) => ({ intent, count }))
+      .sort((a, b) => b.count - a.count || a.intent.localeCompare(b.intent));
   }
 }
 

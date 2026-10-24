@@ -63,6 +63,12 @@ export interface RevenueSplit {
   refundReserveCents: number;
   communityShareCents: number;
   netUserAmountCents: number;
+  /**
+   * Loss not covered by gross when infrastructureCostCents > grossAmountCents
+   * (present only in that branch). Absent means zero. It is reported, never
+   * hidden inside another line.
+   */
+  uncoveredLossCents?: number;
 }
 
 export interface MonetizationEvent {

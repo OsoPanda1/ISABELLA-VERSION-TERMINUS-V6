@@ -8,7 +8,10 @@ import type { Application, Request, Response } from "express";
 import type { FixedWindowRateLimiter } from "../security/rate-limit";
 import {
   EconomicLedger,
+  listMonetizationStreams,
+  monetizationSummary,
   planRoyaltyDistribution,
+  quoteMonetization,
   quotePrice,
   valuateAsset,
   type EconomicEvent,
@@ -145,5 +148,45 @@ export function registerEconomyRoutes(deps: EconomyRouteDeps): void {
       integrity: deps.ledger.verifyIntegrity(),
       head,
     });
+  });
+
+  // Native monetization streams Ω: metered revenue methods bound to real
+  // runtime units (inference tokens, MoE routes, TTS chars, evidence seals…).
+  // The GET catalogs; the POST quotes. Neither charges, debits nor transfers.
+  app.get("/api/v3/economy/streams", (req, res) => {
+    if (!deps.enforceRateLimit(req, res, deps.rateLimiter, "economy-streams")) return;
+    res.json({
+      success: true,
+      fundsMoved: false,
+      authorizationPerformed: false,
+      summary: monetizationSummary(),
+      streams: listMonetizationStreams(),
+    });
+  });
+
+  app.post("/api/v3/economy/quote", (req, res) => {
+    if (!deps.enforceRateLimit(req, res, deps.rateLimiter, "economy-quote")) return;
+    if (!isRecord(req.body)) {
+      res.status(400).json({ success: false, error: "ECONOMY_BODY_REQUIRED" });
+      return;
+    }
+    const streamId = typeof req.body.streamId === "string" ? req.body.streamId : "";
+    if (!streamId) {
+      res.status(400).json({ success: false, error: "ECONOMY_STREAM_ID_REQUIRED" });
+      return;
+    }
+    const quantity = Number(req.body.quantity);
+    try {
+      const quote = quoteMonetization({
+        streamId,
+        quantity,
+        ...(req.body.loyaltyDiscountBps === undefined ? {} : { loyaltyDiscountBps: Number(req.body.loyaltyDiscountBps) }),
+        ...(req.body.demandMultiplierBps === undefined ? {} : { demandMultiplierBps: Number(req.body.demandMultiplierBps) }),
+      });
+      res.json({ success: true, fundsMoved: false, authorizationPerformed: false, quote });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "ECONOMY_QUOTE_INVALID";
+      res.status(message === "MONETIZATION_STREAM_NOT_FOUND" ? 404 : 400).json({ success: false, error: message });
+    }
   });
 }

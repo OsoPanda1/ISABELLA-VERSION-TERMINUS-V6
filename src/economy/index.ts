@@ -15,5 +15,6 @@ export * from "./cognitive-capital-market";
 
 export * from "./monetization-engine";
 export * from "./dynamic-pricing";
+export * from "./monetization-streams";
 
 export * from "./sovereign-revenue-fabric";

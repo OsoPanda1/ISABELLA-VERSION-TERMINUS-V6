@@ -79,6 +79,7 @@ import { registerDocumentSealRoutes } from "./routes/document-seal";
 import { registerPipelineRoutes } from "./routes/pipeline";
 import { registerYunEventRoutes } from "./routes/yun-events";
 import { registerEconomyRoutes } from "./routes/economy";
+import { registerNativeEnginesRoutes } from "./routes/native-engines";
 import { registerTreasuryRoutes } from "./routes/treasury";
 import { registerOmegaRoutes } from "./routes/omega";
 import { registerRevenueFabricRoutes } from "./routes/revenue-fabric";
@@ -3462,6 +3463,17 @@ registerYunEventRoutes({
   authorizeAdmin: (req, res) => authorizeApiToken(req, res, "GENESIS_ADMIN_API_TOKEN"),
   enforceRateLimit,
   rateLimiter: publicScanLimiter,
+});
+
+// ── Native Engines Ω (state: draft | engine-generated) ─ expone los motores
+// NATIVOS en proceso (LLM local determinista, diagnóstico del router MoE,
+// inventario de TTS nativo y del memoizador Turbo). Los GET son viewer; los POST
+// son admin-gated. Generar o diagnosticar NO concede autoridad ni ejecuta efectos.
+registerNativeEnginesRoutes({
+  app,
+  enforceRateLimit,
+  rateLimiter: publicCognitionLimiter,
+  authorizeAdmin: (req, res) => authorizeApiToken(req, res, "GENESIS_ADMIN_API_TOKEN"),
 });
 
 // ── SCER Economy API v3 (state: draft | engine-generated) ─ núcleo económico aditivo:

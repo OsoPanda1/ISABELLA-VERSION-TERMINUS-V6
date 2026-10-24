@@ -1128,6 +1128,93 @@ paths:
         "200":
           description: OK
 
+  /api/v1/native/engines:
+    get:
+      summary: Inventario de los motores nativos en proceso (LLM local determinista, router MoE, voz, memoizador Turbo)
+      operationId: getNativeEngines
+      security: []
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/native/llm/status:
+    get:
+      summary: Estado del LLM nativo y distribución de intenciones servidas en este proceso
+      operationId: getNativeLlmStatus
+      security: []
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/native/llm/generate:
+    post:
+      summary: Generación por el LLM nativo determinista con traza de intención. No autoriza ni ejecuta efectos.
+      description: Requiere el token de administración. Coincidencia determinista de intenciones; no es un modelo neuronal entrenado.
+      operationId: postNativeLlmGenerate
+      security:
+        - AdminBearer: []
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: prompt requerido
+        "401":
+          description: No autorizado
+        "413":
+          description: prompt demasiado largo
+
+  /api/v1/native/moe/diagnostics:
+    post:
+      summary: Diagnóstico real de balance del router MoE (entropía, Gini, carga por experto) sobre un lote
+      description: Requiere el token de administración. Reporta el router inicial (no entrenado) como línea base honesta; aprobación PENDING_REVIEW.
+      operationId: postNativeMoeDiagnostics
+      security:
+        - AdminBearer: []
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: entradas inválidas
+        "401":
+          description: No autorizado
+        "413":
+          description: demasiadas filas
+
+  /api/v3/economy/streams:
+    get:
+      summary: Catálogo de flujos nativos de monetización por unidades reales (tokens, rutas MoE, caracteres TTS, sellos de evidencia)
+      operationId: getEconomyStreams
+      security: []
+      responses:
+        "200":
+          description: OK
+
+  /api/v3/economy/quote:
+    post:
+      summary: Cotiza un flujo de monetización nativo con reparto exacto en puntos base. No cobra, no debita, no transfiere.
+      description: Aritmética entera determinista sobre unidades menores. Respuesta con fundsMoved=false y authorizationPerformed=false.
+      operationId: postEconomyQuote
+      security: []
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: cuerpo o parámetros inválidos
+        "404":
+          description: flujo no encontrado
+
+  /api/v1/hf/references:
+    get:
+      summary: Referencias verificadas del Hub por dominio nativo (descubrimiento, no ejecución)
+      description: Cada repo se comprobó que existe en huggingface.co; Isabella no carga ni ejecuta esos pesos. Licencias transcritas de la tarjeta del Hub.
+      operationId: getHfReferences
+      security: []
+      parameters:
+        - { name: domain, in: query, required: false, schema: { type: string, enum: [llm, moe, tts, asr] } }
+      responses:
+        "200":
+          description: OK
+
   /api/v1/billing/entitlements:
     get:
       summary: Entitlements de un plan

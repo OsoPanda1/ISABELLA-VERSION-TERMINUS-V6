@@ -88,6 +88,18 @@ export interface MoePrediction {
   fallbackUsed: boolean;
 }
 
+/** Real (computed) router balance diagnostics for a batch of inputs. */
+export interface MoeRoutingDiagnostics {
+  readonly entropy: number;
+  readonly entropyNormalized: number;
+  readonly gini: number;
+  readonly loadMin: number;
+  readonly loadMax: number;
+  readonly loadStd: number;
+  readonly meanProbabilities: readonly number[];
+  readonly hardLoads: readonly number[];
+}
+
 export interface MoeBatchOptions {
   capacityFactor?: number;
   fallbackExpertId?: number;
@@ -274,6 +286,7 @@ function validateDataset(
 
 export class MoeNativeModel {
   readonly hyper: MoeNativeHyperParams;
+  // Not `readonly`: fromArtifact restores trained weights in place after hash verification.
   private readonly routerW: number[][];
   private readonly routerB: number[];
   private readonly expertW: number[][];
@@ -457,6 +470,102 @@ export class MoeNativeModel {
       routerBias: this.routerB,
       expertWeights: this.expertW,
       expertBias: this.expertB,
+    });
+  }
+
+  /**
+   * Restores a trained model from a previously exported artifact. Fails closed
+   * on any shape mismatch and verifies the artifact hash so a tampered or
+   * truncated artifact is never silently loaded as a valid model.
+   */
+  static fromArtifact(config: MoeNativeConfig, artifact: MoeModelArtifact): MoeNativeModel {
+    const model = new MoeNativeModel(config);
+    const { inputDim, expertCount } = model.hyper;
+    const expectMatrix = (matrix: number[][], code: string): void => {
+      if (!Array.isArray(matrix) || matrix.length !== expertCount) throw new Error(code);
+      for (const row of matrix) {
+        if (!Array.isArray(row) || row.length !== inputDim) throw new Error(code);
+        for (const value of row) requireFinite(value, code);
+      }
+    };
+    const expectVector = (vector: number[], code: string): void => {
+      if (!Array.isArray(vector) || vector.length !== expertCount) throw new Error(code);
+      for (const value of vector) requireFinite(value, code);
+    };
+    expectMatrix(artifact.routerWeights, "moe_artifact_router_weights_invalid");
+    expectVector(artifact.routerBias, "moe_artifact_router_bias_invalid");
+    expectMatrix(artifact.expertWeights, "moe_artifact_expert_weights_invalid");
+    expectVector(artifact.expertBias, "moe_artifact_expert_bias_invalid");
+    const restored: MoeModelArtifact = {
+      routerWeights: artifact.routerWeights.map((row) => [...row]),
+      routerBias: [...artifact.routerBias],
+      expertWeights: artifact.expertWeights.map((row) => [...row]),
+      expertBias: [...artifact.expertBias],
+      artifactHash: artifact.artifactHash,
+    };
+    if (restored.artifactHash !== model.artifactHashFrom(restored)) {
+      throw new Error("moe_artifact_hash_mismatch");
+    }
+    model.routerW.splice(0, model.routerW.length, ...restored.routerWeights.map((row) => [...row]));
+    model.routerB.splice(0, model.routerB.length, ...restored.routerBias);
+    model.expertW.splice(0, model.expertW.length, ...restored.expertWeights.map((row) => [...row]));
+    model.expertB.splice(0, model.expertB.length, ...restored.expertBias);
+    return model;
+  }
+
+  /** Recomputes the artifact hash from a candidate payload (used by fromArtifact). */
+  private artifactHashFrom(artifact: Pick<MoeModelArtifact, "routerWeights" | "routerBias" | "expertWeights" | "expertBias">): string {
+    return sha256({
+      inputDim: this.hyper.inputDim,
+      expertCount: this.hyper.expertCount,
+      topK: this.hyper.topK,
+      mode: this.hyper.mode,
+      routerWeights: artifact.routerWeights,
+      routerBias: artifact.routerBias,
+      expertWeights: artifact.expertWeights,
+      expertBias: artifact.expertBias,
+    });
+  }
+
+  /**
+   * Router diagnostics over a batch: Shannon entropy of the mean gate
+   * distribution (how much routing mass is spread) and the Gini coefficient of
+   * hard-assignment loads (how imbalanced expert utilization is). Both are
+   * computed from real routing, not declared. `entropyNormalized` divides by
+   * ln(E) so 1 means uniform routing and 0 means all mass on one expert.
+   */
+  routingDiagnostics(inputs: number[][]): MoeRoutingDiagnostics {
+    if (!Array.isArray(inputs) || inputs.length === 0) throw new Error("moe_batch_empty");
+    const { expertCount, topK } = this.hyper;
+    const meanProbability = new Array<number>(expertCount).fill(0);
+    const hardCounts = new Array<number>(expertCount).fill(0);
+    for (const input of inputs) {
+      const { probabilities } = this.gate(input);
+      const selected = selectTopK(probabilities, topK);
+      hardCounts[selected[0]!]! += 1;
+      for (let e = 0; e < expertCount; e++) meanProbability[e]! += probabilities[e]! / inputs.length;
+    }
+    let entropy = 0;
+    for (const p of meanProbability) if (p > 0) entropy -= p * Math.log(p);
+    const entropyNormalized = expertCount > 1 ? entropy / Math.log(expertCount) : 0;
+    const sorted = [...hardCounts].sort((a, b) => a - b);
+    const total = sorted.reduce((sum, value) => sum + value, 0);
+    let gini = 0;
+    if (total > 0) {
+      let weighted = 0;
+      for (let i = 0; i < sorted.length; i++) weighted += (i + 1) * sorted[i]!;
+      gini = (2 * weighted) / (expertCount * total) - (expertCount + 1) / expertCount;
+    }
+    const loads = hardCounts.map((count) => count / inputs.length);
+    return Object.freeze({
+      entropy: entropy,
+      entropyNormalized,
+      gini: Math.max(0, Math.min(1, gini)),
+      loadMin: Math.min(...loads),
+      loadMax: Math.max(...loads),
+      loadStd: Math.sqrt(loads.reduce((acc, load) => acc + (load - 1 / expertCount) ** 2, 0) / expertCount),
+      meanProbabilities: Object.freeze([...meanProbability]),
+      hardLoads: Object.freeze([...loads]),
     });
   }
 

@@ -68,3 +68,34 @@ export function hfTaskLabel(task: string): string {
 export function hfHubSummary(): { readonly methodId: string; readonly tasks: number } {
   return Object.freeze({ methodId: HF_HUB_METHOD_ID, tasks: HF_HUB_TASKS.length });
 }
+
+/**
+ * Referencias verificadas del Hub por dominio nativo de Isabella.
+ *
+ * Honestidad: cada `repoId` se comprobó que EXISTE en huggingface.co en la fecha
+ * indicada, con su `pipeline_tag` y licencia declaradas por el propio Hub. Esto
+ * es descubrimiento, NO ejecución: Isabella no carga estos pesos ni genera con
+ * ellos. La licencia se transcribe de la tarjeta del Hub y debe revalidarse antes
+ * de cualquier uso comercial (cambia sin aviso).
+ */
+export interface HfVerifiedReference {
+  /** Dominio nativo de Isabella al que sirve de referencia. */
+  readonly domain: "llm" | "moe" | "tts" | "asr";
+  readonly repoId: string;
+  readonly task: string;
+  readonly license: string;
+  /** Fecha (UTC, ISO) en que se verificó la existencia del repo. */
+  readonly verifiedAt: string;
+}
+
+export const HF_VERIFIED_REFERENCES: readonly HfVerifiedReference[] = Object.freeze([
+  Object.freeze({ domain: "moe", repoId: "migtissera/Synthia-MoE-v3-Mixtral-8x7B", task: "text-generation", license: "apache-2.0", verifiedAt: "2026-10-24" }),
+  Object.freeze({ domain: "moe", repoId: "Alpha-VLLM/MoE-Mixtral-7B-8Expert", task: "text-generation", license: "mit", verifiedAt: "2026-10-24" }),
+  Object.freeze({ domain: "tts", repoId: "HirCoir/Piper-TTS-Laura", task: "text-to-speech", license: "cc-by-nc-4.0", verifiedAt: "2026-10-24" }),
+  Object.freeze({ domain: "asr", repoId: "DrishtiSharma/wav2vec2-xlsr-spanish-speech-emotion-recognition-v2", task: "unspecified-on-card", license: "unspecified-on-card", verifiedAt: "2026-10-24" }),
+]);
+
+/** Referencias verificadas para un dominio nativo. Devuelve copia congelada. */
+export function hfReferencesForDomain(domain: HfVerifiedReference["domain"]): readonly HfVerifiedReference[] {
+  return Object.freeze(HF_VERIFIED_REFERENCES.filter((reference) => reference.domain === domain));
+}

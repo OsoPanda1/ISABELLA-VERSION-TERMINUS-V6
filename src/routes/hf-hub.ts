@@ -8,7 +8,7 @@
 import type { Application, Request, Response } from "express";
 import type { FixedWindowRateLimiter } from "../security/rate-limit";
 import type { HfCatalogInput, HfCatalogResult, HfIngestInput, HfKnowledgeDocument } from "../hf-hub";
-import { HF_HUB_METHOD_ID } from "../hf-hub";
+import { HF_HUB_METHOD_ID, HF_VERIFIED_REFERENCES, hfReferencesForDomain } from "../hf-hub";
 
 export const HF_HUB_ROUTES_VERSION = "1.0.0" as const;
 
@@ -65,5 +65,30 @@ export function registerHfHubRoutes(deps: HfHubRouteDeps): void {
       const status = message.includes("UNSAFE") || message.includes("REQUIRED") ? 400 : 502;
       res.status(status).json({ success: false, error: message });
     }
+  });
+
+  // Referencias verificadas del Hub por dominio nativo (descubrimiento, NO ejecución).
+  // Cada entrada se comprobó que existe en huggingface.co; la licencia se transcribe
+  // de la tarjeta del Hub y debe revalidarse antes de uso comercial.
+  app.get("/api/v1/hf/references", (req, res) => {
+    if (!deps.enforceRateLimit(req, res, deps.rateLimiter, "hf-references")) return;
+    const query = (req.query ?? {}) as Record<string, unknown>;
+    const domain = typeof query.domain === "string" ? query.domain.trim() : "";
+    const allowed = ["llm", "moe", "tts", "asr"] as const;
+    const references =
+      domain && (allowed as readonly string[]).includes(domain)
+        ? hfReferencesForDomain(domain as (typeof allowed)[number])
+        : HF_VERIFIED_REFERENCES;
+    res.json({
+      success: true,
+      authorizationPerformed: false,
+      executionPerformed: false,
+      downloaded: false,
+      methodId: HF_HUB_METHOD_ID,
+      disclaimer:
+        "Referencias verificadas (existencia comprobada en el Hub). Isabella NO carga ni ejecuta estos pesos; la licencia debe revalidarse antes de cualquier uso comercial.",
+      count: references.length,
+      references,
+    });
   });
 }
