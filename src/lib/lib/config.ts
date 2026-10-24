@@ -58,9 +58,9 @@ function assertRequired(mode: RuntimeMode, source: RawEnv): void {
 }
 function assertProductionProvider(mode: RuntimeMode, parsed: Env): void {
   if (mode !== "production" && mode !== "staging") return;
-  if (!parsed.GEMINI_API_KEY && !parsed.GROQ_API_KEY && !parsed.XAI_API_KEY)
+  if (!parsed.GEMINI_API_KEY && !parsed.GROQ_API_KEY && !parsed.XAI_API_KEY && !parsed.DEEPSEEK_APIKEY)
     throw new Error(
-      "Se requiere al menos un proveedor de inferencia autorizado: GEMINI_API_KEY, GROQ_API_KEY o XAI_API_KEY.",
+      "Se requiere al menos un proveedor de inferencia autorizado: GEMINI_API_KEY, GROQ_API_KEY, XAI_API_KEY o DEEPSEEK_APIKEY.",
     );
 }
 function assertProductionCrypto(mode: RuntimeMode, parsed: Env): void {

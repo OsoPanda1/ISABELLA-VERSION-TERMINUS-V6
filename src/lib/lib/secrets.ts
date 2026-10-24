@@ -77,15 +77,17 @@ export class SecretsManager {
     return this.getActiveSecretSync("ai", "GEMINI_API_KEY", "GEMINI_API_KEY");
   }
 
-  optionalProviderKey(provider: "gemini" | "groq" | "xai" | "ai-gateway"): string | undefined {
+  optionalProviderKey(provider: "gemini" | "groq" | "xai" | "deepseek" | "ai-gateway"): string | undefined {
     const keyName =
       provider === "gemini"
         ? "GEMINI_API_KEY"
         : provider === "groq"
           ? "GROQ_API_KEY"
-          : provider === "ai-gateway"
-            ? "AI_GATEWAY_API_KEY"
-            : "XAI_API_KEY";
+          : provider === "xai"
+            ? "XAI_API_KEY"
+            : provider === "deepseek"
+              ? "DEEPSEEK_APIKEY"
+              : "AI_GATEWAY_API_KEY";
     const value = this.cachedConfig[keyName];
     return typeof value === "string" && value.trim() ? value : undefined;
   }

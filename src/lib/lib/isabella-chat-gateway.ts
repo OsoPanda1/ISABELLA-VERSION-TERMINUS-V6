@@ -439,11 +439,12 @@ export async function handleIsabellaChat(
   }
   const { messages, temperature, context: requestContext } = validation.data;
   void requestContext;
-  // Provider contracts: GEMINI_API_KEY, GROQ_API_KEY, XAI_API_KEY
+  // Provider contracts: GEMINI_API_KEY, GROQ_API_KEY, XAI_API_KEY, DEEPSEEK_APIKEY
   const providerKeys = {
     gemini: secrets.optionalProviderKey("gemini"),
     groq: secrets.optionalProviderKey("groq"),
     xai: secrets.optionalProviderKey("xai"),
+    deepseek: secrets.optionalProviderKey("deepseek"),
   };
   const serverSystem = [
     "Eres Isabella Villaseñor AI, interfaz cognitiva soberana del Nodo Cero.",
@@ -752,13 +753,19 @@ export async function handleIsabellaChat(
           }),
   }));
   const attempts: Array<{
-    provider: "ai-gateway" | "gemini" | "groq" | "xai";
+    provider: "ai-gateway" | "gemini" | "groq" | "xai" | "deepseek";
     key?: string;
     model: string;
   }> = [];
   // Prefer explicitly configured, direct providers. Their response body can be
   // validated before returning headers, avoiding a false HTTP 200 empty stream
   // when a gateway fails lazily after the response has already started.
+  if (providerKeys.deepseek)
+    attempts.push({
+      provider: "deepseek",
+      key: providerKeys.deepseek,
+      model: process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat",
+    });
   if (providerKeys.groq)
     attempts.push({
       provider: "groq",
@@ -855,7 +862,8 @@ export async function handleIsabellaChat(
         attempt.provider === "ai-gateway" &&
         !providerKeys.gemini &&
         !providerKeys.groq &&
-        !providerKeys.xai
+        !providerKeys.xai &&
+        !providerKeys.deepseek
       ) {
         // Skip gateway when no direct provider keys — go directly to sovereign fallback
         // (AI_GATEWAY es opcional; se resuelve vía secrets/config validada por Zod)
@@ -889,9 +897,11 @@ export async function handleIsabellaChat(
       }
       const url = isGemini
         ? `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(attempt.model)}:streamGenerateContent?alt=sse`
-        : attempt.provider === "groq"
-          ? "https://api.groq.com/openai/v1/chat/completions"
-          : "https://api.x.ai/v1/chat/completions";
+        : attempt.provider === "deepseek"
+          ? "https://api.deepseek.com/chat/completions"
+          : attempt.provider === "groq"
+            ? "https://api.groq.com/openai/v1/chat/completions"
+            : "https://api.x.ai/v1/chat/completions";
       const body = isGemini
         ? {
             systemInstruction: {

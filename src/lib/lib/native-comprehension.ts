@@ -40,7 +40,10 @@ export function runNativeComprehension(input: NativeComprehensionInput): NativeC
   // anterior solo consideraba Gemini y marcaba mantenimiento aunque Groq/XAI
   // fueran los proveedores realmente disponibles.
   const hasProvider = Boolean(
-    runtime.GEMINI_API_KEY || runtime.GROQ_API_KEY || runtime.XAI_API_KEY,
+    runtime.GEMINI_API_KEY ||
+      runtime.GROQ_API_KEY ||
+      runtime.XAI_API_KEY ||
+      runtime.DEEPSEEK_APIKEY,
   );
   const result = runNativePipeline(input.input, {
     productionLike,
