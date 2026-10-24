@@ -68,13 +68,15 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
   });
   const meteringService = new MeteringService();
 
-  // User-scoped access defaults to deny until the host injects verified identity.
-  function getUserIdFromReq(req: Request): string {
-    const sessionId = req.get("x-session-id");
-    if (sessionId) return `session:${sessionId}`;
-    const userId = req.get("x-user-id");
-    if (userId) return `user:${userId}`;
-    return `ip:${req.ip ?? "unknown"}`;
+  // Wallet access must use identity verified by the host (e.g. Supabase Auth).
+  // Client-controlled x-user-id / x-session-id headers are not credentials.
+  async function getAuthenticatedWalletUserId(req: Request, res: Response): Promise<string | null> {
+    const userId = deps.resolveAuthenticatedUserId ? await deps.resolveAuthenticatedUserId(req) : null;
+    if (!userId) {
+      res.status(401).json({ success: false, error: "AUTHENTICATED_USER_REQUIRED" });
+      return null;
+    }
+    return userId;
   }
 
   // ============================================================
@@ -430,7 +432,8 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
   app.get("/api/v1/revenue/my/wallet", async (req, res) => {
     if (!enforceRateLimit(req, res, rateLimiter, "wallet-get")) return;
 
-    const userId = getUserIdFromReq(req);
+    const userId = await getAuthenticatedWalletUserId(req, res);
+    if (!userId) return;
     try {
       const wallet = await storage.getWallet(userId);
       const eligibility = await storage.getEarnEligibility(userId);
@@ -446,7 +449,8 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
   app.post("/api/v1/revenue/my/wallet/payout", async (req, res) => {
     if (!enforceRateLimit(req, res, rateLimiter, "wallet-payout")) return;
 
-    const userId = getUserIdFromReq(req);
+    const userId = await getAuthenticatedWalletUserId(req, res);
+    if (!userId) return;
     try {
       const body = req.body || {};
       const wallet = await storage.debitWallet(
