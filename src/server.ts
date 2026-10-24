@@ -186,6 +186,7 @@ app.use(
 
 
 // Read the canonical workspace assets once at startup; avoid sync filesystem I/O per request.
+  // Static UI assets and API response contracts are rebuilt whenever this server module restarts.
 // Assets are pre-compressed (brotli/gzip) and ETagged once (src/http/static-assets.ts); script/style URLs
 // carry a content hash so they can be cached immutably while the HTML itself always revalidates.
 const uiPath = path.join(process.cwd(), "src", "ui");
@@ -1350,7 +1351,11 @@ app.post("/api/v1/cognition/route", async (req, res) => {
       trafficLight = null;
     }
     res.status(decision.admitted ? 200 : 403).json({
-      success: decision.admitted, decision, principal, generativeNarrative, responseEngine, trafficLight,
+      success: decision.admitted,
+      // `output` is the stable public contract consumed by the browser client.
+      // Keep the descriptive field for observability and backwards compatibility.
+      output: generativeNarrative,
+      decision, principal, generativeNarrative, responseEngine, trafficLight,
       ...describeProviderReadiness(process.env),
       conversationContextTurns: history.length,
       nativeRouting: nativeRouting ? {
@@ -1673,14 +1678,14 @@ app.post("/api/v1/cognitive/request", async (req, res) => {
       sessionMemory.addToSession(sessionId, { role: "assistant", content: generativeNarrative, timestamp: new Date().toISOString() });
     }
     const activeSession = sessionMemory.snapshot(sessionId);
-    res.status(decision.admitted ? 200 : 403).json({
-      success: decision.admitted,
-      requestId: snapshot.requestId,
-      traceId,
-      decision,
-      snapshot,
-      systemPromptApplied: true,
-      generativeNarrative,
+  res.status(decision.admitted ? 200 : 403).json({
+  success: decision.admitted,
+  // Keep the browser contract consistent with the primary cognition route.
+  output: generativeNarrative,
+  decision,
+  snapshot,
+  systemPromptApplied: true,
+  generativeNarrative,
       publicAuthority: "VIEWER_ONLY",
       session: activeSession === null ? null : {
         sessionId: activeSession.sessionId,

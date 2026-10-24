@@ -441,22 +441,31 @@ const sendMessage = async (text) => {
       signal: abortController.signal
     });
     
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const contentType = response.headers.get('content-type') || '';
+    let payload = null;
+    if (contentType.includes('application/json')) {
+      try { payload = await response.json(); } catch { payload = null; }
+    }
+    if (!response.ok) {
+      const serverError = typeof payload?.error === 'string' ? payload.error : `HTTP ${response.status}`;
+      throw new Error(serverError);
+    }
     
-    const payload = await response.json();
-    
-    if (payload.success === true && payload.output) {
+    const output = typeof payload?.output === 'string'
+      ? payload.output
+      : typeof payload?.generativeNarrative === 'string' ? payload.generativeNarrative : '';
+    if (payload?.success === true && output.trim()) {
       if (window.IsabellaChatPlus?.renderInto) {
-        window.IsabellaChatPlus.renderInto(assistantPara, payload.output, { animate: true });
+        window.IsabellaChatPlus.renderInto(assistantPara, output, { animate: true });
       } else {
-        assistantPara.textContent = payload.output;
+        assistantPara.textContent = output;
       }
       if (window.IsabellaChatPlus?.decorate) {
         window.IsabellaChatPlus.decorate(assistantPara, { engine: payload.responseEngine || payload.engine, latencyMs: payload.latencyMs });
       }
       if (window.IsabellaChatPlus?.persist) window.IsabellaChatPlus.persist();
     } else {
-      throw new Error(payload.error || 'Respuesta inválida del servidor');
+      throw new Error(typeof payload?.error === 'string' ? payload.error : 'Respuesta inválida del servidor');
     }
   } catch (err) {
     if (err.name === 'AbortError') return;
