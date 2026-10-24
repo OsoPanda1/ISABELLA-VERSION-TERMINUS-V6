@@ -107,10 +107,11 @@ jobs:
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
+          exit-code: '1'
 
       - name: Upload Trivy results
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: always() && github.event_name != 'pull_request'
         with:
           sarif_file: 'trivy-results.sarif'
 
@@ -216,6 +217,9 @@ jobs:
     name: Build Docker Image
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
     needs: [lint-and-typecheck, security-scan, test, ige-omega-ci]
     steps:
       - name: Checkout
@@ -280,47 +284,13 @@ jobs:
             curl -f http://localhost:8080/api/v1/health || exit 1
 
   # ============================================================================
-  # PRODUCTION DEPLOYMENT
-  # ============================================================================
-  deploy-production:
-    name: Deploy to Production
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: [build, ige-omega-ci]
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
-    environment: production
-    steps:
-      - name: Deploy to Production
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.PRODUCTION_HOST }}
-          username: ${{ secrets.PRODUCTION_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_KEY }}
-          script: |
-            set -e
-            cd /opt/isabella
-            echo "Creating pre-deployment backup..."
-            ./scripts/backup.sh full
-            echo "Pulling new images..."
-            docker compose pull
-            echo "Deploying new version..."
-            docker compose up -d --remove-orphans
-            sleep 30
-            echo "Running migrations..."
-            docker compose exec -T postgres psql -U isabella_admin -d isabella_db -f /docker-entrypoint-initdb.d/schema.sql
-            echo "Verifying deployment..."
-            sleep 10
-            curl -f http://localhost:8080/api/v1/health
-            curl -f http://localhost:8080/api/v1/readyz
-            echo "Deployment successful!"
-
-  # ============================================================================
   # MANUAL PRODUCTION DEPLOYMENT (workflow_dispatch)
   # ============================================================================
   deploy-production-manual:
     name: Manual Production Deploy
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: [build, ige-omega-ci]
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
     environment: production
     steps:
