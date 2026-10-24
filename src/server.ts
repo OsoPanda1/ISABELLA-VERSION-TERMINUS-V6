@@ -5,6 +5,7 @@ import express, { type Application, type NextFunction, type Request, type Respon
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "node:url";
 import { GoogleGenAI } from "@google/genai";
 import { generateText } from "ai";
 import Stripe from "stripe";
@@ -3951,7 +3952,8 @@ app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
   res.status(safe.status).json(safe.body);
 });
 
-if (!process.env.VERCEL) app.listen(port, host, () => {
+// state: draft | engine-generated — serverless runtimes invoke the exported app.
+if (!process.env.VERCEL && process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) app.listen(port, host, () => {
   console.log(`[Isabella Genesis TINA V6] Listening on http://${host}:${port}`);
   console.log(`[Isabella Genesis TINA V6] Identity: TINA esLatina · Orgullo Latinoamericano`);
   console.log(`[Isabella Genesis TINA V6] Invariant: CAPABILITY ≠ AUTHORITY ≠ EXECUTION ≠ EVIDENCE ≠ LEARNING ≠ PRODUCTION`);
