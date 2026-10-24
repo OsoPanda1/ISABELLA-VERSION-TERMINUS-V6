@@ -47,7 +47,7 @@ assert.ok(!/\.side-rail\{[^}]*!important/.test(css), 'Legacy !important rules mu
 assert.ok(!/\.side-rail\{\s*display\s*:\s*none\s*!important/.test(css), 'A global !important display:none must not make navigation rails permanently inaccessible');
 assert.ok(css.includes('transform:translateX(calc(-100% - 20px))'), 'Closed left rail must remain off-canvas until explicitly opened');
 assert.ok(css.includes('transform:translateX(calc(100% + 20px))'), 'Closed right rail must remain off-canvas until explicitly opened');
-assert.equal((html.match(/class="side-rail /g) || []).length, 2, 'The interface must render one folded rail on each side');
+assert.equal((html.match(/class="side-rail /g) || []).length, 4, 'The interface must render four independent folded rails across both sides');
 assert.ok(html.includes('class="rail-panel"'), 'Each side rail must expose folded command panels');
 assert.ok(html.includes('class="command-palette"'), 'A native command palette must be available');
 assert.ok(html.includes('id="studio"'), 'The local Studio workspace must exist');
