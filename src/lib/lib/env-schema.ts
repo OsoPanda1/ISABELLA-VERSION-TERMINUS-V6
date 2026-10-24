@@ -143,6 +143,7 @@ export const envSchema = z
     VOICE_API_URL: optionalUrl(),
     GROQ_API_KEY: optionalString(),
     XAI_API_KEY: optionalString(),
+    DEEPSEEK_APIKEY: optionalString(),
     // Free federation is opt-in and only accepts explicitly configured, HTTPS endpoints.
     FREE_AI_FEDERATION_ENABLED: bool(false),
     FREE_AI_FEDERATION_ENDPOINTS: optionalString(),
@@ -358,6 +359,14 @@ export const ENV_VAR_CATALOG: EnvVarDescriptor[] = [
   },
   {
     name: "GROQ_API_KEY",
+    visibility: "secret",
+    required: [],
+    forbidden: [],
+    provider: "self",
+    criticality: "CRITICAL",
+  },
+  {
+    name: "DEEPSEEK_APIKEY",
     visibility: "secret",
     required: [],
     forbidden: [],

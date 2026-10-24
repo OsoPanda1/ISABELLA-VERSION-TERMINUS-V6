@@ -42,7 +42,12 @@ function has(value: unknown): boolean {
 
 function hasAuthorizedInferenceProvider(): boolean {
   const cfg = config();
-  return Boolean(has(cfg.GEMINI_API_KEY) || has(cfg.GROQ_API_KEY) || has(cfg.XAI_API_KEY));
+  return Boolean(
+    has(cfg.GEMINI_API_KEY) ||
+      has(cfg.GROQ_API_KEY) ||
+      has(cfg.XAI_API_KEY) ||
+      has(cfg.DEEPSEEK_APIKEY),
+  );
 }
 
 export const PRODUCTION_AUTHORITIES: readonly AuthorityDefinition[] = [
