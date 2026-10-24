@@ -1,3 +1,4 @@
+// state: draft | engine-generated
 import { createHash } from "node:crypto";
 import type { DatasetIdentity, ModelIdentity, PredictionResult } from "./types";
 
@@ -74,6 +75,7 @@ export function trainDeterministicRegression(
     const rate = 0.01 / Math.sqrt(epoch + 1);
     for (let j = 0; j < width; j++) weights[j] -= rate * error * dataset.features[i]![j]!;
     bias -= rate * error;
+    if (!finite(weights) || !Number.isFinite(bias)) throw new Error("non_finite_regression_training_state");
   }
   const artifactHash = digest({ weights, bias });
   return {
