@@ -67,6 +67,7 @@ export function trainDeterministicRegression(
 ): RegressionModel {
   const width = validateMatrix(dataset.features);
   if (dataset.features.length !== dataset.labels.length || dataset.labels.some((v) => !Number.isFinite(v))) throw new Error("invalid_regression_dataset");
+  if (!Number.isSafeInteger(epochs) || epochs < 1 || epochs > 10_000) throw new Error("invalid_regression_epochs");
   const weights = Array<number>(width).fill(0); let bias = 0;
   for (let epoch = 0; epoch < epochs; epoch++) for (let i = 0; i < dataset.features.length; i++) {
     const error = dot(dataset.features[i]!, weights, bias) - dataset.labels[i]!;
@@ -83,9 +84,27 @@ export function trainDeterministicRegression(
 
 export function predictRegression(model: RegressionModel, features: number[][], approved = false): PredictionResult<number> {
   if (!approved && model.model.approvalStatus !== "APPROVED") throw new Error("model_not_approved");
-  validateMatrix(features); if (features.some((row) => row.length !== model.weights.length)) throw new Error("feature_width_mismatch");
+  if (!finite(model.weights) || !Number.isFinite(model.bias)) throw new Error("invalid_model_parameters");
+  validateMatrix(features);
+  if (features.some((row) => row.length !== model.weights.length)) throw new Error("feature_width_mismatch");
   const predictions = features.map((row) => dot(row, model.weights, model.bias));
-  return { model: model.model, predictions, confidence: predictions.map(() => 1), explanation: { method: "linear_feature_contribution", weights: [...model.weights] }, riskScore: 0, requiresReview: false, degraded: true };
+  if (predictions.some((prediction) => !Number.isFinite(prediction))) throw new Error("non_finite_regression_prediction");
+  // This baseline has no held-out evaluation or calibrated uncertainty estimate.
+  // Never report synthetic 100% confidence for an uncalibrated regression model.
+  return {
+    model: model.model,
+    predictions,
+    confidence: null,
+    explanation: {
+      method: "linear_feature_contribution",
+      weights: [...model.weights],
+      confidenceStatus: "uncalibrated",
+      limitation: "No held-out evaluation or calibrated prediction interval is available.",
+    },
+    riskScore: 1,
+    requiresReview: true,
+    degraded: true,
+  };
 }
 
 export function detectAnomalies(rows: number[][], threshold = 3): AnomalyResult {

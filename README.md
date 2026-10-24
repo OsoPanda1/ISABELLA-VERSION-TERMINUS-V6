@@ -3,6 +3,8 @@
 **Isabella** es un ecosistema de IA gobernada con servicios de inferencia, herramientas, memoria, evidencia, integraciones y una capa económica auditable. Este repositorio contiene el runtime V6 Terminus y sus servicios de servidor; la interfaz comercial puede integrarse con la aplicación Isabella mediante las APIs de este backend.
 
 > **Regla de diseño:** capacidad ≠ autoridad ≠ ejecución ≠ evidencia ≠ aprendizaje ≠ producción.
+>
+> **Contrato de evidencia:** SPECIFIED ≠ IMPLEMENTED ≠ TESTED.
 
 Un módulo presente en el código no equivale a una integración externa activa. Los estados de pago, la elegibilidad, los asientos contables y las transferencias bancarias son hechos diferentes y deben verificarse por separado.
 
@@ -10,9 +12,11 @@ Un módulo presente en el código no equivale a una integración externa activa.
 
 - La política de reparto v5, la persistencia de suscripciones, el checkout de Stripe, la verificación de webhooks y el libro mayor transaccional están implementados en esta rama.
 - Las migraciones deben aplicarse a una base PostgreSQL de prueba y las variables privadas deben configurarse antes de probar el flujo real.
-- **Avance global de implementación: 100% del alcance de código de esta rama**, verificado por la suite local y el commit de esta revisión (SHA 802e6ee); esto no equivale a producción activa ni sustituye pruebas end-to-end con Stripe y PostgreSQL reales.
-- La disponibilidad de checkout, la integridad del ledger y la configuración de identidad se exponen como capacidades comprobables en `GET /api/v1/revenue/health`; la ruta devuelve estado degradado si el ledger persistente no se puede verificar.
+- La rama de auditoría `audit/ci-revenue-hardening-2026-10-23` endurece los gates de CI, el build de pull requests, el escaneo de dependencias y la validación numérica del reparto. Estos cambios requieren ejecución de CI; no se consideran certificados hasta que los checks remotos terminen correctamente.
+- **Avance global de implementación: no publicado como porcentaje único en esta revisión.** No hay un denominador de requisitos ponderados y reproducible que permita derivar una cifra verificable. El estado de cada subsistema debe evaluarse con pruebas y evidencia separadas; la presencia de código no equivale a integración certificada.
+- `GET /api/v1/revenue/health` expone solo el estado público del servicio. Los detalles de configuración se restringen a `GET /api/v1/revenue/health?details=true` (administración); la presencia de variables no certifica conectividad ni migraciones aplicadas. La readiness queda degradada si no se puede verificar el ledger persistente.
 - Los pagos a creadores mediante Stripe Connect, el onboarding KYC, las retenciones/impuestos, las devoluciones, los contracargos y la conciliación bancaria **no están habilitados**. El devengo contable no significa que el dinero se haya transferido.
+- `POST /api/v1/revenue/my/wallet/payout` responde `503 PAYOUTS_NOT_CONFIGURED` y no debita saldo hasta que exista un proveedor de payout real, KYC, política fiscal, holdback y conciliación. Las cabeceras `x-user-id` y `x-session-id` no se aceptan como identidad: las rutas de wallet exigen identidad verificada por el host.
 
 ## Arquitectura del repositorio
 
@@ -92,7 +96,8 @@ Esto es una regla de configuración, **no un promedio de mercado verificado**. S
 | GET | `/api/v1/revenue/outbox/status` | Estadísticas de outbox persistente |
 | GET | `/api/v1/revenue/outbox/dead-letter` | Eventos fallidos con cinco o más intentos |
 | POST | `/api/v1/revenue/outbox/retry/:eventId` | Reintenta un evento dead-letter |
-| GET | `/api/v1/revenue/health` | Estado del ledger y capacidades configuradas |
+| GET | `/api/v1/revenue/health` | Estado público resumido del servicio |
+| GET | `/api/v1/revenue/health?details=true` | Diagnóstico detallado, solo administración |
 
 Las rutas de usuario comparan el usuario objetivo con la identidad devuelta por Supabase Auth. Los identificadores enviados en headers no son prueba de identidad. El settlement es una ruta administrativa y requiere el token de administración.
 
@@ -102,6 +107,7 @@ Las rutas de usuario comparan el usuario objetivo con la identidad devuelta por 
 - La persistencia escribe el journal, el settlement y el evento outbox en una sola transacción PostgreSQL.
 - Las escrituras se serializan con un bloqueo transaccional y se verifica la cabeza actual de la cadena antes de añadir un journal.
 - La restauración recorre la cadena por `previous_hash`, no por fecha; verifica hash y balance de débitos/créditos.
+- Los endpoints de settlement y registro de consumo exigen una clave idempotente estable de 8–200 caracteres seguros; no generan una clave aleatoria por petición, porque los reintentos de red podrían duplicar asientos o consumo.
 - Las claves de idempotencia no pueden reutilizarse con un payload económico diferente.
 - Los eventos Stripe se verifican con la firma HMAC de Stripe y una ventana temporal de cinco minutos, se deduplican en inbox y se aplican solo si el evento es más reciente que el estado ya guardado.
 - Los registros monetarios anteriores conservan la marca `legacy_major`; los nuevos usan `minor_v2`. No se reescriben silenciosamente los asientos históricos.
@@ -177,6 +183,8 @@ Para validar PostgreSQL y el runtime, revisa también `pnpm run postgres:e2e`, `
 Isabella puede enrutar a distintos proveedores y herramientas según la configuración del entorno. La disponibilidad, precio, cuota, región y licencia son específicos de cada modelo o servicio. No existe garantía de inferencia gratuita ilimitada, incluso cuando los pesos de un modelo son abiertos.
 
 Revisa la licencia de cada modelo, dataset, herramienta, proveedor y dependencia antes de usarla comercialmente. No descargues ni ingieras datasets completos sin autorización, base jurídica y controles de procedencia.
+
+## Gates pendientes para liberar
 
 ## Próximos bloqueos antes de producción financiera
 

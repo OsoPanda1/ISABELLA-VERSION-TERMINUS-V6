@@ -41,6 +41,17 @@ function parseMoney(value: unknown, field: string): number {
   return amount;
 }
 
+/**
+ * Financial writes must be retry-safe. Never synthesize a new idempotency key
+ * per request: a network retry would otherwise create a second settlement/event.
+ */
+export function parseIdempotencyKey(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const key = value.trim();
+  if (key.length < 8 || key.length > 200 || !/^[A-Za-z0-9._:-]+$/.test(key)) return null;
+  return key;
+}
+
 export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
   const { 
     app, 
@@ -69,13 +80,15 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
   });
   const meteringService = new MeteringService();
 
-  // User-scoped access defaults to deny until the host injects verified identity.
-  function getUserIdFromReq(req: Request): string {
-    const sessionId = req.get("x-session-id");
-    if (sessionId) return `session:${sessionId}`;
-    const userId = req.get("x-user-id");
-    if (userId) return `user:${userId}`;
-    return `ip:${req.ip ?? "unknown"}`;
+  // Wallet access must use identity verified by the host (e.g. Supabase Auth).
+  // Client-controlled x-user-id / x-session-id headers are not credentials.
+  async function getAuthenticatedWalletUserId(req: Request, res: Response): Promise<string | null> {
+    const userId = deps.resolveAuthenticatedUserId ? await deps.resolveAuthenticatedUserId(req) : null;
+    if (!userId) {
+      res.status(401).json({ success: false, error: "AUTHENTICATED_USER_REQUIRED" });
+      return null;
+    }
+    return userId;
   }
 
   // ============================================================
@@ -118,6 +131,14 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
 
     try {
       const body = req.body || {};
+      const idempotencyKey = parseIdempotencyKey(body.idempotencyKey);
+      if (!idempotencyKey) {
+        return res.status(400).json({
+          success: false,
+          error: "IDEMPOTENCY_KEY_REQUIRED",
+          message: "Envía una clave idempotente estable (8–200 caracteres) para evitar settlements duplicados al reintentar.",
+        });
+      }
       const stream = body.stream as RevenueStream;
       const creatorId = typeof body.creatorId === "string" ? body.creatorId.trim() : "";
       const creatorWorkspaceId = typeof body.creatorWorkspaceId === "string" ? body.creatorWorkspaceId.trim() : "";
@@ -160,7 +181,7 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
         dataLicenceEvidenceRef: body.dataLicenceEvidenceRef,
         dataVaultCreatorRateBps: body.dataVaultCreatorRateBps,
         currency: body.currency ?? "USD",
-        idempotencyKey: body.idempotencyKey ?? uuidv4(),
+        idempotencyKey,
         externalPaymentId: body.externalPaymentId,
         occurredAt: body.occurredAt,
       };
@@ -250,8 +271,16 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
 
     try {
       const body = req.body || {};
+      const idempotencyKey = parseIdempotencyKey(body.idempotencyKey);
+      if (!idempotencyKey) {
+        return res.status(400).json({
+          success: false,
+          error: "IDEMPOTENCY_KEY_REQUIRED",
+          message: "Envía una clave idempotente estable para evitar registrar el mismo consumo más de una vez.",
+        });
+      }
       const event: UsageEvent = {
-        idempotencyKey: body.idempotencyKey ?? uuidv4(),
+        idempotencyKey,
         userId: body.userId ?? req.header("x-user-id") ?? "anonymous",
         resourceType: body.resourceType,
         resourceId: body.resourceId,
@@ -431,7 +460,8 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
   app.get("/api/v1/revenue/my/wallet", async (req, res) => {
     if (!enforceRateLimit(req, res, rateLimiter, "wallet-get")) return;
 
-    const userId = getUserIdFromReq(req);
+    const userId = await getAuthenticatedWalletUserId(req, res);
+    if (!userId) return;
     try {
       const wallet = await storage.getWallet(userId);
       const eligibility = await storage.getEarnEligibility(userId);
@@ -443,25 +473,20 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
     }
   });
 
-  // User: Request payout (debit own wallet)
+  // Payouts are intentionally fail-closed until a real payout provider, KYC,
+  // tax/withholding policy, holdback and reconciliation are configured.
+  // A request must never debit a wallet before an external transfer is confirmed.
   app.post("/api/v1/revenue/my/wallet/payout", async (req, res) => {
     if (!enforceRateLimit(req, res, rateLimiter, "wallet-payout")) return;
 
-    const userId = getUserIdFromReq(req);
-    try {
-      const body = req.body || {};
-      const wallet = await storage.debitWallet(
-        userId,
-        parseMoney(body.amount, "amount"),
-        "payout",
-        uuidv4(),
-        body.description ?? "User requested payout"
-      );
+    const userId = await getAuthenticatedWalletUserId(req, res);
+    if (!userId) return;
 
-      res.json({ success: true, wallet });
-    } catch (err) {
-      res.status(400).json({ success: false, error: err instanceof Error ? err.message : "PAYOUT_FAILED" });
-    }
+    res.status(503).json({
+      success: false,
+      error: "PAYOUTS_NOT_CONFIGURED",
+      message: "No hay un proveedor de pagos salientes certificado. El saldo permanece intacto.",
+    });
   });
 
   // ============================================================
@@ -665,25 +690,43 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
   // Health / Readiness
   // ============================================================
 
-  app.get("/api/v1/revenue/health", async (_req, res) => {
+  async function getRevenueHealthDiagnostics() {
     const durableDatabaseConfigured = Boolean(process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL);
     const ledgerValid = durableDatabaseConfigured ? await storage.verifyChain().catch(() => false) : false;
-    const stripeCheckoutConfigured = Boolean(process.env.STRIPE_SECRET_KEY && process.env.ISABELLA_PUBLIC_URL);
-    const stripeWebhookConfigured = Boolean(stripeWebhookSecret);
-    const supabaseAuthConfigured = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY);
     const ready = durableDatabaseConfigured && ledgerValid;
-    res.status(ready ? 200 : 503).json({
-      success: ready,
-      status: ready ? "ready" : "degraded",
-      service: "revenue-fabric",
-      version: "5.0.0",
+    return {
+      ready,
       ledgerValid,
       durableDatabaseConfigured,
-      subscriptionPersistenceConfigured: durableDatabaseConfigured,
-      stripeCheckoutConfigured,
-      stripeWebhookConfigured,
-      supabaseAuthConfigured,
+      // A database URL does not prove that the subscription migration is applied.
+      subscriptionPersistenceSchema: "unverified" as const,
+      stripeCheckoutEnvConfigured: Boolean(process.env.STRIPE_SECRET_KEY && process.env.ISABELLA_PUBLIC_URL),
+      stripeWebhookSecretConfigured: Boolean(stripeWebhookSecret),
+      supabaseAuthEnvConfigured: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
       creatorPayoutsEnabled: false,
+    };
+  }
+
+  // Public health response exposes only service state. Operators may request details
+  // with ?details=true, but only after admin authentication.
+  app.get("/api/v1/revenue/health", async (req, res) => {
+    if (req.query.details === "true") {
+      if (!authorizeAdmin(req, res)) return;
+      const diagnostics = await getRevenueHealthDiagnostics();
+      return res.status(diagnostics.ready ? 200 : 503).json({
+        success: diagnostics.ready,
+        service: "revenue-fabric",
+        version: "5.0.0",
+        ...diagnostics,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    const diagnostics = await getRevenueHealthDiagnostics();
+    return res.status(diagnostics.ready ? 200 : 503).json({
+      success: diagnostics.ready,
+      status: diagnostics.ready ? "ready" : "degraded",
+      service: "revenue-fabric",
+      version: "5.0.0",
       timestamp: new Date().toISOString(),
     });
   });
