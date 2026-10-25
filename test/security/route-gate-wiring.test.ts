@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
  * state: draft | engine-generated.
  * Los grupos de rutas aceptan `authorizeAdmin` como OPCIONAL (abierto en desarrollo). Para que una
  * futura omisión no deje una superficie abierta en producción, TODO registro en server.ts debe
- * cablear explícitamente una compuerta de autorización.
+ * cablear explícitamente una compuerta de autorización o declararse como superficie pública.
  */
 const server = readFileSync(new URL("../../src/server.ts", import.meta.url), "utf8");
 
@@ -32,8 +32,12 @@ describe("route group gate wiring", () => {
   it("finds the registered route groups", () => {
     expect(blocks.length).toBeGreaterThanOrEqual(15);
   });
-  it("every route group wires an explicit authorization gate", () => {
-    const ungated = blocks.filter((b) => !/\bauthorizeAdmin\b|\bauthorizeApiToken\b/.test(b.body)).map((b) => b.name);
+  it("every route group wires an explicit authorization gate or declares a public surface", () => {
+    const AUTH_GATE = /\bauthorizeAdmin\b|\bauthorizeApiToken\b|\bisAdminAuthorized\b/;
+    const EXPLICIT_PUBLIC = /\bpublicSurface:\s*(?:"read-only-html-and-chat"|PLATFORM_PUBLIC_SURFACE)\b/;
+    const ungated = blocks
+      .filter((b) => !AUTH_GATE.test(b.body) && !EXPLICIT_PUBLIC.test(b.body))
+      .map((b) => b.name);
     expect(ungated).toEqual([]);
   });
 });

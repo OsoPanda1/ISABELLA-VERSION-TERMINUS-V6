@@ -60,5 +60,33 @@ export default tseslint.config(
       "no-misleading-character-class": "off",
     },
   },
+  {
+    files: ["src/ui/platform/**/*.js"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: {
+        window: "readonly",
+        document: "readonly",
+        navigator: "readonly",
+        localStorage: "readonly",
+        crypto: "readonly",
+        fetch: "readonly",
+        URL: "readonly",
+        URLSearchParams: "readonly",
+        Blob: "readonly",
+        AbortController: "readonly",
+        TextDecoder: "readonly",
+        performance: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        IntersectionObserver: "readonly",
+        SpeechSynthesisUtterance: "readonly",
+      },
+    },
+    rules: {
+      "no-control-regex": "off",
+    },
+  },
   prettierConfig
 );

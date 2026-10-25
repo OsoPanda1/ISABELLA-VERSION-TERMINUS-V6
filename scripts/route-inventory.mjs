@@ -210,7 +210,7 @@ function main() {
   const verifiedCount = routes.filter((r) => r.verified).length;
   const sensitiveCount = routes.filter((r) => r.sensitive).length;
   console.log(
-    `[route-inventory] ${routes.length} rutas extra��das de src/ ` +
+    `[route-inventory] ${routes.length} rutas extraídas de src/ ` +
       `(${sensitiveCount} sensibles, ${verifiedCount} con contrato verificado).`,
   );
   console.log(`[route-inventory] Escrito: ${path.relative(REPO_ROOT, OUT_JSON).replace(/\\/g, "/")}`);

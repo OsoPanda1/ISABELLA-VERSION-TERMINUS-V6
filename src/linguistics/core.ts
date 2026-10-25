@@ -40,13 +40,25 @@ export interface IngestRecord {
 }
 
 const ADULT_MARKERS = ["sexual", "porno", "erótico", "explícito", "genital", "coito"];
+const MAX_TERM_CHARS = 80;
+const MAX_MEANING_CHARS = 2_000;
+const MAX_SOURCE_CHARS = 200;
+const MAX_ARRAY_ITEMS = 25;
+const MAX_ARRAY_ITEM_CHARS = 200;
+const MAX_ENTRIES = 10_000;
 const CONTEXT_MAP: Readonly<Record<string, string>> = Object.freeze({ aguas: "warning", chamba: "work", lana: "money", laburo: "work", bondi: "transport" });
 
 function asString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value.trim() : fallback;
 }
 function asStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean) : [];
+  return Array.isArray(value)
+    ? value
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim().slice(0, MAX_ARRAY_ITEM_CHARS))
+        .filter(Boolean)
+        .slice(0, MAX_ARRAY_ITEMS)
+    : [];
 }
 function boundedConfidence(value: unknown): number {
   const number = typeof value === "number" && Number.isFinite(value) ? value : 0.5;
@@ -62,13 +74,14 @@ export class LatinoGenesis {
   }
 
   addTerm(record: IngestRecord, defaultCountry = "LATAM", defaultSource = "operator-curated"): TermEntry | null {
-    const term = this.normalizer.clean(asString(record.term ?? record.word));
-    const meaning = asString(record.meaning ?? record.definicion);
+    if (this.entries.size >= MAX_ENTRIES) return null;
+    const term = this.normalizer.clean(asString(record.term ?? record.word)).slice(0, MAX_TERM_CHARS);
+    const meaning = asString(record.meaning ?? record.definicion).slice(0, MAX_MEANING_CHARS);
     if (!term || !meaning) return null;
     const rawCategory = this.normalizer.clean(asString(record.category ?? record.type, "expresion"));
     const category: Category = isCategory(rawCategory) ? rawCategory : "expresion";
-    const country = asString(record.country, defaultCountry) || defaultCountry;
-    const source = asString(record.source, defaultSource) || defaultSource;
+    const country = asString(record.country, defaultCountry).slice(0, 40) || defaultCountry;
+    const source = asString(record.source, defaultSource).slice(0, MAX_SOURCE_CHARS) || defaultSource;
     const adultFlag = ADULT_MARKERS.some((marker) => `${term} ${meaning}`.includes(marker));
     const raw = `${term}|${country}|${category}|${meaning}`;
     const entryHash = createHash("sha256").update(raw).digest("hex");

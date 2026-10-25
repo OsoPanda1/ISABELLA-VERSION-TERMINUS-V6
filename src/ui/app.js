@@ -19,23 +19,6 @@ const commandPalette = byId('commandPalette');
 const commandSearch = byId('commandSearch');
 const commandList = byId('commandList');
 const studio = byId('studio');
-document.addEventListener('keydown', (event) => {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-    event.preventDefault();
-    if (typeof commandPalette?.showModal === 'function') commandPalette.showModal();
-  }
-});
-commandLauncher?.addEventListener('click', () => {
-  if (typeof commandPalette?.showModal === 'function') commandPalette.showModal();
-  else commandPalette?.setAttribute('open', '');
-});
-commandList?.addEventListener('keydown', (event) => {
-  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-  const items = [...commandList.querySelectorAll('button:not([hidden])')];
-  const current = items.indexOf(document.activeElement);
-  const next = items[(current + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length];
-  if (next) { event.preventDefault(); next.focus(); }
-});
 const draftShelf = byId('draftShelf');
 const exportChat = byId('exportChat');
 const clearChat = byId('clearChat');
@@ -50,6 +33,10 @@ const systemInspector = byId('systemInspector');
 const closeSystemInspector = byId('closeSystemInspector');
 const sessionBadge = byId('sessionBadge');
 const inspectorRuntime = byId('inspectorRuntime');
+const inspectorSession = byId('inspectorSession');
+const inspectorVoice = byId('inspectorVoice');
+const inspectorAttachment = byId('inspectorAttachment');
+const voiceCapability = byId('voiceCapability');
 const navToggle = byId('navToggle');
 const primaryLinks = byId('primaryLinks');
 const runtimeStatus = byId('runtimeStatus');
@@ -58,6 +45,7 @@ const chatForm = byId('chatForm');
 const prompt = byId('prompt');
 const mic = byId('mic');
 
+const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 const INTRO_SCENE_MS = 4_200; // 4.2 seconds per scene (matches test expectation)
 const MAX_LOCAL_FILE_BYTES = 25 * 1024;
 const MAX_LOCAL_FILE_CHARS = 12_000;
@@ -342,6 +330,7 @@ navToggle?.addEventListener('click', () => {
   primaryLinks?.classList.toggle('is-open', !expanded);
 });
 document.querySelectorAll('.workspace-mode').forEach((button) => {
+  button.setAttribute('aria-pressed', String(button.classList.contains('is-active')));
   button.addEventListener('click', () => {
     const layout = button.dataset.layout || 'chat';
     document.body.dataset.workspaceLayout = layout;
@@ -350,6 +339,13 @@ document.querySelectorAll('.workspace-mode').forEach((button) => {
       item.classList.toggle('is-active', active);
       item.setAttribute('aria-pressed', String(active));
     });
+    if (layout === 'chat') {
+      closePanel(true);
+      byId('chat')?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+      prompt?.focus();
+    } else {
+      openPanel(layout === 'split-2' ? 'design' : 'control');
+    }
   });
 });
 const messages = byId('messages');
@@ -370,67 +366,136 @@ const setRuntimeStatus = (label, state, title) => {
 let sessionId = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
 let abortController = null;
 
+const sanitizeFileName = (value) => String(value || 'archivo').replace(/[^\w.\- ]+/g, '_').slice(0, 80);
+
 const exportConversation = () => {
-  const transcript = [...messages.querySelectorAll('.message')].map((message) => {
+  const nodes = [...messages.querySelectorAll('.message')];
+  if (!nodes.length) return;
+  const transcript = nodes.map((message) => {
     const speaker = message.classList.contains('user') ? 'Tú' : 'Isabella';
-    return `## ${speaker}\n\n${message.querySelector('p')?.textContent?.trim() || ''}`;
+    const raw = message.querySelector('p')?.dataset.raw || message.querySelector('p')?.textContent?.trim() || '';
+    return `## ${speaker}\n\n${raw}`;
   }).join('\n\n');
-  const blob = new Blob([`# Conversación Isabella\n\n${transcript}\n`], { type: 'text/markdown;charset=utf-8' });
+  const header = `# Conversación Isabella\n\n- Sesión: ${sessionId}\n- Exportado: ${new Date().toISOString()}\n- Aviso: transcripción local; no certifica verificación ni ejecución.\n\n`;
+  const blob = new Blob([header + transcript + '\n'], { type: 'text/markdown;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url; link.download = `isabella-conversacion-${new Date().toISOString().slice(0, 10)}.md`;
-  link.click(); URL.revokeObjectURL(url);
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 };
 exportChat?.addEventListener('click', exportConversation);
+byId('contextExport')?.addEventListener('click', exportConversation);
 
-const saveAssistantDraft = (paragraph) => window.IsabellaApp?.saveDraft(paragraph.dataset.raw || paragraph.textContent || '');
+document.addEventListener('click', (event) => {
+  const button = event.target instanceof Element ? event.target.closest('[data-message-action]') : null;
+  if (!button) return;
+  const article = button.closest('.message');
+  const paragraph = article?.querySelector('p');
+  const raw = paragraph ? (paragraph.dataset.raw || paragraph.textContent || '') : '';
+  if (!raw.trim()) return;
+  const action = button.dataset.messageAction;
+  const restore = button.textContent;
+  if (action === 'copy') {
+    if (!navigator.clipboard?.writeText) return;
+    navigator.clipboard.writeText(raw)
+      .then(() => { button.textContent = 'Copiado'; })
+      .catch(() => { button.textContent = 'No disponible'; })
+      .finally(() => window.setTimeout(() => { button.textContent = restore; }, 1_400));
+  } else if (action === 'save') {
+    const saved = saveDraft(paragraph.dataset.raw || paragraph.textContent || '');
+    button.textContent = saved ? 'Guardado' : 'Sin texto';
+    window.setTimeout(() => { button.textContent = restore; }, 1_400);
+  } else if (action === 'speak') {
+    if (currentAudio || window.speechSynthesis?.speaking) stopSpeech();
+    else speakMessage(raw);
+  }
+});
 
 const addMessage = (text, role = 'isabella') => {
   const article = document.createElement('article');
   article.className = `message ${role}`;
+  article.dataset.ts = String(Date.now());
+  const avatar = document.createElement('span');
+  avatar.className = 'avatar';
+  avatar.setAttribute('aria-hidden', 'true');
+  avatar.textContent = role === 'user' ? 'TÚ' : 'IS';
+  const body = document.createElement('div');
+  body.className = 'message-body';
+  const speaker = document.createElement('span');
+  speaker.className = 'speaker';
+  speaker.textContent = role === 'user' ? 'TÚ · AHORA' : 'ISABELLA · AHORA';
   const p = document.createElement('p');
   p.textContent = text;
-  article.append(p);
-  if (role === 'isabella') {
-    const copy = document.createElement('button');
-    copy.type = 'button';
-    copy.className = 'message-copy';
-    copy.setAttribute('aria-label', 'Copiar respuesta de Isabella');
-    copy.textContent = 'Copiar';
-    copy.addEventListener('click', async () => {
-      const value = p.dataset.raw || p.textContent || '';
-      if (!value || !navigator.clipboard?.writeText) return;
-      try {
-        await navigator.clipboard.writeText(value);
-        copy.textContent = 'Copiado';
-        window.setTimeout(() => { copy.textContent = 'Copiar'; }, 1400);
-      } catch {
-        copy.textContent = 'No disponible';
-      }
-    });
-    article.append(copy);
-  }
+  body.append(speaker, p);
+  article.append(avatar, body);
   messages.append(article);
+  refreshWorkspaceContext();
   return p;
 };
 
-const sendMessage = async (text) => {
-  const input = String(text || '').trim();
-  if (!input || input.length > 18_000) {
-    addMessage(input.length > 18_000 ? 'La solicitud supera el límite permitido de 18.000 caracteres.' : 'Escribe una solicitud para continuar.', 'isabella');
+let attachment = null;
+const attachmentContext = () => attachment ? `\n\nArchivo adjunto: ${attachment.name}\n${attachment.text}` : '';
+const paintAttachment = () => {
+  if (attachmentChip) attachmentChip.hidden = !attachment;
+  if (attachmentName) attachmentName.textContent = attachment ? attachment.name : '';
+  if (inspectorAttachment) inspectorAttachment.textContent = attachment ? attachment.name : 'NONE';
+};
+const clearAttachment = () => {
+  attachment = null;
+  if (localFile) localFile.value = '';
+  paintAttachment();
+};
+
+const readFileAsContext = async (file) => {
+  if (!file) return;
+  if (file.size > MAX_LOCAL_FILE_BYTES) {
+    addMessage(`El archivo supera el límite local de ${Math.round(MAX_LOCAL_FILE_BYTES / 1024)} KB. Adjunta un fragmento más pequeño.`, 'isabella');
+    if (localFile) localFile.value = '';
     return;
   }
-  const userPara = addMessage(input, 'user');
-  if (window.IsabellaChatPlus?.stamp) window.IsabellaChatPlus.stamp(userPara.parentElement);
-  
+  try {
+    const contents = (await file.text()).trim();
+    if (!contents) {
+      addMessage('El archivo no contiene texto legible. Prueba con TXT, MD, CSV, JSON o LOG.', 'isabella');
+      if (localFile) localFile.value = '';
+      return;
+    }
+    attachment = { name: sanitizeFileName(file.name), text: contents.slice(0, MAX_LOCAL_FILE_CHARS) };
+    paintAttachment();
+    prompt?.focus();
+  } catch {
+    addMessage('No pude leer el archivo en este navegador. Verifica el formato e inténtalo de nuevo.', 'isabella');
+    if (localFile) localFile.value = '';
+  }
+};
+
+const sendMessage = async (text) => {
+  const typed = String(text || '').trim();
+  const input = `${typed}${attachmentContext()}`.trim();
+  if (!input) {
+    addMessage('Escribe una solicitud o adjunta un archivo para continuar.', 'isabella');
+    return;
+  }
+  if (input.length > 18_000) {
+    addMessage(`La solicitud con el archivo adjunto supera el límite de ${MAX_COMBINED_PROMPT_CHARS.toLocaleString('es-MX')} caracteres. Recorta el texto e inténtalo de nuevo.`, 'isabella');
+    return;
+  }
+  const display = typed || `Archivo adjunto: ${attachment?.name || 'archivo'}`;
+  const userPara = addMessage(display, 'user');
+  if (window.IsabellaChatPlus?.stamp) window.IsabellaChatPlus.stamp(userPara.closest('.message'));
+  clearAttachment();
+
   const assistantPara = addMessage('', 'isabella');
   if (window.IsabellaChatPlus?.beginPending) window.IsabellaChatPlus.beginPending(assistantPara);
-  
+
   abortController = new AbortController();
   if (window.IsabellaChatPlus?.setAbort) window.IsabellaChatPlus.setAbort(abortController);
-  
-  form.setAttribute('aria-busy', 'true');
-  
+  form?.setAttribute('aria-busy', 'true');
+  const startedAt = performance.now();
+
   try {
     const response = await fetch('/api/v1/cognition/route', {
       method: 'POST',
@@ -450,7 +515,7 @@ const sendMessage = async (text) => {
       }),
       signal: abortController.signal
     });
-    
+
     const contentType = response.headers.get('content-type') || '';
     let payload = null;
     if (contentType.includes('application/json')) {
@@ -460,7 +525,7 @@ const sendMessage = async (text) => {
       const serverError = typeof payload?.error === 'string' ? payload.error : `HTTP ${response.status}`;
       throw new Error(serverError);
     }
-    
+
     const output = typeof payload?.output === 'string'
       ? payload.output
       : typeof payload?.generativeNarrative === 'string' ? payload.generativeNarrative : '';
@@ -470,23 +535,33 @@ const sendMessage = async (text) => {
       } else {
         assistantPara.textContent = output;
       }
+      const serverTiming = /cognition;dur=([\d.]+)/.exec(response.headers.get('Server-Timing') || '');
+      const latencyMs = Number.isFinite(payload?.latencyMs)
+        ? payload.latencyMs
+        : serverTiming ? Number(serverTiming[1]) : performance.now() - startedAt;
       if (window.IsabellaChatPlus?.decorate) {
-        window.IsabellaChatPlus.decorate(assistantPara, { engine: payload.responseEngine || payload.engine, latencyMs: payload.latencyMs });
+        window.IsabellaChatPlus.decorate(assistantPara, { engine: payload.responseEngine || payload.engine, latencyMs });
       }
       if (window.IsabellaChatPlus?.persist) window.IsabellaChatPlus.persist();
+      refreshWorkspaceContext();
     } else {
       throw new Error(typeof payload?.error === 'string' ? payload.error : 'Respuesta inválida del servidor');
     }
   } catch (err) {
-    if (err.name === 'AbortError') return;
-      if (window.IsabellaChatPlus?.renderInto) {
-        window.IsabellaChatPlus.renderInto(assistantPara, `No pude completar la respuesta: ${err.message}. Puedes reintentarlo sin perder el contexto de esta sesión.`, { animate: false });
+    if (err?.name === 'AbortError') {
+      window.IsabellaChatPlus?.renderInto?.(assistantPara, 'Generación detenida por la persona usuaria. El contexto de la sesión se conserva.', { animate: false });
+      return;
+    }
+    const message = err instanceof Error ? err.message : 'Error de red';
+    if (window.IsabellaChatPlus?.renderInto) {
+      window.IsabellaChatPlus.renderInto(assistantPara, `No pude completar la respuesta: ${message}. Puedes reintentarlo sin perder el contexto de esta sesión.`, { animate: false });
     } else {
-      assistantPara.textContent = `Error: ${err.message}`;
+      assistantPara.textContent = `Error: ${message}`;
     }
   } finally {
-    form.removeAttribute('aria-busy');
+    form?.removeAttribute('aria-busy');
     abortController = null;
+    refreshWorkspaceContext();
   }
 };
 
@@ -506,69 +581,162 @@ form?.addEventListener('submit', (e) => {
   sendMessage(text);
 });
 
+const WELCOME_TEXT = 'Estoy aquí. Puedes escribirme o activar tu micrófono para hablar de forma natural.';
+
 const resetConversation = ({ keepFocus } = {}) => {
-  messages.querySelectorAll('.message').forEach((node) => node.remove());
+  messages.querySelectorAll('.message, .empty-state').forEach((node) => node.remove());
   sessionId = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
+  clearAttachment();
+  addMessage(WELCOME_TEXT, 'isabella');
+  refreshWorkspaceContext();
   if (!keepFocus) prompt?.focus();
 };
-clearChat?.addEventListener('click', resetConversation);
-newChat?.addEventListener('click', resetConversation);
+clearChat?.addEventListener('click', () => resetConversation());
+newChat?.addEventListener('click', () => resetConversation());
 
-window.IsabellaApp = Object.freeze({
-  addMessage,
-  getSessionId: () => sessionId,
-  setSessionId: (id) => { sessionId = id; },
-  resetConversation,
-  saveDraft: (code) => {
-    // Save to localStorage or draft shelf
-    const drafts = JSON.parse(localStorage.getItem(DRAFT_STORAGE_KEY) || '[]');
-    drafts.unshift({ code, ts: Date.now() });
-    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(drafts.slice(0, 20)));
-    if (draftShelf) {
-      const item = document.createElement('div');
-      item.className = 'draft-item';
-      item.textContent = code.slice(0, 60) + (code.length > 60 ? '…' : '');
-      draftShelf.prepend(item);
-    }
+/* ------------------------------------------------------------------ studio */
+const readDrafts = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DRAFT_STORAGE_KEY) || '[]');
+    return Array.isArray(parsed)
+      ? parsed.filter((item) => item && typeof item.code === 'string' && item.code.trim()).slice(0, 20)
+      : [];
+  } catch {
+    return [];
   }
+};
+const writeDrafts = (list) => {
+  try { localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(list.slice(0, 20))); } catch { /* quota or privacy mode */ }
+};
+const formatStamp = (ts) => {
+  const date = new Date(Number(ts) || Date.now());
+  return date.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) + ' · ' +
+    date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+};
+const renderDrafts = () => {
+  if (!draftShelf) return;
+  const drafts = readDrafts();
+  draftShelf.replaceChildren();
+  if (!drafts.length) {
+    const empty = document.createElement('p');
+    empty.className = 'empty-shelf';
+    empty.textContent = 'Tus respuestas guardadas aparecerán aquí. Usa «Guardar» debajo de una respuesta para conservarla.';
+    draftShelf.append(empty);
+    return;
+  }
+  drafts.forEach((draft, index) => {
+    const card = document.createElement('article');
+    card.className = 'draft-card';
+    const title = document.createElement('h3');
+    title.textContent = draft.code.replace(/\s+/g, ' ').slice(0, 72) || 'Fragmento guardado';
+    const meta = document.createElement('p');
+    meta.className = 'draft-meta';
+    meta.textContent = formatStamp(draft.ts);
+    const preview = document.createElement('p');
+    preview.className = 'draft-preview';
+    preview.textContent = draft.code.length > 280 ? draft.code.slice(0, 280) + '…' : draft.code;
+    const actions = document.createElement('div');
+    actions.className = 'draft-actions';
+    const use = document.createElement('button');
+    use.type = 'button';
+    use.textContent = 'Usar';
+    use.addEventListener('click', () => { closePanel(); prompt.value = draft.code; prompt.dispatchEvent(new Event('input')); prompt.focus(); });
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.textContent = 'Copiar';
+    copy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(draft.code); copy.textContent = 'Copiado'; }
+      catch { copy.textContent = 'No disponible'; }
+      window.setTimeout(() => { copy.textContent = 'Copiar'; }, 1400);
+    });
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = 'Eliminar';
+    remove.addEventListener('click', () => {
+      const next = readDrafts().filter((_, i) => i !== index);
+      writeDrafts(next);
+      renderDrafts();
+    });
+    actions.append(use, copy, remove);
+    card.append(title, meta, preview, actions);
+    draftShelf.append(card);
+  });
+};
+const saveDraft = (code) => {
+  const value = String(code || '').trim();
+  if (!value) return false;
+  const drafts = readDrafts();
+  drafts.unshift({ code: value.slice(0, 8_000), ts: Date.now() });
+  writeDrafts(drafts);
+  renderDrafts();
+  return true;
+};
+clearDrafts?.addEventListener('click', () => {
+  if (!readDrafts().length) return;
+  if (!window.confirm('¿Vaciar los fragmentos guardados en este navegador?')) return;
+  writeDrafts([]);
+  renderDrafts();
 });
 
 const checkHealth = async () => {
   try {
-    const res = await fetch('/api/v1/health');
-    if (res.ok) setRuntimeStatus('En línea', 'ok');
-    else setRuntimeStatus('Degradado', 'warn');
+    const res = await fetch('/api/v1/health', { headers: { accept: 'application/json' } });
+    if (!res.ok) {
+      setRuntimeStatus('Degradado', 'warn', `HTTP ${res.status}`);
+      if (inspectorRuntime) inspectorRuntime.textContent = 'DEGRADADO';
+      return;
+    }
+    const health = await res.json().catch(() => null);
+    setRuntimeStatus('En línea', 'ok', health?.node ? String(health.node) : 'Nodo activo');
+    if (inspectorRuntime) inspectorRuntime.textContent = 'EN LÍNEA';
   } catch {
-    setRuntimeStatus('Fuera de línea', 'error');
+    setRuntimeStatus('Fuera de línea', 'error', 'Sin respuesta del nodo');
+    if (inspectorRuntime) inspectorRuntime.textContent = 'FUERA DE LÍNEA';
   }
 };
 checkHealth();
-setInterval(checkHealth, 60000);
+setInterval(checkHealth, 60_000);
+window.addEventListener('focus', checkHealth);
 
 const refreshWorkspaceContext = () => {
   const turns = messages.querySelectorAll('.message').length;
-  if (sessionBadge) sessionBadge.textContent = `Sesión · ${turns} mensajes`;
+  const userTurns = messages.querySelectorAll('.message.user').length;
+  const short = sessionId.slice(0, 8).toUpperCase();
+  if (sessionBadge) sessionBadge.textContent = `SESIÓN ${short} · ${turns} ${turns === 1 ? 'MENSAJE' : 'MENSAJES'}`;
+  if (inspectorSession) inspectorSession.textContent = short;
+  document.body.classList.toggle('has-conversation', userTurns > 0);
 };
 refreshWorkspaceContext();
 
 /* ------------------------------------------------------------ TTS / Speech */
+let currentAudio = null;
+const stopSpeech = () => {
+  if (currentAudio) { try { currentAudio.pause(); } catch { /* noop */ } currentAudio = null; }
+  try { window.speechSynthesis?.cancel(); } catch { /* noop */ }
+};
 const speakMessage = async (text) => {
-  const payloadFor = (audio) => audio?.dataUrl || audio?.audio || (audio?.audioBase64?.startsWith('data:') ? audio.audioBase64 : '');
+  const clean = String(text || '').trim().slice(0, 4_000);
+  if (!clean) return;
+  stopSpeech();
+  const payloadFor = (audio) => audio?.dataUrl || audio?.audio || (typeof audio?.audioBase64 === 'string' && audio.audioBase64.startsWith('data:') ? audio.audioBase64 : '');
   try {
     let response = await fetch('/api/v1/tts/synthesize', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, sessionId, format: 'mp3', voice: 'troy' })
+      body: JSON.stringify({ text: clean, sessionId, format: 'mp3', voice: 'troy' })
     });
     if (!response.ok) {
       response = await fetch('/api/v1/cognition/speech', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, sessionId, format: 'mp3', voice: 'troy' })
+        body: JSON.stringify({ text: clean, sessionId, format: 'mp3', voice: 'troy' })
       });
     }
     if (response.ok) {
       const audioUrl = payloadFor(await response.json());
       if (/^data:audio\/(?:mpeg|mp3|wav);base64,/.test(audioUrl)) {
-        const audio = new Audio(audioUrl); await audio.play(); return;
+        currentAudio = new Audio(audioUrl);
+        currentAudio.addEventListener('ended', () => { currentAudio = null; }, { once: true });
+        await currentAudio.play();
+        return;
       }
     }
   } catch (error) {
@@ -576,49 +744,626 @@ const speakMessage = async (text) => {
   }
   if ('speechSynthesis' in window) {
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(clean);
     utterance.lang = 'es-MX';
+    utterance.rate = 1;
     window.speechSynthesis.speak(utterance);
   }
 };
 
+const lastAssistantRaw = () => {
+  const paragraphs = [...messages.querySelectorAll('.message.isabella p')];
+  const last = paragraphs.at(-1);
+  return last ? (last.dataset.raw || last.textContent || '') : '';
+};
 const playLastAssistantMessage = () => {
-  const lastAssistant = messages.querySelector('.message.isabella:last-of-type p');
-  if (lastAssistant && lastAssistant.dataset.raw) {
-    speakMessage(lastAssistant.dataset.raw);
-  }
+  const raw = lastAssistantRaw();
+  if (raw.trim()) speakMessage(raw);
+};
+const copyLastAssistant = async () => {
+  const raw = lastAssistantRaw();
+  if (!raw.trim() || !navigator.clipboard?.writeText) return;
+  try { await navigator.clipboard.writeText(raw); } catch { /* clipboard unavailable */ }
 };
 
-if (soundToggle) {
-  soundToggle.addEventListener('click', () => {
-    const enabled = soundToggle.getAttribute('aria-pressed') === 'true';
-    soundToggle.setAttribute('aria-pressed', String(!enabled));
-    if (!enabled) playLastAssistantMessage();
-  });
-}
+const VOICE_KEY = 'isabella.voice.v1';
+const readVoicePreference = () => {
+  try { return localStorage.getItem(VOICE_KEY) === '1'; } catch { return false; }
+};
+const writeVoicePreference = (on) => {
+  try { localStorage.setItem(VOICE_KEY, on ? '1' : '0'); } catch { /* private mode */ }
+};
+let voiceEnabled = readVoicePreference();
+const paintVoice = () => {
+  if (soundToggle) {
+    soundToggle.setAttribute('aria-pressed', String(voiceEnabled));
+    soundToggle.textContent = voiceEnabled ? 'VOZ: ON' : 'VOZ: OFF';
+    soundToggle.classList.toggle('is-on', voiceEnabled);
+  }
+  if (voiceCapability) {
+    voiceCapability.classList.toggle('is-active', voiceEnabled);
+    voiceCapability.textContent = voiceEnabled ? 'VOICE ON' : 'VOICE';
+  }
+};
+paintVoice();
+soundToggle?.addEventListener('click', () => {
+  voiceEnabled = !voiceEnabled;
+  writeVoicePreference(voiceEnabled);
+  paintVoice();
+  if (voiceEnabled) playLastAssistantMessage();
+  else stopSpeech();
+});
 
-/* -------------------------------------------------------- IntersectionObserver for workspace navigation */
-const navObserver = new IntersectionObserver((entries) => {
-  entries.forEach((entry) => {
-    if (entry.isIntersecting) {
-      const id = entry.target.id;
-      const link = document.querySelector(`.nav-links a[href="#${id}"]`);
-      if (link) {
-        document.querySelectorAll('.nav-links a').forEach((a) => a.classList.remove('is-active'));
-        link.classList.add('is-active');
-      }
+/* ------------------------------------------------------------- microphone */
+const RecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let listening = false;
+const setListening = (on) => {
+  listening = on;
+  if (!mic) return;
+  mic.classList.toggle('is-listening', on);
+  mic.setAttribute('aria-pressed', String(on));
+  mic.setAttribute('aria-label', on ? 'Detener dictado' : 'Dictar mensaje');
+  mic.title = on ? 'Detener dictado' : 'Dictar mensaje';
+};
+if (RecognitionCtor) {
+  recognition = new RecognitionCtor();
+  recognition.lang = 'es-MX';
+  recognition.interimResults = false;
+  recognition.continuous = false;
+  recognition.maxAlternatives = 1;
+  recognition.addEventListener('result', (event) => {
+    const transcript = Array.from(event.results || [])
+      .map((result) => result[0]?.transcript || '')
+      .join(' ')
+      .trim();
+    if (!transcript) return;
+    prompt.value = prompt.value ? `${prompt.value.trim()} ${transcript}` : transcript;
+    prompt.dispatchEvent(new Event('input'));
+    prompt.focus();
+  });
+  recognition.addEventListener('end', () => setListening(false));
+  recognition.addEventListener('error', (event) => {
+    setListening(false);
+    if (event?.error === 'not-allowed' || event?.error === 'service-not-allowed') {
+      addMessage('El navegador bloqueó el micrófono. Habilita el permiso de voz para este sitio y vuelve a intentarlo.', 'isabella');
     }
   });
-}, { rootMargin: '-20% 0px -70% 0px' });
-
-document.querySelectorAll('section[id]').forEach((section) => navObserver.observe(section));
-
-/* --------------------------------------------------- Navigation link focus handling */
-document.querySelectorAll('.nav-links a[href^="#"]').forEach((link) => {
-  link.dataset.focusPrompt = 'true';
-  // Check: link.dataset.focusPrompt === 'true'
-  link.addEventListener('click', () => {
-    window.setTimeout(() => prompt?.focus(), 180);
-    // Check: window.setTimeout(() => prompt?.focus(), 180)
+  if (inspectorVoice) inspectorVoice.textContent = 'WEB STT + TTS';
+} else {
+  if (mic) {
+    mic.disabled = true;
+    mic.title = 'Reconocimiento de voz no disponible en este navegador';
+    mic.setAttribute('aria-label', 'Reconocimiento de voz no disponible');
+  }
+  if (inspectorVoice) inspectorVoice.textContent = 'BROWSER TTS';
+}
+const toggleMic = () => {
+  if (!recognition) {
+    addMessage('Este navegador no expone reconocimiento de voz. Puedes escribir o adjuntar un archivo de texto.', 'isabella');
+    return;
+  }
+  if (listening) {
+    try { recognition.stop(); } catch { /* already stopped */ }
+    setListening(false);
+    return;
+  }
+  try {
+    recognition.start();
+    setListening(true);
+  } catch {
+    setListening(false);
+  }
+};
+mic?.addEventListener('click', toggleMic);
+document.querySelectorAll('.mode[data-mode]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const isVoice = button.dataset.mode === 'voice';
+    document.querySelectorAll('.mode[data-mode]').forEach((item) => {
+      item.classList.toggle('active', item === button);
+      item.setAttribute('aria-pressed', String(item === button));
+    });
+    if (isVoice) toggleMic();
+    else { closePanel(true); prompt?.focus(); }
   });
+});
+
+/* ------------------------------------------------------------- attachments */
+attachText?.addEventListener('click', () => localFile?.click());
+localFile?.addEventListener('change', () => { void readFileAsContext(localFile.files?.[0]); });
+removeAttachment?.addEventListener('click', clearAttachment);
+paintAttachment();
+
+/* ---------------------------------------------------------------- inspector */
+const inspectorState = () => {
+  const state = runtimeStatus?.dataset.state;
+  if (state === 'ok') return 'EN LÍNEA';
+  if (state === 'warn') return 'DEGRADADO';
+  if (state === 'error') return 'FUERA DE LÍNEA';
+  return 'VERIFICANDO';
+};
+const openInspector = () => {
+  refreshWorkspaceContext();
+  if (inspectorRuntime) inspectorRuntime.textContent = inspectorState();
+  if (inspectorAttachment) inspectorAttachment.textContent = attachment ? attachment.name : 'NONE';
+  if (inspectorVoice) inspectorVoice.textContent = recognition ? 'WEB STT + TTS' : 'BROWSER TTS';
+  if (typeof systemInspector?.showModal === 'function') {
+    if (!systemInspector.open) systemInspector.showModal();
+  } else {
+    systemInspector?.setAttribute('open', '');
+  }
+  closeSystemInspector?.focus({ preventScroll: true });
+};
+const closeInspector = () => {
+  if (typeof systemInspector?.close === 'function') systemInspector.close();
+  else systemInspector?.removeAttribute('open');
+};
+contextInspector?.addEventListener('click', openInspector);
+closeSystemInspector?.addEventListener('click', closeInspector);
+systemInspector?.addEventListener('click', (event) => { if (event.target === systemInspector) closeInspector(); });
+
+/* ------------------------------------------------------------------ panels */
+const PANEL_SELECTOR = '.studio-panel, .access-section, .workspace-pane';
+const panelBackdrop = document.createElement('div');
+panelBackdrop.className = 'panel-backdrop';
+panelBackdrop.hidden = true;
+panelBackdrop.addEventListener('click', () => closePanel());
+// Panels live inside .stage (z-index:1); the backdrop must share that stacking context or it paints above them.
+(byId('top') || document.body).append(panelBackdrop);
+let lastPanelTrigger = null;
+
+function ensurePanelChrome(section) {
+  if (section.querySelector(':scope > .panel-close')) return;
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'panel-close';
+  close.dataset.panelClose = '';
+  close.textContent = 'Cerrar ×';
+  close.setAttribute('aria-label', 'Cerrar panel');
+  close.addEventListener('click', () => closePanel());
+  section.prepend(close);
+}
+function openPanel(id) {
+  const section = byId(id);
+  if (!section || !section.matches?.(PANEL_SELECTOR)) return false;
+  if (document.body.classList.contains('panel-open') && document.body.dataset.panel === id) return true;
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && !active.closest('.panel-visible')) lastPanelTrigger = active;
+  if (document.body.classList.contains('panel-open')) closePanel(true);
+  closeSideRails();
+  ensurePanelChrome(section);
+  section.classList.add('panel-visible');
+  section.setAttribute('role', 'dialog');
+  section.setAttribute('aria-modal', 'true');
+  section.setAttribute('tabindex', '-1');
+  document.body.classList.add('panel-open');
+  document.body.dataset.panel = id;
+  panelBackdrop.hidden = false;
+  if (id === 'studio') renderDrafts();
+  section.scrollTop = 0;
+  section.focus({ preventScroll: true });
+  return true;
+}
+function closePanel(silent = false) {
+  const section = document.querySelector('.panel-visible');
+  if (!section) return;
+  section.classList.remove('panel-visible');
+  section.removeAttribute('role');
+  section.removeAttribute('aria-modal');
+  section.removeAttribute('tabindex');
+  if (document.body.dataset.panel === section.id) delete document.body.dataset.panel;
+  document.body.classList.remove('panel-open');
+  panelBackdrop.hidden = true;
+  if (!silent && lastPanelTrigger?.isConnected) lastPanelTrigger.focus({ preventScroll: true });
+  lastPanelTrigger = null;
+}
+
+/* --------------------------------------------------------- command palette */
+const paletteEmpty = document.createElement('p');
+paletteEmpty.className = 'command-empty';
+paletteEmpty.hidden = true;
+paletteEmpty.textContent = 'Sin resultados. Prueba con otra palabra.';
+commandList?.append(paletteEmpty);
+
+const normalizeSearch = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const visibleCommands = () => [...(commandList?.querySelectorAll('button[data-command]') || [])].filter((button) => !button.hidden);
+const filterCommands = () => {
+  if (!commandList) return;
+  const query = normalizeSearch(commandSearch?.value);
+  commandList.querySelectorAll('button[data-command]').forEach((button) => {
+    const haystack = normalizeSearch(`${button.textContent || ''} ${button.dataset.keywords || ''} ${button.dataset.command || ''}`);
+    button.hidden = Boolean(query) && !haystack.includes(query);
+  });
+  const visible = visibleCommands();
+  paletteEmpty.hidden = visible.length > 0;
+};
+const openPalette = () => {
+  if (!commandPalette) return;
+  if (typeof commandPalette.showModal === 'function') {
+    if (!commandPalette.open) commandPalette.showModal();
+  } else {
+    commandPalette.setAttribute('open', '');
+  }
+  if (commandSearch) { commandSearch.value = ''; filterCommands(); commandSearch.focus(); }
+};
+const closePalette = () => {
+  if (typeof commandPalette?.close === 'function') commandPalette.close();
+  else commandPalette?.removeAttribute('open');
+};
+const runCommand = (command) => {
+  closePalette();
+  switch (command) {
+    case 'go-chat':
+    case 'focus-prompt':
+      closePanel(true);
+      byId('chat')?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+      window.setTimeout(() => prompt?.focus(), 120);
+      break;
+    case 'new-chat':
+      resetConversation();
+      break;
+    case 'export-chat':
+      exportConversation();
+      break;
+    case 'go-studio':
+      openPanel('studio');
+      break;
+    case 'go-tools':
+      openPanel('tools');
+      break;
+    case 'go-skills':
+      openPanel('skills');
+      break;
+    case 'go-economy':
+      openPanel('plans');
+      break;
+    case 'go-evidence':
+      openPanel('evidence');
+      break;
+    case 'go-governance':
+      openPanel('governance');
+      break;
+    case 'go-platform-chat':
+      window.location.assign('/chat');
+      break;
+    case 'go-platform':
+      window.location.assign('/platform');
+      break;
+    case 'go-library':
+      window.location.assign('/platform/library');
+      break;
+    case 'go-profile':
+      window.location.assign('/platform/profile');
+      break;
+    case 'go-developers':
+      window.location.assign('/platform/developers');
+      break;
+    case 'toggle-voice':
+      soundToggle?.click();
+      break;
+    case 'copy-last':
+      void copyLastAssistant();
+      break;
+    case 'read-last':
+      playLastAssistantMessage();
+      break;
+    case 'open-inspector':
+      openInspector();
+      break;
+    case 'open-history':
+      window.IsabellaChatPlus?.openHistory?.();
+      break;
+    case 'open-shortcuts':
+      window.IsabellaChatPlus?.openShortcuts?.();
+      break;
+    default:
+      break;
+  }
+};
+const movePaletteFocus = (direction) => {
+  const buttons = visibleCommands();
+  if (!buttons.length) return;
+  const current = buttons.indexOf(document.activeElement);
+  const index = current === -1
+    ? (direction > 0 ? 0 : buttons.length - 1)
+    : (current + direction + buttons.length) % buttons.length;
+  buttons[index].focus();
+};
+document.addEventListener('keydown', (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    openPalette();
+  }
+});
+commandLauncher?.addEventListener('click', openPalette);
+byId('closeCommandPalette')?.addEventListener('click', closePalette);
+commandSearch?.addEventListener('input', filterCommands);
+commandList?.addEventListener('click', (event) => {
+  const button = event.target instanceof Element ? event.target.closest('button[data-command]') : null;
+  if (button) runCommand(button.dataset.command);
+});
+commandList?.addEventListener('keydown', (event) => {
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+  event.preventDefault();
+  movePaletteFocus(event.key === 'ArrowDown' ? 1 : -1);
+});
+commandSearch?.addEventListener('keydown', (event) => {
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+  const buttons = visibleCommands();
+  if (!buttons.length) return;
+  event.preventDefault();
+  (event.key === 'ArrowDown' ? buttons[0] : buttons[buttons.length - 1]).focus();
+});
+commandPalette?.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') return;
+  const buttons = visibleCommands();
+  const active = document.activeElement instanceof HTMLElement && document.activeElement.matches('button[data-command]')
+    ? document.activeElement
+    : buttons[0];
+  if (active) {
+    event.preventDefault();
+    runCommand(active.dataset.command);
+  }
+});
+commandPalette?.addEventListener('click', (event) => { if (event.target === commandPalette) closePalette(); });
+
+/* ----------------------------------------------------- section / rail links */
+const runAction = (action) => {
+  switch (action) {
+    case 'new-chat': resetConversation(); closeSideRails(); break;
+    case 'export': exportConversation(); closeSideRails(); break;
+    case 'history': closeSideRails(); window.IsabellaChatPlus?.openHistory?.(); break;
+    case 'close-rails': closeSideRails(); break;
+    case 'mic': toggleMic(); break;
+    case 'shortcuts': closeSideRails(); window.IsabellaChatPlus?.openShortcuts?.(); break;
+    case 'inspector': closeSideRails(); openInspector(); break;
+    case 'focus-prompt': closeSideRails(); closePanel(true); prompt?.focus(); break;
+    case 'copy-last': void copyLastAssistant(); break;
+    case 'read-last': playLastAssistantMessage(); break;
+    default: break;
+  }
+};
+const applyStarter = (value) => {
+  if (!value) return;
+  closePanel(true);
+  prompt.value = value;
+  prompt.dispatchEvent(new Event('input'));
+  byId('chat')?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+  window.setTimeout(() => prompt.focus(), 120);
+};
+document.addEventListener('click', (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  if (!target) return;
+  const actionEl = target.closest('[data-action]');
+  if (actionEl) {
+    event.preventDefault();
+    runAction(actionEl.dataset.action);
+    return;
+  }
+  const starterEl = target.closest('[data-starter]');
+  if (starterEl) {
+    event.preventDefault();
+    applyStarter(starterEl.dataset.starter);
+    return;
+  }
+  const anchor = target.closest('a[href^="#"]');
+  if (!anchor) return;
+  const id = (anchor.getAttribute('href') || '').slice(1);
+  if (!id) return;
+  if (id === 'top') {
+    closePanel();
+    closeSideRails();
+    window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+    return;
+  }
+  if (id === 'chat') {
+    closePanel(true);
+    if (anchor.hasAttribute('data-focus-prompt')) window.setTimeout(() => prompt?.focus(), 180);
+    return;
+  }
+  if (openPanel(id)) event.preventDefault();
+});
+document.addEventListener('keydown', (event) => {
+  if (!document.body.classList.contains('panel-open')) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closePanel();
+    return;
+  }
+  if (event.key !== 'Tab') return;
+  const panel = document.querySelector('.panel-visible');
+  if (!panel) return;
+  const focusable = [...panel.querySelectorAll('a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])')]
+    .filter((node) => node instanceof HTMLElement && node.offsetParent !== null);
+  if (!focusable.length) {
+    event.preventDefault();
+    panel.focus({ preventScroll: true });
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+});
+
+/* ------------------------------------------------------ ambient quantum mesh */
+const mountMeshCanvas = (host, canvas, options = {}) => {
+  if (!host || !canvas || canvas.dataset.meshMounted === 'true') return;
+  const context = canvas.getContext('2d', { alpha: true });
+  if (!context) return;
+  canvas.dataset.meshMounted = 'true';
+  const nodeCount = options.nodeCount ?? (window.innerWidth < 700 ? 16 : 26);
+  const linkDistance = options.linkDistance ?? 150;
+  const lineAlpha = options.lineAlpha ?? 0.14;
+  const nodeAlpha = options.nodeAlpha ?? 0.5;
+  const drift = options.drift ?? 0.00028;
+  const nodes = Array.from({ length: nodeCount }, () => ({
+    x: Math.random(),
+    y: Math.random(),
+    vx: (Math.random() - 0.5) * drift,
+    vy: (Math.random() - 0.5) * drift,
+    r: Math.random() * 1.4 + 0.7
+  }));
+  let width = 0;
+  let height = 0;
+  let frame = 0;
+  let running = false;
+  const palette = ['159,247,255', '201,184,255', '169,245,208'];
+  const resize = () => {
+    const rect = canvas.getBoundingClientRect();
+    width = Math.max(1, Math.round(rect.width));
+    height = Math.max(1, Math.round(rect.height));
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+  };
+  const paint = () => {
+    context.clearRect(0, 0, width, height);
+    for (let i = 0; i < nodes.length; i += 1) {
+      const a = nodes[i];
+      if (!reduceMotion) {
+        a.x += a.vx;
+        a.y += a.vy;
+        if (a.x < -0.05) a.x = 1.05;
+        if (a.x > 1.05) a.x = -0.05;
+        if (a.y < -0.05) a.y = 1.05;
+        if (a.y > 1.05) a.y = -0.05;
+      }
+      for (let j = i + 1; j < nodes.length; j += 1) {
+        const b = nodes[j];
+        const dx = (a.x - b.x) * width;
+        const dy = (a.y - b.y) * height;
+        const distance = Math.hypot(dx, dy);
+        if (distance > linkDistance) continue;
+        context.strokeStyle = `rgba(${palette[(i + j) % palette.length]},${(1 - distance / linkDistance) * lineAlpha})`;
+        context.lineWidth = 0.7;
+        context.beginPath();
+        context.moveTo(a.x * width, a.y * height);
+        context.lineTo(b.x * width, b.y * height);
+        context.stroke();
+      }
+    }
+    for (let index = 0; index < nodes.length; index += 1) {
+      const node = nodes[index];
+      context.fillStyle = `rgba(${palette[index % palette.length]},${nodeAlpha})`;
+      context.beginPath();
+      context.arc(node.x * width, node.y * height, node.r, 0, Math.PI * 2);
+      context.fill();
+    }
+  };
+  const start = () => {
+    if (running) return;
+    resize();
+    if (reduceMotion) { paint(); return; }
+    running = true;
+    const loop = () => {
+      if (!running) return;
+      paint();
+      frame = window.requestAnimationFrame(loop);
+    };
+    frame = window.requestAnimationFrame(loop);
+  };
+  const stop = () => {
+    running = false;
+    window.cancelAnimationFrame(frame);
+  };
+  if (typeof ResizeObserver === 'function') {
+    new ResizeObserver(() => { resize(); if (!running) paint(); }).observe(host);
+  } else {
+    window.addEventListener('resize', () => { resize(); if (!running) paint(); });
+  }
+  if (typeof IntersectionObserver === 'function') {
+    new IntersectionObserver((entries) => {
+      entries.forEach((entry) => { if (entry.isIntersecting) start(); else stop(); });
+    }, { threshold: 0 }).observe(host);
+  }
+  document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); else start(); });
+  start();
+};
+
+const mountAmbientMesh = () => {
+  const chat = byId('chat');
+  if (!chat) return;
+  const compact = window.innerWidth < 700;
+  const canvas = document.createElement('canvas');
+  canvas.className = 'console-ambient';
+  canvas.setAttribute('aria-hidden', 'true');
+  chat.prepend(canvas);
+  mountMeshCanvas(chat, canvas, {
+    nodeCount: compact ? 14 : 24,
+    linkDistance: 150,
+    lineAlpha: 0.13,
+    nodeAlpha: 0.48
+  });
+  const hero = document.querySelector('.hero.hero-product');
+  const heroCanvas = byId('quantumMesh');
+  if (hero && heroCanvas) {
+    mountMeshCanvas(hero, heroCanvas, {
+      nodeCount: compact ? 18 : 34,
+      linkDistance: 172,
+      lineAlpha: 0.1,
+      nodeAlpha: 0.4,
+      drift: 0.0002
+    });
+  }
+};
+mountAmbientMesh();
+
+/* ---------------------------------------------- initial UI + public bridge */
+const navObserver = new IntersectionObserver((entries) => {
+  entries.forEach((entry) => {
+    if (!entry.isIntersecting) return;
+    document.querySelectorAll('.nav-links a').forEach((link) => {
+      const active = link.getAttribute('href') === `#${entry.target.id}`;
+      link.classList.toggle('is-active', active);
+      if (active) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    });
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+document.querySelectorAll('section[id]').forEach((section) => navObserver.observe(section));
+document.querySelectorAll('.nav-links a[href^="#"]').forEach((link) => {
+  link.dataset.focusPrompt = link.hasAttribute('data-focus-prompt') ? 'true' : 'false';
+  link.addEventListener('click', () => {
+    if (link.dataset.focusPrompt === 'true') window.setTimeout(() => prompt?.focus(), 180);
+  });
+});
+
+enterChat?.addEventListener('click', () => {
+  byId('chat')?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+  window.setTimeout(() => prompt?.focus({ preventScroll: true }), reduceMotion ? 60 : 540);
+});
+
+renderDrafts();
+refreshWorkspaceContext();
+if (inspectorAttachment) inspectorAttachment.textContent = 'NONE';
+
+window.IsabellaApp = Object.freeze({
+  addMessage,
+  getSessionId: () => sessionId,
+  setSessionId: (id) => {
+    if (typeof id === 'string' && id) {
+      sessionId = id;
+      refreshWorkspaceContext();
+    }
+  },
+  resetConversation,
+  saveDraft,
+  renderDrafts,
+  exportConversation,
+  speak: speakMessage,
+  stopSpeech,
+  openPanel,
+  closePanel,
+  openInspector,
+  refreshWorkspaceContext,
+  getAttachmentName: () => (attachment ? attachment.name : null),
+  getVoiceEnabled: () => voiceEnabled,
+  copyLastAssistant
 });

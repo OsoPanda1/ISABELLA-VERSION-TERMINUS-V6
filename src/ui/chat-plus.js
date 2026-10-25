@@ -233,33 +233,54 @@
     return row;
   };
   const feedbackKey='isabella.feedback.v1';
+  const recordFeedback=(value,engine)=>{
+    let store=[];
+    try{const parsed=JSON.parse(safeStorage.get(feedbackKey)||'[]');if(Array.isArray(parsed))store=parsed;}catch{store=[];}
+    store.push({at:new Date().toISOString(),value,engine:engine||null,session:app()?.getSessionId?.()||null});
+    safeStorage.set(feedbackKey,JSON.stringify(store.slice(-200)));
+  };
   const decorate=(paragraph,meta={})=>{
     const article=paragraph?.closest('.message');
     if(!article||article.classList.contains('user'))return;
-    messages.querySelectorAll('.message-tools').forEach(n=>n.remove());
+    article.querySelectorAll('.message-tools').forEach(n=>n.remove());
     const raw=paragraph.dataset.raw||paragraph.textContent||'';
     const bar=el('div','message-tools');
     const regen=el('button','tool-btn','↻ Regenerar');regen.type='button';regen.addEventListener('click',regenerate);
+    const copy=el('button','tool-btn message-copy','Copiar');copy.type='button';copy.dataset.messageAction='copy';
+    const save=el('button','tool-btn message-save','Guardar');save.type='button';save.dataset.messageAction='save';
+    const speak=el('button','tool-btn message-speak','Escuchar');speak.type='button';speak.dataset.messageAction='speak';
     const up=el('button','tool-btn','👍');const down=el('button','tool-btn','👎');
     [up,down].forEach((b,idx)=>{b.type='button';b.setAttribute('aria-label',idx===0?'Respuesta útil':'Respuesta no útil');
-      b.addEventListener('click',()=>{const store=JSON.parse(safeStorage.get(feedbackKey)||'[]');store.push({at:new Date().toISOString(),value:idx===0?1:-1,engine:meta.engine||null});safeStorage.set(feedbackKey,JSON.stringify(store.slice(-200)));up.disabled=down.disabled=true;(idx===0?up:down).classList.add('is-on');});});
-    const sources=sourcesRow(raw);bar.append(regen,up,down);
+      b.addEventListener('click',()=>{recordFeedback(idx===0?1:-1,meta.engine);up.disabled=down.disabled=true;(idx===0?up:down).classList.add('is-on');});});
+    const sources=sourcesRow(raw);bar.append(regen,copy,save,speak,up,down);
     if(Number.isFinite(meta.latencyMs))bar.append(el('span','latency-chip',`⏱ ${(meta.latencyMs/1000).toFixed(1)} s`));
     const chips=el('div','followups');followUps(raw).forEach(t=>{const c=el('button','followup',t);c.type='button';c.addEventListener('click',()=>submitText(t));chips.append(c);});
-    const host=article.querySelector(':scope > div');
-    if(sources)host?.append(sources);
-    host?.append(bar,chips);
+    const host=article.querySelector('.message-body')||article.querySelector(':scope > div')||article;
+    if(sources)host.append(sources);
+    host.append(bar,chips);
   };
 
   /* ------------------------------------------------------------------ history */
-  const readChats=()=>{try{const v=JSON.parse(safeStorage.get(HISTORY_KEY)||'[]');return Array.isArray(v)?v:[];}catch{return[];}};
-  const writeChats=(list)=>{const pinned=list.filter(c=>c.pinned);const rest=list.filter(c=>!c.pinned).sort((a,b)=>b.updated-a.updated).slice(0,Math.max(0,MAX_CHATS-pinned.length));safeStorage.set(HISTORY_KEY,JSON.stringify([...pinned,...rest]));};
+  const readChats=()=>{
+    try{
+      const parsed=JSON.parse(safeStorage.get(HISTORY_KEY)||'[]');
+      if(!Array.isArray(parsed))return[];
+      return parsed.filter((c)=>c&&typeof c.sid==='string'&&Array.isArray(c.turns)).map((c)=>({
+        ...c,
+        title:String(c.title||'Conversación').slice(0,80),
+        turns:c.turns.filter((t)=>t&&typeof t.text==='string').slice(-MAX_TURNS),
+        updated:Number(c.updated)||Date.now(),
+        pinned:Boolean(c.pinned)
+      })).slice(0,MAX_CHATS*2);
+    }catch{return[];}
+  };
+  const writeChats=(list)=>{const pinned=list.filter(c=>c.pinned).sort((a,b)=>b.updated-a.updated).slice(0,MAX_CHATS);const rest=list.filter(c=>!c.pinned).sort((a,b)=>b.updated-a.updated).slice(0,Math.max(0,MAX_CHATS-pinned.length));safeStorage.set(HISTORY_KEY,JSON.stringify([...pinned,...rest]));};
   const isWelcome=(t)=>t.role==='assistant'&&/^Estoy aquí\./.test(t.text);
   const collectTurns=()=>[...messages.querySelectorAll('.message')].map(n=>{const p=n.querySelector('p');return{role:n.classList.contains('user')?'user':'assistant',text:(p?.dataset.raw||p?.textContent||'').slice(0,MAX_TURN_CHARS),ts:Number(n.dataset.ts)||Date.now()};}).filter(t=>t.text&&!isWelcome(t)).slice(-MAX_TURNS);
   const persist=()=>{const sid=app()?.getSessionId?.();const turns=collectTurns();if(!sid||!turns.some(t=>t.role==='user'))return;const chats=readChats();const existing=chats.find(c=>c.sid===sid);const title=(turns.find(t=>t.role==='user')?.text||'Conversación').replace(/\s+/g,' ').slice(0,64);
     if(existing){existing.turns=turns;existing.updated=Date.now();if(!existing.renamed)existing.title=title;}else chats.push({sid,title,turns,updated:Date.now(),pinned:false,renamed:false});
     writeChats(chats);renderHistory();};
-  const drawer=el('aside','history-drawer');drawer.id='historyDrawer';drawer.setAttribute('aria-label','Historial de conversaciones');drawer.hidden=true;
+  const drawer=el('aside','history-drawer');drawer.id='historyDrawer';drawer.setAttribute('role','dialog');drawer.setAttribute('aria-modal','true');drawer.setAttribute('aria-label','Historial de conversaciones');drawer.tabIndex=-1;drawer.hidden=true;
   const dHead=el('div','hd-head');dHead.append(el('strong','','HISTORIAL'),el('span','hd-note','Solo en este navegador'));
   const dClose=el('button','hd-close','×');dClose.type='button';dClose.setAttribute('aria-label','Cerrar historial');dHead.append(dClose);
   const dSearch=el('input','hd-search');dSearch.type='search';dSearch.placeholder='Buscar conversaciones…';dSearch.setAttribute('aria-label','Buscar conversaciones');
@@ -286,8 +307,28 @@
     messages.querySelectorAll('.message').forEach(n=>n.remove());
     chat.turns.forEach(t=>{const p=app().addMessage(t.role==='user'?t.text:'',t.role==='user'?'user':'isabella');if(t.role!=='user'&&p)renderInto(p,t.text,{animate:false});});
     const lastA=lastTurn('isabella')?.querySelector('p');if(lastA)decorate(lastA,{});closeDrawer();scrollIfPinned(true);}
-  function openDrawer(){renderHistory();drawer.hidden=false;document.body.classList.add('history-open');dSearch.focus();}
-  function closeDrawer(){drawer.hidden=true;document.body.classList.remove('history-open');}
+  let historyReturnFocus=null;
+  function openDrawer(){
+    if(!drawer.hidden)return;
+    historyReturnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;
+    renderHistory();drawer.hidden=false;document.body.classList.add('history-open');dSearch.focus();
+  }
+  function closeDrawer(){
+    if(drawer.hidden)return;
+    drawer.hidden=true;document.body.classList.remove('history-open');
+    if(historyReturnFocus?.isConnected)historyReturnFocus.focus({preventScroll:true});
+    historyReturnFocus=null;
+  }
+  drawer.addEventListener('keydown',(event)=>{
+    if(event.key==='Escape'){event.preventDefault();closeDrawer();return;}
+    if(event.key!=='Tab')return;
+    const focusable=[...drawer.querySelectorAll('button:not(:disabled), input:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])')]
+      .filter((node)=>node instanceof HTMLElement&&node.offsetParent!==null);
+    if(!focusable.length)return;
+    const first=focusable[0],last=focusable[focusable.length-1];
+    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+  });
   const toggleDrawer=()=>drawer.hidden?openDrawer():closeDrawer();
   dClose.addEventListener('click',closeDrawer);
   dSearch.addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(renderHistory,180);});
@@ -318,6 +359,8 @@
     {cmd:'/redactar',desc:'Redactar documento',text:'Ayúdame a redactar un documento claro y profesional. Objetivo, audiencia, tono y resultado esperado: '},
     {cmd:'/nuevo',desc:'Nueva conversación',run:()=>app()?.resetConversation()},
     {cmd:'/historial',desc:'Abrir historial',run:()=>openDrawer()},
+    {cmd:'/estudio',desc:'Abrir Studio local',run:()=>app()?.openPanel?.('studio')},
+    {cmd:'/inspeccionar',desc:'Inspeccionar la sesión',run:()=>app()?.openInspector?.()},
     {cmd:'/enfoque',desc:'Modo enfoque',run:()=>toggleFocus()},
     {cmd:'/exportar',desc:'Exportar .md',run:()=>$('exportChat')?.click()},
     {cmd:'/voz',desc:'Activar o desactivar voz',run:()=>$('soundToggle')?.click()},
@@ -417,7 +460,11 @@
     .forEach(([k, v]) => { dl.append(el('dt', '', k), el('dd', '', v)); });
   const dlgClose = el('button', 'subtle-action', 'Cerrar'); dlgClose.type = 'button'; dlgClose.addEventListener('click', () => dlg.close());
   dlg.append(dlgTitle, dl, dlgClose); document.body.append(dlg);
-  function openShortcuts() { if (typeof dlg.showModal === 'function' && !dlg.open) dlg.showModal(); }
+  function openShortcuts() {
+    if (typeof dlg.showModal === 'function') { if (!dlg.open) dlg.showModal(); }
+    else dlg.setAttribute('open', '');
+    dlgClose.focus({ preventScroll: true });
+  }
   document.addEventListener('keydown', (e) => {
     const typing = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '');
     const mod = e.ctrlKey || e.metaKey;
@@ -494,7 +541,8 @@
   /* --------------------------------------------------------------------- bridge */
   window.IsabellaChatPlus = Object.freeze({
     renderInto, beginPending, latencySince, decorate, persist, getLens: () => lens,
+    openHistory: openDrawer, closeHistory: closeDrawer, openShortcuts,
     setAbort(controller) { activeController = controller; },
-    stamp(article) { article.dataset.ts = String(Date.now()); }
+    stamp(article) { if (article) article.dataset.ts = String(Date.now()); }
   });
 })();
