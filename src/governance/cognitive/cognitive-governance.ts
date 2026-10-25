@@ -13,7 +13,14 @@
  */
 
 import { EventEmitter } from "node:events";
-import { createHash, randomBytes } from "node:crypto";
+import {
+  createHash,
+  createPublicKey,
+  constants as cryptoConstants,
+  randomBytes,
+  verify as cryptoVerify,
+  type KeyObject,
+} from "node:crypto";
 
 export type GovernanceDomain = 
   | "capability" 
@@ -261,6 +268,233 @@ export interface ConstitutionalInterpretation {
   readonly issuedAt: number;
 }
 
+type RuleValue = string | number | boolean | null;
+
+function isDigit(character: string | undefined): boolean {
+  return character !== undefined && character >= "0" && character <= "9";
+}
+
+function normalizeRuleValue(value: unknown): RuleValue {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+  return Boolean(value);
+}
+
+/**
+ * Deterministic evaluator for the policy rule DSL.
+ * Supports dotted `input.*` / `context.*` paths, literals, parentheses,
+ * `!`, `&&`, `||` and comparisons. It never executes code.
+ */
+class RuleExpressionParser {
+  private index = 0;
+
+  constructor(
+    private readonly source: string,
+    private readonly input: Record<string, unknown>,
+    private readonly context: Record<string, unknown>
+  ) {}
+
+  parse(): boolean {
+    const value = this.parseOr();
+    this.skipWhitespace();
+    if (this.index !== this.source.length) throw new Error("UNEXPECTED_TOKEN");
+    return Boolean(value);
+  }
+
+  private parseOr(): RuleValue {
+    let left = this.parseAnd();
+    while (this.matchOperator("||")) {
+      // Both sides are parsed even when the left side already decides the result,
+      // so the whole expression is consumed and syntax errors stay visible.
+      const right = this.parseAnd();
+      left = Boolean(left) || Boolean(right);
+    }
+    return left;
+  }
+
+  private parseAnd(): RuleValue {
+    let left = this.parseComparison();
+    while (this.matchOperator("&&")) {
+      const right = this.parseComparison();
+      left = Boolean(left) && Boolean(right);
+    }
+    return left;
+  }
+
+  private parseComparison(): RuleValue {
+    const left = this.parseUnary();
+    for (const operator of ["===", "!==", ">=", "<=", "==", "!=", ">", "<"] as const) {
+      if (this.matchOperator(operator)) {
+        return this.compare(left, this.parseUnary(), operator);
+      }
+    }
+    return left;
+  }
+
+  private parseUnary(): RuleValue {
+    this.skipWhitespace();
+    if (this.source[this.index] === "!") {
+      this.index++;
+      return !this.parseUnary();
+    }
+    return this.parsePrimary();
+  }
+
+  private parsePrimary(): RuleValue {
+    this.skipWhitespace();
+    const character = this.source[this.index];
+    if (character === "(") {
+      this.index++;
+      const value = this.parseOr();
+      this.skipWhitespace();
+      if (this.source[this.index] !== ")") throw new Error("EXPECTED_CLOSING_PARENTHESIS");
+      this.index++;
+      return value;
+    }
+    if (character === "'" || character === '"') return this.parseString(character);
+    if (character === "-" || isDigit(character)) return this.parseNumber();
+
+    const identifier = this.parseIdentifier();
+    if (identifier === "true") return true;
+    if (identifier === "false") return false;
+    if (identifier === "null") return null;
+    return this.resolvePath(identifier);
+  }
+
+  private parseIdentifier(): string {
+    const match = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/.exec(
+      this.source.slice(this.index)
+    );
+    if (!match) throw new Error("EXPECTED_IDENTIFIER");
+    this.index += match[0].length;
+    return match[0];
+  }
+
+  private parseString(quote: string): string {
+    this.index++;
+    let value = "";
+    while (this.index < this.source.length) {
+      const character = this.source[this.index++] ?? "";
+      if (character === quote) return value;
+      if (character !== "\\") {
+        value += character;
+        continue;
+      }
+      const escaped = this.source[this.index++];
+      switch (escaped) {
+        case "n": value += "\n"; break;
+        case "r": value += "\r"; break;
+        case "t": value += "\t"; break;
+        case "\\": value += "\\"; break;
+        case "'": value += "'"; break;
+        case '"': value += '"'; break;
+        default: throw new Error("INVALID_ESCAPE");
+      }
+    }
+    throw new Error("UNTERMINATED_STRING");
+  }
+
+  private parseNumber(): number {
+    const start = this.index;
+    if (this.source[this.index] === "-") this.index++;
+    const integerStart = this.index;
+    while (isDigit(this.source[this.index])) this.index++;
+    if (this.index === integerStart) throw new Error("INVALID_NUMBER");
+    if (this.source[this.index] === ".") {
+      this.index++;
+      const fractionStart = this.index;
+      while (isDigit(this.source[this.index])) this.index++;
+      if (this.index === fractionStart) throw new Error("INVALID_NUMBER");
+    }
+    const value = Number(this.source.slice(start, this.index));
+    if (!Number.isFinite(value)) throw new Error("INVALID_NUMBER");
+    return value;
+  }
+
+  private resolvePath(path: string): RuleValue {
+    const [root, ...parts] = path.split(".");
+    let value: unknown;
+    if (root === "input") value = this.input;
+    else if (root === "context") value = this.context;
+    else throw new Error("UNKNOWN_ROOT");
+
+    for (const part of parts) {
+      if (part === "__proto__" || part === "prototype" || part === "constructor") {
+        throw new Error("FORBIDDEN_PATH");
+      }
+      // Missing paths resolve to null so negated safeguards (`!input.flag`) still fire.
+      if (value === null || typeof value !== "object" || !Object.hasOwn(value, part)) {
+        return null;
+      }
+      value = (value as Record<string, unknown>)[part];
+    }
+    return normalizeRuleValue(value);
+  }
+
+  private compare(left: RuleValue, right: RuleValue, operator: string): boolean {
+    switch (operator) {
+      case "===":
+      case "==":
+        return left === right;
+      case "!==":
+      case "!=":
+        return left !== right;
+      case ">=":
+        return typeof left === "number" && typeof right === "number" && left >= right;
+      case "<=":
+        return typeof left === "number" && typeof right === "number" && left <= right;
+      case ">":
+        return typeof left === "number" && typeof right === "number" && left > right;
+      case "<":
+        return typeof left === "number" && typeof right === "number" && left < right;
+      default:
+        throw new Error("UNKNOWN_OPERATOR");
+    }
+  }
+
+  private matchOperator(operator: string): boolean {
+    this.skipWhitespace();
+    if (!this.source.startsWith(operator, this.index)) return false;
+    this.index += operator.length;
+    return true;
+  }
+
+  private skipWhitespace(): void {
+    while (this.index < this.source.length && /\s/.test(this.source[this.index] ?? "")) {
+      this.index++;
+    }
+  }
+}
+
+function listScopeMatches(scope: readonly string[], value: string): boolean {
+  return scope.length === 0 || scope.includes("*") || scope.includes(value);
+}
+
+function checkSignature(
+  key: KeyObject,
+  payload: Buffer,
+  signature: Buffer
+): boolean {
+  if (signature.length === 0) return false;
+  switch (key.asymmetricKeyType) {
+    case "ed25519":
+    case "ed448":
+      return cryptoVerify(null, payload, key, signature);
+    case "rsa":
+    case "rsa-pss":
+      return cryptoVerify("sha256", payload, {
+        key,
+        padding: cryptoConstants.RSA_PKCS1_PADDING,
+      }, signature);
+    case "ec":
+      return cryptoVerify("sha256", payload, { key, dsaEncoding: "der" }, signature);
+    default:
+      return false;
+  }
+}
+
 /**
  * Policy Engine - OPA/Rego Compatible
  */
@@ -308,8 +542,9 @@ export class PolicyEngine extends EventEmitter {
     );
 
     // Aggregate results - deny by default, any deny wins
-    let finalStatus: DecisionStatus = "approved";
-    let finalReason = "All policies passed";
+    const hasApplicablePolicies = results.length > 0;
+    let finalStatus: DecisionStatus = hasApplicablePolicies ? "approved" : "denied";
+    let finalReason = hasApplicablePolicies ? "All policies passed" : "No applicable policy - default deny";
     const allConditions: DecisionCondition[] = [];
     const allEvidence: EvidenceReference[] = [];
     const requiredActions: string[] = [];
@@ -351,18 +586,19 @@ export class PolicyEngine extends EventEmitter {
 
   private policyApplies(policy: GovernancePolicy, context: EvaluationContext): boolean {
     const app = policy.metadata.applicability;
-    
-    if (app.environments.length && !app.environments.includes(context.environment)) {
-      return false;
-    }
-    if (app.roles.length && !app.roles.some(r => context.roles.includes(r))) {
-      return false;
-    }
-    if (app.resources.length && !app.resources.some(r => context.resource.startsWith(r))) {
-      return false;
-    }
-    
-    return true;
+
+    if (!listScopeMatches(app.environments, context.environment)) return false;
+
+    const rolesMatch =
+      !app.roles.length ||
+      app.roles.includes("*") ||
+      app.roles.some(role => context.roles.includes(role));
+    if (!rolesMatch) return false;
+
+    const resourcesMatch =
+      !app.resources.length ||
+      app.resources.some(resource => resource === "*" || context.resource.startsWith(resource));
+    return resourcesMatch;
   }
 
   private async evaluatePolicy(
@@ -372,18 +608,20 @@ export class PolicyEngine extends EventEmitter {
   ): Promise<GovernanceDecision> {
     const conditions: DecisionCondition[] = [];
     const evidence: EvidenceReference[] = [];
+    const requiredActions: string[] = [];
 
     for (const rule of policy.rules) {
-      const satisfied = await this.evaluateRule(rule, input, context);
-      
+      const matched = await this.evaluateRule(rule, input, context);
+
       conditions.push({
         type: "pre",
         description: rule.message,
         validator: rule.condition,
-        satisfied,
+        satisfied: matched,
       });
 
-      if (!satisfied && rule.action === "deny") {
+      // A matched rule triggers its action; an unmatched deny condition is not a denial.
+      if (matched && rule.action === "deny") {
         return {
           id: `dec_${randomBytes(12).toString("hex")}`,
           requestId: context.requestId,
@@ -403,6 +641,10 @@ export class PolicyEngine extends EventEmitter {
           evidence,
         };
       }
+
+      if (matched && rule.action === "require_approval") {
+        requiredActions.push(rule.message);
+      }
     }
 
     return {
@@ -410,12 +652,12 @@ export class PolicyEngine extends EventEmitter {
       requestId: context.requestId,
       policyId: policy.id,
       domain: policy.domain,
-      status: "approved",
+      status: requiredActions.length > 0 ? "conditional" : "approved",
       input,
       output: {
         allowed: true,
-        reason: "Policy satisfied",
-        requiredActions: [],
+        reason: requiredActions.length > 0 ? "Approval required" : "Policy satisfied",
+        requiredActions,
         metadata: {},
       },
       evaluatedAt: Date.now(),
@@ -430,31 +672,14 @@ export class PolicyEngine extends EventEmitter {
     input: Record<string, unknown>,
     context: EvaluationContext
   ): Promise<boolean> {
-    // In production, would use OPA/Rego engine
-    // For now, simple expression evaluation
     try {
-      // Replace variables in condition
-      let expression = rule.condition;
-      for (const [key, value] of Object.entries(input)) {
-        expression = expression.replace(new RegExp(`\\b${key}\\b`, 'g'), JSON.stringify(value));
-      }
-      for (const [key, value] of Object.entries(context)) {
-        expression = expression.replace(new RegExp(`\\bcontext\\.${key}\\b`, 'g'), JSON.stringify(value));
-      }
-      
-      // Simple evaluation (in production: use proper Rego engine)
-      return this.evaluateExpression(expression);
+      return new RuleExpressionParser(
+        rule.condition,
+        input,
+        context as unknown as Record<string, unknown>
+      ).parse();
     } catch {
-      return false;
-    }
-  }
-
-  private evaluateExpression(expr: string): boolean {
-    // Very basic expression evaluator - replace with OPA in production
-    try {
-      // eslint-disable-next-line no-eval
-      return eval(expr);
-    } catch {
+      // Unknown syntax, missing paths or forbidden identifiers fail closed.
       return false;
     }
   }
@@ -543,10 +768,12 @@ export class QualityGatesEngine extends EventEmitter {
     const totalWeight = checkResults.reduce((sum, r) => sum + (
       gate.checks.find(c => c.id === r.checkId)?.weight ?? 1
     ), 0);
-    const weightedScore = checkResults.reduce((sum, r) => {
-      const check = gate.checks.find(c => c.id === r.checkId);
-      return sum + r.score * (check?.weight || 1);
-    }, 0) / totalWeight;
+    const weightedScore = totalWeight > 0
+      ? checkResults.reduce((sum, r) => {
+          const check = gate.checks.find(c => c.id === r.checkId);
+          return sum + r.score * (check?.weight || 1);
+        }, 0) / totalWeight
+      : 0;
 
     // Check critical checks
     const criticalFailed = gate.threshold.criticalChecks.some(id => {
@@ -555,7 +782,8 @@ export class QualityGatesEngine extends EventEmitter {
     });
 
     let status: QualityGateStatus;
-    if (criticalFailed) status = "failed";
+    if (checkResults.length === 0) status = "failed";
+    else if (criticalFailed) status = "failed";
     else if (weightedScore < gate.threshold.minimumScore) status = "failed";
     else if (weightedScore < gate.threshold.warningThreshold) status = "warning";
     else status = "passed";
@@ -614,7 +842,10 @@ export class EvidenceValidator extends EventEmitter {
   private evidenceStore: Map<string, Evidence> = new Map();
   private trustedKeys: Map<string, string> = new Map(); // keyId -> publicKey
 
-  async submitEvidence(evidence: Evidence): Promise<{ accepted: boolean; evidenceId: string; issues: string[] }> {
+  async submitEvidence(
+    evidence: Evidence,
+    options: { clearance?: EvidenceMetadata["classification"] } = {}
+  ): Promise<{ accepted: boolean; evidenceId: string; issues: string[] }> {
     const issues: string[] = [];
 
     // Verify integrity
@@ -635,10 +866,18 @@ export class EvidenceValidator extends EventEmitter {
       if (!sigValid) {
         issues.push("SIGNATURE_VERIFICATION_FAILED");
       }
+    } else if (isSignatureRequired(evidence.metadata.classification)) {
+      issues.push("SIGNATURE_REQUIRED");
     }
 
-    // Check classification handling
-    if (evidence.metadata.classification === "restricted" && !contextHasClearance()) {
+    // Check classification handling against the caller's explicit clearance.
+    const requiredRank = CLASSIFICATION_RANK[evidence.metadata.classification];
+    const clearanceRank = CLASSIFICATION_RANK[options.clearance ?? "public"];
+    if (
+      requiredRank === undefined ||
+      clearanceRank === undefined ||
+      requiredRank > clearanceRank
+    ) {
       issues.push("INSUFFICIENT_CLEARANCE");
     }
 
@@ -655,37 +894,64 @@ export class EvidenceValidator extends EventEmitter {
   }
 
   private verifyIntegrity(evidence: Evidence): boolean {
-    const contentHash = this.hashContent(evidence.content);
+    const expected = evidence.integrity.hash;
+    if (!/^[0-9a-f]+$/i.test(expected) || expected.length % 2 !== 0) return false;
+
+    let actual: string;
+    try {
+      const payload = JSON.stringify(evidence.content);
+      if (evidence.integrity.algorithm === "sha256") {
+        actual = createHash("sha256").update(payload).digest("hex");
+      } else if (evidence.integrity.algorithm === "sha3-512") {
+        actual = this.hashContent(evidence.content);
+      } else {
+        // blake3 has no native Node backend in this runtime; refusing is safer than guessing.
+        return false;
+      }
+    } catch {
+      return false;
+    }
     return timingSafeEqual(
-      Buffer.from(contentHash),
-      Buffer.from(evidence.integrity.hash)
+      Buffer.from(actual),
+      Buffer.from(expected)
     );
   }
 
   private verifyProvenance(provenance: Provenance): boolean {
-    // Verify each link in the chain
-    for (let i = 1; i < provenance.chain.length; i++) {
-      const prev = provenance.chain[i - 1];
-      const curr = provenance.chain[i];
-      
-      // Verify hash chain
+    if (provenance.chain.length === 0) return false;
+
+    for (let i = 0; i < provenance.chain.length; i++) {
+      const link = provenance.chain[i];
+      if (!link) return false;
+
       const expectedHash = createHash("sha256")
-        .update(`${prev.from}:${prev.to}:${prev.transformation}:${prev.timestamp}`)
+        .update(`${link.from}:${link.to}:${link.transformation}:${link.timestamp}`)
         .digest("hex");
-      
-      if (prev.hash !== expectedHash) {
-        return false;
-      }
+      if (link.hash !== expectedHash) return false;
+
+      const previous = provenance.chain[i - 1];
+      if (previous && previous.to !== link.from) return false;
     }
     return true;
   }
 
   private async verifySignature(evidence: Evidence): Promise<boolean> {
-    if (!evidence.integrity.publicKey || !evidence.integrity.signature) {
+    const publicKey = evidence.integrity.publicKey;
+    const signature = evidence.integrity.signature;
+    if (!publicKey || !signature) return false;
+
+    // Only explicitly registered keys are trust anchors; an embedded key proves nothing.
+    const trusted = Array.from(this.trustedKeys.values())
+      .some(candidate => candidate.trim() === publicKey.trim());
+    if (!trusted) return false;
+
+    try {
+      const key = createPublicKey(publicKey);
+      const payload = Buffer.from(evidence.integrity.hash, "utf8");
+      return checkSignature(key, payload, Buffer.from(signature, "base64"));
+    } catch {
       return false;
     }
-    // In production: use crypto.verify()
-    return true; // placeholder
   }
 
   private hashContent(content: unknown): string {
@@ -723,9 +989,15 @@ export class EvidenceValidator extends EventEmitter {
   }
 }
 
-function contextHasClearance(): boolean {
-  // In production: check actual clearance
-  return true;
+const CLASSIFICATION_RANK: Record<EvidenceMetadata["classification"], number> = {
+  public: 0,
+  internal: 1,
+  confidential: 2,
+  restricted: 3,
+};
+
+function isSignatureRequired(classification: EvidenceMetadata["classification"]): boolean {
+  return CLASSIFICATION_RANK[classification] >= CLASSIFICATION_RANK.confidential;
 }
 
 function timingSafeEqual(a: Buffer, b: Buffer): boolean {
@@ -814,14 +1086,8 @@ export class EthicsEngine extends EventEmitter {
   }
 
   private async evaluateRule(rule: EthicsRule, context: Record<string, unknown>): Promise<boolean> {
-    // Simple rule evaluation - in production use proper logic engine
     try {
-      let expression = rule.condition;
-      for (const [key, value] of Object.entries(context)) {
-        expression = expression.replace(new RegExp(`\\b${key}\\b`, 'g'), JSON.stringify(value));
-      }
-      // eslint-disable-next-line no-eval
-      return eval(expression);
+      return new RuleExpressionParser(rule.condition, context, context).parse();
     } catch {
       return false;
     }

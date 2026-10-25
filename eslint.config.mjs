@@ -32,8 +32,6 @@ export default tseslint.config(
       "src/security/http-hardening.ts",
       "src/security/pqc/**",
       "src/security/secret-scanner.ts",
-      "src/security/zero-trust/**",
-      "src/governance/cognitive/**",
     ] },
   js.configs.recommended,
   ...tseslint.configs.recommended,

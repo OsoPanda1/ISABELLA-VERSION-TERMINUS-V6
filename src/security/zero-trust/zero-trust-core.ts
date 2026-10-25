@@ -15,7 +15,18 @@
  */
 
 import { EventEmitter } from "node:events";
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import {
+  createHash,
+  createHmac,
+  createPublicKey,
+  constants as cryptoConstants,
+  randomBytes,
+  scryptSync,
+  timingSafeEqual,
+  verify as cryptoVerify,
+  X509Certificate,
+  type KeyObject,
+} from "node:crypto";
 
 export type TrustLevel = "none" | "low" | "medium" | "high" | "critical";
 
@@ -70,7 +81,10 @@ export interface Device {
 
 export interface DeviceAttestation {
   readonly type: "tpm" | "secure_enclave" | "tee" | "software" | "none";
+  /** Base64 signature over the server challenge, produced by the attested device key. */
   readonly quote?: string;
+  /** SPKI PEM (or certificate PEM) used to verify the quote. */
+  readonly verificationKey?: string;
   readonly certificateChain?: string[];
   readonly measurements?: string[];
   readonly verifiedAt?: number;
@@ -210,6 +224,149 @@ export interface SandboxConfig {
   readonly allowedBinaries: string[];
 }
 
+const SCRYPT_N = 16_384;
+const SCRYPT_R = 8;
+const SCRYPT_P = 1;
+const SCRYPT_KEY_BYTES = 64;
+
+/**
+ * Hashes a password with a per-credential random salt using scrypt.
+ * The encoded form is self-describing so parameters can be rotated later.
+ */
+export function hashPassword(password: string): string {
+  const salt = randomBytes(16);
+  const derived = scryptSync(password, salt, SCRYPT_KEY_BYTES, {
+    N: SCRYPT_N,
+    r: SCRYPT_R,
+    p: SCRYPT_P,
+  });
+  return `scrypt$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$${salt.toString("hex")}$${derived.toString("hex")}`;
+}
+
+function verifyScryptHash(stored: string, password: string): boolean {
+  const parts = stored.split("$");
+  if (parts.length !== 6 || parts[0] !== "scrypt") return false;
+
+  const n = Number(parts[1]);
+  const r = Number(parts[2]);
+  const p = Number(parts[3]);
+  if (!Number.isInteger(n) || !Number.isInteger(r) || !Number.isInteger(p)) return false;
+  if (n < 1_024 || n > 131_072 || r < 1 || r > 32 || p < 1 || p > 16) return false;
+  if (!/^[0-9a-f]+$/i.test(parts[4] ?? "") || !/^[0-9a-f]+$/i.test(parts[5] ?? "")) return false;
+
+  const salt = Buffer.from(parts[4], "hex");
+  const expected = Buffer.from(parts[5], "hex");
+  if (salt.length < 8 || expected.length < 32) return false;
+
+  let actual: Buffer;
+  try {
+    actual = scryptSync(password, salt, expected.length, {
+      N: n,
+      r,
+      p,
+      maxmem: 256 * 1024 * 1024,
+    });
+  } catch {
+    return false;
+  }
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
+function decodeBase32(secret: string): Buffer {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const normalized = secret.replace(/[\s=-]/g, "").toUpperCase();
+  if (!/^[A-Z2-7]+$/.test(normalized)) return Buffer.alloc(0);
+
+  const output: number[] = [];
+  let bits = 0;
+  let value = 0;
+  for (const character of normalized) {
+    const index = alphabet.indexOf(character);
+    if (index < 0) return Buffer.alloc(0);
+    value = (value << 5) | index;
+    bits += 5;
+    if (bits >= 8) {
+      bits -= 8;
+      output.push((value >>> bits) & 0xff);
+    }
+  }
+  return Buffer.from(output);
+}
+
+/** RFC 6238 TOTP (SHA-1, 30-second step, 6 digits) for the given Base32 secret. */
+export function computeTotp(secretBase32: string, timestampMs: number = Date.now()): string {
+  const key = decodeBase32(secretBase32);
+  if (key.length === 0) return "";
+
+  const counter = Math.floor(timestampMs / 30_000);
+  const counterBytes = Buffer.alloc(8);
+  counterBytes.writeBigUInt64BE(BigInt(counter));
+
+  const digest = createHmac("sha1", key).update(counterBytes).digest();
+  const offset = (digest[digest.length - 1] ?? 0) & 0x0f;
+  const binary =
+    (((digest[offset] ?? 0) & 0x7f) << 24) |
+    (((digest[offset + 1] ?? 0) & 0xff) << 16) |
+    (((digest[offset + 2] ?? 0) & 0xff) << 8) |
+    ((digest[offset + 3] ?? 0) & 0xff);
+
+  return (binary % 1_000_000).toString().padStart(6, "0");
+}
+
+function safeEqualString(a: string, b: string): boolean {
+  const left = Buffer.from(a, "utf8");
+  const right = Buffer.from(b, "utf8");
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function decodeBase64Url(value: string): Buffer {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = "=".repeat((4 - (normalized.length % 4)) % 4);
+  return Buffer.from(normalized + padding, "base64");
+}
+
+function decodeBase64(value: string): Buffer {
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return Buffer.alloc(0);
+  return Buffer.from(value, "base64");
+}
+
+function parseJsonObject(value: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function importPublicKey(value: string): KeyObject {
+  const trimmed = value.trim();
+  if (trimmed.includes("BEGIN CERTIFICATE")) {
+    return new X509Certificate(trimmed).publicKey;
+  }
+  return createPublicKey(trimmed);
+}
+
+function verifyWithPublicKey(key: KeyObject, data: Buffer, signature: Buffer): boolean {
+  if (signature.length === 0) return false;
+  switch (key.asymmetricKeyType) {
+    case "ed25519":
+    case "ed448":
+      return cryptoVerify(null, data, key, signature);
+    case "rsa":
+    case "rsa-pss":
+      return cryptoVerify("sha256", data, {
+        key,
+        padding: cryptoConstants.RSA_PKCS1_PADDING,
+      }, signature);
+    case "ec":
+      return cryptoVerify("sha256", data, { key, dsaEncoding: "der" }, signature);
+    default:
+      return false;
+  }
+}
+
 /**
  * Identity Provider - Continuous Verification
  */
@@ -279,10 +436,10 @@ export class IdentityProvider extends EventEmitter {
         valid = await this.verifyWebAuthn(credential, challenge, response);
         break;
       case "certificate":
-        valid = await this.verifyCertificate(credential, response);
+        valid = await this.verifyCertificate(credential, challenge, response);
         break;
       case "device":
-        valid = await this.verifyDevice(credential, response);
+        valid = await this.verifyDevice(credential, challenge, response);
         break;
     }
     
@@ -297,29 +454,156 @@ export class IdentityProvider extends EventEmitter {
 
   private async verifyPassword(cred: Credential, response: string): Promise<boolean> {
     if (!cred.secretHash) return false;
-    // Use timing-safe comparison
-    const responseHash = createHash("sha256").update(response).digest("hex");
-    return timingSafeEqual(Buffer.from(cred.secretHash), Buffer.from(responseHash));
+    return verifyScryptHash(cred.secretHash, response);
   }
 
   private verifyTOTP(cred: Credential, response: string): boolean {
-    // TOTP verification would use a library like otplib
-    return response.length === 6 && /^\d{6}$/.test(response);
+    const secret = typeof cred.metadata.totpSecret === "string" ? cred.metadata.totpSecret : "";
+    if (!secret || !/^\d{6}$/.test(response)) return false;
+
+    const currentStep = Math.floor(Date.now() / 30_000);
+    const lastAcceptedStep =
+      typeof cred.metadata.lastTotpStep === "number" ? cred.metadata.lastTotpStep : -1;
+
+    for (const drift of [0, -1, 1]) {
+      const step = currentStep + drift;
+      if (step < 1) continue;
+      const candidate = computeTotp(secret, step * 30_000);
+      if (!candidate || !safeEqualString(candidate, response)) continue;
+      if (step <= lastAcceptedStep) return false; // Replay of an already consumed time step.
+      cred.metadata.lastTotpStep = step;
+      return true;
+    }
+    return false;
   }
 
-  private async verifyWebAuthn(cred: Credential, challenge: string, response: string): Promise<boolean> {
-    // WebAuthn verification would use @simplewebauthn/server
-    return true; // placeholder
+  private async verifyWebAuthn(
+    cred: Credential,
+    challenge: string,
+    response: string
+  ): Promise<boolean> {
+    try {
+      const publicKey = cred.publicKey;
+      if (!publicKey) return false;
+
+      const rpId =
+        typeof cred.metadata.rpId === "string" ? cred.metadata.rpId : process.env.WEBAUTHN_RP_ID;
+      const origin =
+        typeof cred.metadata.origin === "string"
+          ? cred.metadata.origin
+          : process.env.WEBAUTHN_ORIGIN;
+      // Both values are trust anchors; without them an assertion cannot be bound safely.
+      if (!rpId || !origin) return false;
+
+      const assertion = parseJsonObject(response);
+      if (!assertion) return false;
+      const { authenticatorData, clientDataJSON, signature } = assertion;
+      if (
+        typeof authenticatorData !== "string" ||
+        typeof clientDataJSON !== "string" ||
+        typeof signature !== "string"
+      ) {
+        return false;
+      }
+
+      const authData = decodeBase64Url(authenticatorData);
+      const clientDataBytes = decodeBase64Url(clientDataJSON);
+      const signatureBytes = decodeBase64Url(signature);
+      const clientData = parseJsonObject(clientDataBytes.toString("utf8"));
+      if (!clientData) return false;
+
+      if (clientData.type !== "webauthn.get") return false;
+      if (
+        typeof clientData.challenge !== "string" ||
+        !safeEqualString(clientData.challenge, challenge)
+      ) {
+        return false;
+      }
+      if (clientData.origin !== origin || clientData.crossOrigin === true) return false;
+      if (authData.length < 37) return false;
+
+      const expectedRpIdHash = createHash("sha256").update(rpId).digest();
+      if (!timingSafeEqual(authData.subarray(0, 32), expectedRpIdHash)) return false;
+
+      const flags = authData[32] ?? 0;
+      if ((flags & 0x01) === 0) return false; // User presence is mandatory.
+      if (cred.metadata.requireUserVerification === true && (flags & 0x04) === 0) return false;
+
+      const signCount = authData.readUInt32BE(33);
+      const lastSignCount =
+        typeof cred.metadata.signCount === "number" ? cred.metadata.signCount : 0;
+      if (signCount > 0 && lastSignCount > 0 && signCount <= lastSignCount) return false;
+
+      const key = importPublicKey(publicKey);
+      const signed = Buffer.concat([
+        authData,
+        createHash("sha256").update(clientDataBytes).digest(),
+      ]);
+      const valid = verifyWithPublicKey(key, signed, signatureBytes);
+      if (valid && signCount > 0) cred.metadata.signCount = signCount;
+      return valid;
+    } catch {
+      return false;
+    }
   }
 
-  private async verifyCertificate(cred: Credential, response: string): Promise<boolean> {
-    // Certificate verification
-    return true; // placeholder
+  private async verifyCertificate(
+    cred: Credential,
+    challenge: string,
+    response: string
+  ): Promise<boolean> {
+    try {
+      if (!cred.publicKey) return false;
+      const proof = parseJsonObject(response);
+      if (!proof) return false;
+      const { certificatePem, signature } = proof;
+      if (typeof certificatePem !== "string" || typeof signature !== "string") return false;
+
+      const certificate = new X509Certificate(certificatePem);
+      const now = Date.now();
+      if (now < Date.parse(certificate.validFrom) || now > Date.parse(certificate.validTo)) {
+        return false;
+      }
+
+      // The credential pins the expected public key; the certificate must match it.
+      const pinnedKey = importPublicKey(cred.publicKey);
+      const certificateKey = certificate.publicKey.export({ type: "spki", format: "der" });
+      const pinnedSpki = pinnedKey.export({ type: "spki", format: "der" });
+      if (
+        certificateKey.length !== pinnedSpki.length ||
+        !timingSafeEqual(certificateKey, pinnedSpki)
+      ) {
+        return false;
+      }
+
+      const signatureBytes = decodeBase64(signature);
+      return verifyWithPublicKey(
+        certificate.publicKey,
+        Buffer.from(challenge, "utf8"),
+        signatureBytes
+      );
+    } catch {
+      return false;
+    }
   }
 
-  private async verifyDevice(cred: Credential, response: string): Promise<boolean> {
-    // Device attestation verification
-    return true; // placeholder
+  private async verifyDevice(
+    cred: Credential,
+    challenge: string,
+    response: string
+  ): Promise<boolean> {
+    try {
+      if (!cred.publicKey) return false;
+      const proof = parseJsonObject(response);
+      if (!proof) return false;
+      const signature = typeof proof.signature === "string" ? decodeBase64(proof.signature) : null;
+      if (!signature) return false;
+      const attestation = typeof proof.attestation === "string" ? proof.attestation : "";
+      const payload = Buffer.from(`${challenge}\n${attestation}`, "utf8");
+      return verifyWithPublicKey(importPublicKey(cred.publicKey), payload, signature);
+    } catch {
+      return false;
+    }
   }
 
   getIdentity(id: string): Identity | undefined {
@@ -350,6 +634,7 @@ export class IdentityProvider extends EventEmitter {
 export class DeviceTrustManager extends EventEmitter {
   private devices: Map<string, Device> = new Map();
   private identityDevices: Map<string, Set<string>> = new Map();
+  private deviceChallenges: Map<string, { challenge: string; expiresAt: number }> = new Map();
 
   async enrollDevice(
     identityId: string,
@@ -396,15 +681,35 @@ export class DeviceTrustManager extends EventEmitter {
     }
   }
 
-  async verifyDevice(deviceId: string, challenge: string): Promise<{ valid: boolean; trustScore: number }> {
+  /** Issues a single-use challenge that the device must sign with its enrolled key. */
+  issueChallenge(deviceId: string, ttlMs = 60_000): string | null {
+    const device = this.devices.get(deviceId);
+    if (!device || device.status === "revoked") return null;
+    const challenge = randomBytes(32).toString("base64url");
+    this.deviceChallenges.set(deviceId, { challenge, expiresAt: Date.now() + ttlMs });
+    return challenge;
+  }
+
+  async verifyDevice(
+    deviceId: string,
+    challenge: string,
+    response: string
+  ): Promise<{ valid: boolean; trustScore: number }> {
     const device = this.devices.get(deviceId);
     if (!device) return { valid: false, trustScore: 0 };
-    
-    // Verify attestation if present
-    let valid = true;
-    if (device.attestation.type !== "none") {
-      // In production, would verify TPM quote, SEP attestation, etc.
-      valid = await this.verifyAttestation(device.attestation, challenge);
+
+    // Consume the pending challenge on every attempt so a failed proof cannot be ground.
+    const pending = this.deviceChallenges.get(deviceId);
+    this.deviceChallenges.delete(deviceId);
+    const challengeValid =
+      pending !== undefined &&
+      pending.expiresAt >= Date.now() &&
+      safeEqualString(pending.challenge, challenge);
+
+    // A device without an attestation, or a revoked one, never verifies.
+    let valid = false;
+    if (challengeValid && device.status !== "revoked" && device.attestation.type !== "none") {
+      valid = await this.verifyAttestation(device.attestation, challenge, response);
     }
     
     if (valid) {
@@ -421,9 +726,26 @@ export class DeviceTrustManager extends EventEmitter {
     return { valid, trustScore: device.trustScore };
   }
 
-  private async verifyAttestation(attestation: DeviceAttestation, challenge: string): Promise<boolean> {
-    // Placeholder for actual attestation verification
-    return true;
+  private async verifyAttestation(
+    attestation: DeviceAttestation,
+    challenge: string,
+    response: string
+  ): Promise<boolean> {
+    try {
+      if (!attestation.quote || !attestation.verificationKey) return false;
+      if (attestation.expiresAt !== undefined && Date.now() > attestation.expiresAt) return false;
+      // The enrollment quote is evidence, not a session credential. Each verification
+      // requires a fresh signature over the current challenge from the device key.
+      const signature = decodeBase64(response);
+      if (signature.length === 0) return false;
+      return verifyWithPublicKey(
+        importPublicKey(attestation.verificationKey),
+        Buffer.from(challenge, "utf8"),
+        signature
+      );
+    } catch {
+      return false;
+    }
   }
 
   getDevicesForIdentity(identityId: string): Device[] {
@@ -933,50 +1255,24 @@ export class SandboxRuntime extends EventEmitter {
   }
 
   async execute(
-    code: string,
-    input: unknown,
-    options: { timeout?: number; memory?: number } = {}
+    _code: string,
+    _input: unknown,
+    _options: { timeout?: number; memory?: number } = {}
   ): Promise<SandboxResult> {
     const sandboxId = `sbx_${randomBytes(8).toString("hex")}`;
-    const startTime = Date.now();
-    
-    // In production, would use actual sandbox (gVisor, Firecracker, etc.)
-    // For now, simulate execution
-    const result = await this.simulateExecution(code, input, {
-      timeout: options.timeout || this.config.maxExecutionTime,
-      memory: options.memory || this.config.maxMemory,
-    });
-    
-    const executionTime = Date.now() - startTime;
-    
-    this.emit("sandbox:executed", { sandboxId, executionTime, success: result.success });
-    
-    return {
-      success: result.success,
-      output: result.output,
-      error: result.error,
-      executionTime,
-      memoryUsed: result.memoryUsed,
-      syscalls: result.syscalls,
-    };
-  }
 
-  private async simulateExecution(
-    code: string,
-    input: unknown,
-    options: { timeout: number; memory: number }
-  ): Promise<{ success: boolean; output: unknown; error?: string; memoryUsed: number; syscalls: string[] }> {
-    // Simulated execution - in production would use actual sandbox
-    return new Promise(resolve => {
-      setTimeout(() => {
-        resolve({
-          success: true,
-          output: { result: "executed", input },
-          memoryUsed: Math.floor(options.memory * 0.3),
-          syscalls: ["read", "write"],
-        });
-      }, 10);
-    });
+    // No isolation backend (gVisor, Firecracker, WASM) is configured in this runtime.
+    // Refusing is the only safe outcome; simulating success would fake execution evidence.
+    this.emit("sandbox:refused", { sandboxId, reason: "SANDBOX_BACKEND_UNAVAILABLE" });
+
+    return {
+      success: false,
+      output: null,
+      error: "SANDBOX_BACKEND_UNAVAILABLE",
+      executionTime: 0,
+      memoryUsed: 0,
+      syscalls: [],
+    };
   }
 
   getConfig(): SandboxConfig {
@@ -1123,12 +1419,21 @@ export class ZeroTrustCore extends EventEmitter {
   }
 
   /**
+   * Issues the single-use challenge a client must sign before calling
+   * authenticateAndAuthorize with a deviceId.
+   */
+  issueDeviceChallenge(deviceId: string): string | null {
+    return this.deviceManager.issueChallenge(deviceId);
+  }
+
+  /**
    * Authenticate and authorize a request
    */
   async authenticateAndAuthorize(params: {
     identityId: string;
     credentials: Array<{ credentialId: string; challenge: string; response: string }>;
     deviceId?: string;
+    deviceProof?: { challenge: string; response: string };
     sessionContext: SessionContext;
     resource: string;
     action: string;
@@ -1145,7 +1450,7 @@ export class ZeroTrustCore extends EventEmitter {
       throw new Error("IDENTITY_NOT_FOUND");
     }
 
-    // Verify credentials
+    // Every supplied credential must verify; a single valid factor must not mask bad ones.
     const verifiedFactors: AuthFactor[] = [];
     for (const cred of params.credentials) {
       const result = await this.identityProvider.verifyCredential(
@@ -1154,24 +1459,33 @@ export class ZeroTrustCore extends EventEmitter {
         cred.challenge,
         cred.response
       );
-      if (result.valid) {
-        verifiedFactors.push(result.factor);
-      }
+      if (!result.valid) throw new Error("AUTHENTICATION_FAILED");
+      verifiedFactors.push(result.factor);
     }
 
     if (verifiedFactors.length === 0) {
       throw new Error("AUTHENTICATION_FAILED");
     }
 
-    // Check device
+    // A claimed device must prove possession of its key with the current challenge.
     let device: Device | undefined;
     if (params.deviceId) {
       device = this.deviceManager.getDevicesForIdentity(params.identityId)
         .find(d => d.id === params.deviceId);
-      
-      if (device) {
-        await this.deviceManager.verifyDevice(device.id, "challenge");
-      }
+      if (!device) throw new Error("DEVICE_NOT_FOUND");
+
+      const proof = params.deviceProof;
+      if (!proof) throw new Error("DEVICE_PROOF_REQUIRED");
+
+      const verification = await this.deviceManager.verifyDevice(
+        device.id,
+        proof.challenge,
+        proof.response
+      );
+      if (!verification.valid) throw new Error("DEVICE_VERIFICATION_FAILED");
+      device = this.deviceManager
+        .getDevicesForIdentity(params.identityId)
+        .find(d => d.id === params.deviceId) ?? device;
     }
 
     // Create session

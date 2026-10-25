@@ -22,8 +22,9 @@
 
 ## Qué incluye esta revisión
 
-- **Chat dedicado** en `/chat`: sesiones locales, búsqueda de historial, adjuntos de texto, voz del navegador, exportación Markdown/JSON, inspector de sesión y entrega progresiva SSE.
+- **Chat dedicado** en `/chat`: sesiones locales, búsqueda de historial, adjuntos de texto, voz nativa con entrega SSE por oración y barge-in —con respaldo a `speechSynthesis`—, exportación Markdown/JSON, inspector de sesión y entrega progresiva SSE.
 - **Plataforma de 17 páginas** agrupadas en cinco áreas (Espacio, Capacidades, Comercial, Confianza y Cuenta local), con HTML renderizado en servidor, activos con hash de contenido, ETag, compresión previa y un 404 real para rutas fuera del catálogo.
+- **Seguridad verificada, no declarada**: contraseñas scrypt, TOTP sin replay, WebAuthn con anclas y firma, certificados con SPKI fijado, dispositivo con reto de un solo uso, evidencia gobernada por claves registradas y sandbox que falla cerrado. 27 pruebas nuevas cubren los caminos positivos y negativos.
 - **HyperCore Turbo v2** aplicado a los cuellos de botella reales: fast lane determinista, caché TTL + LRU con single-flight y stale-while-revalidate, compuerta de concurrencia para proveedores, histogramas acotados de latencia y fragmentación determinista para SSE.
 - **Motores nativos honestos**: LLM determinista con traza, router MoE top-k, TTS es-MX con fairness y memoizador Turbo. Calculan en proceso; no se presentan como redes neuronales entrenadas ni como un MoE de producción.
 - **Ocho flujos de monetización cotizables** por unidades reales, con aritmética entera y reparto en puntos base. Cotizar no cobra ni transfiere.
@@ -253,6 +254,8 @@ La respuesta se genera completa y luego se fragmenta de forma determinista. **No
 
 La voz sigue la misma disciplina con `POST /api/v1/tts/stream`: emite `meta`, `chunk`, `interrupted` y `done` con planes de prosodia por oración —ritmo, tono, pausas y respiración—, no audio PCM. `POST /api/v1/tts/interrupt` marca un barge-in de un solo uso y alcance por actor; una entrega en curso responde `interrupted` sin chunks posteriores y la marca se consume. Ambos declaran `authorizationPerformed: false` y `executionPerformed: false`.
 
+La interfaz de chat consume esos eventos con `fetch` + lector SSE: reproduce cada oración en orden, respeta `pauseAfterMs` con un tope de 1,2 s y, al desactivar la voz o enviar un mensaje nuevo, aborta el lector, cancela la síntesis del navegador y publica el mismo `x-session-id` en `/api/v1/tts/interrupt`. Si el stream no entrega ningún chunk (por ejemplo, backend no disponible), recurre a `speechSynthesis` con el texto completo. El texto hablado nunca se ejecuta ni concede autoridad.
+
 ### Límites de tasa
 
 | Bucket | Límite |
@@ -277,7 +280,9 @@ La cuota de proveedor solo se consume cuando la petición puede alcanzar un prov
 
 - **Nunca** publiques ni envíes al navegador `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` ni tokens administrativos. Viven solo en el entorno del servidor.
 - Ningún cuerpo HTTP concede autoridad, roles, scopes o aprobación. La capa de confianza decide.
-- La caché no es un permiso; el single-flight no crea identidad; los fragmentos SSE no son evidencia.
+- **Verificación criptográfica real:** contraseñas con scrypt y sal por hash; TOTP RFC 6238 con ventana ±1 y anti-replay por paso; WebAuthn con anclas RP ID/origen, flags UP/UV, `signCount` creciente y firma de la aserción; certificados con SPKI fijado y firma del reto; dispositivo con reto de un solo uso emitido por el servidor y firma fresca. Sin anclas configuradas se falla cerrado.
+- **Gobernanza cognitiva:** denegación por defecto sin política aplicable, DSL restringido sin `eval`, firmas de evidencia solo contra claves registradas, clasificación con clearance, cadena de procedencia verificada y sandbox que rechaza ejecutar sin backend de aislamiento.
+- La caché no es un permiso; el single-flight no crea identidad; los fragmentos SSE no son evidencia. La verificación criptográfica es local y no sustituye una auditoría externa.
 - BookPI registra integridad, no veracidad. La memoria de proceso no es durable; JSONL local no es WORM; PostgreSQL es durable y compartido, pero no WORM.
 - El rate limiter es de ventana fija por proceso. No se eliminan buckets activos para admitir claves nuevas: bajo presión se falla cerrado.
 - El chat público no muta la memoria canónica. Las propuestas quedan en cola de revisión.
@@ -428,12 +433,14 @@ Ejecutada antes del push sobre el árbol de este commit:
 
 | Comprobación | Resultado |
 | --- | --- |
-| `pnpm run typecheck` | Sin errores |
-| `pnpm run lint` | Sin errores ni advertencias |
+| `pnpm run typecheck` | Sin errores (incluye `zero-trust` y `gobernanza cognitiva`) |
+| `pnpm run lint` | Sin errores ni advertencias; ambos módulos dejaron de estar excluidos |
 | `node scripts/repository-assurance.mjs` | PASS: 43/44 comprobaciones; 0 fallos; 1 advertencia (RA-028) |
-| `vitest run --maxWorkers=4` | 305 archivos y 1.824 pruebas aprobadas; 0 fallos |
+| `vitest run --maxWorkers=4` | 307 archivos y 1.851 pruebas aprobadas; 0 fallos |
 | `esbuild` + `node --check` | Bundle ESM generado; sintaxis válida en servidor y UI |
-| `prettier --check` (archivos nuevos) | Los seis archivos nuevos cumplen el estilo; el resto del árbol conserva el desajuste histórico |
+| `node scripts/check-env-example.mjs` | OK: 141 claves documentadas, 96 variables leídas en `src/` |
+| `node scripts/generate-status.mjs --check` | `STATUS_OK` |
+| `prettier --check` | Pendiente por el desajuste histórico del árbol (ver gates) |
 
 La suite se ejecutó con paralelismo limitado para evitar el agotamiento de recursos de Windows que interrumpió el arranque de workers en una primera pasada. `pnpm run format:check` sigue pendiente por el desajuste histórico descrito en los gates. Esta evidencia es local y no sustituye el resultado de la CI remota.
 

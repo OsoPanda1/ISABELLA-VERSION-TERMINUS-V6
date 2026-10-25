@@ -72,6 +72,7 @@
     recognition: null,
     toastTimer: null,
     speechAvailable: typeof window.speechSynthesis !== 'undefined' && typeof window.SpeechSynthesisUtterance !== 'undefined',
+    tts: { controller: null, actor: null, runId: 0 },
   };
 
   const uid = () => {
@@ -954,15 +955,12 @@
     await runGeneration(session, payload, assistantMessage);
   };
 
-  const speak = (text) => {
-    if (!state.speechAvailable) {
-      toast('Este navegador no ofrece síntesis de voz.', 'warn');
+  const queueUtterance = (text) => new Promise((resolve) => {
+    if (!state.speechAvailable || !text) {
+      resolve();
       return;
     }
-    const clean = decodeMarkdown(text);
-    if (!clean) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(clean.slice(0, 12_000));
+    const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'es-MX';
     utterance.rate = 1.02;
     utterance.pitch = 1;
@@ -973,7 +971,131 @@
     } catch {
       /* the default voice remains */
     }
+    utterance.onend = () => resolve();
+    utterance.onerror = () => resolve();
     window.speechSynthesis.speak(utterance);
+  });
+
+  const ttsActorId = (runId) => {
+    const id = activeSession()?.id;
+    const base = typeof id === 'string' && /^[\w-]{8,128}$/.test(id) ? id : 'tts-chat-console';
+    // One actor per utterance so a barge-in mark cannot cancel the stream that replaces it.
+    return `${base.slice(0, 110)}-${runId}`;
+  };
+
+  const stopSpeech = ({ notifyServer = true } = {}) => {
+    const actor = state.tts.actor;
+    state.tts.runId += 1;
+    state.tts.actor = null;
+    if (state.tts.controller) {
+      state.tts.controller.abort();
+      state.tts.controller = null;
+    }
+    if (state.speechAvailable) window.speechSynthesis.cancel();
+    if (notifyServer && actor) {
+      fetch('/api/v1/tts/interrupt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-session-id': actor },
+        body: '{}',
+        keepalive: true,
+      }).catch(() => {});
+    }
+  };
+
+  const parseSseBlock = (block) => {
+    let event = 'message';
+    const data = [];
+    for (const line of block.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      else if (line.startsWith('data:')) data.push(line.slice(5).trim());
+    }
+    if (data.length === 0) return null;
+    try {
+      return { event, payload: JSON.parse(data.join('\n')) };
+    } catch {
+      return null;
+    }
+  };
+
+  const speak = async (text) => {
+    if (!state.speechAvailable) {
+      toast('Este navegador no ofrece síntesis de voz.', 'warn');
+      return;
+    }
+    const clean = decodeMarkdown(text).slice(0, 12_000).trim();
+    if (!clean) return;
+
+    stopSpeech({ notifyServer: true });
+    const runId = state.tts.runId;
+    const actor = ttsActorId(runId);
+    const controller = new AbortController();
+    state.tts.actor = actor;
+    state.tts.controller = controller;
+    let delivered = 0;
+
+    try {
+      const response = await fetch('/api/v1/tts/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+          'x-session-id': actor,
+        },
+        body: JSON.stringify({ text: clean, mode: 'CONVERSACION', region: 'cdmx' }),
+        signal: controller.signal,
+      });
+      const streaming = response.ok && response.body && /text\/event-stream/i.test(response.headers.get('content-type') || '');
+      if (!streaming) throw new Error('TTS_STREAM_UNAVAILABLE');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finished = false;
+      while (!finished) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (runId !== state.tts.runId) {
+          controller.abort();
+          return;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        let boundary = buffer.indexOf('\n\n');
+        while (boundary >= 0) {
+          const message = parseSseBlock(buffer.slice(0, boundary));
+          buffer = buffer.slice(boundary + 2);
+          boundary = buffer.indexOf('\n\n');
+
+          if (message?.event === 'chunk' && typeof message.payload?.text === 'string' && message.payload.text.trim()) {
+            delivered += 1;
+            await queueUtterance(message.payload.text);
+            if (runId !== state.tts.runId) {
+              controller.abort();
+              return;
+            }
+            const pause = Number(message.payload.pauseAfterMs);
+            if (Number.isFinite(pause) && pause > 0) {
+              await new Promise((resolve) => setTimeout(resolve, Math.min(pause, 1_200)));
+            }
+          } else if (message?.event === 'interrupted' || message?.event === 'done') {
+            finished = true;
+            controller.abort();
+            break;
+          }
+        }
+      }
+    } catch {
+      if (runId !== state.tts.runId) return;
+    } finally {
+      if (runId === state.tts.runId) {
+        state.tts.controller = null;
+        state.tts.actor = null;
+      }
+    }
+
+    // Native planning unavailable: keep the feature usable through the browser voice.
+    if (delivered === 0 && runId === state.tts.runId) {
+      await queueUtterance(clean);
+    }
   };
 
   const toggleTts = () => {
@@ -990,7 +1112,7 @@
       const last = lastAssistant();
       if (last?.content) speak(last.content);
     } else {
-      window.speechSynthesis.cancel();
+      stopSpeech();
       toast('Lectura en voz alta desactivada.');
     }
   };
