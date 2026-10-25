@@ -77,7 +77,7 @@ Cada producto se evalúa en cinco dimensiones:
 
 | Patrón | Implementación en Isabella |
 | --- | --- |
-| Separar conversación de catálogo | `/chat` dedicado y 16 páginas de plataforma con URL propia |
+| Separar conversación de catálogo | `/chat` dedicado y 17 páginas de plataforma con URL propia |
 | Hacer visible el motor real | `responseEngine`, badge de chat y campos del inspector |
 | Declarar el progreso sin mentir | SSE con `meta` → `chunk` → `done`; aviso de que no es streaming nativo |
 | Sesiones locales primero | Historial, biblioteca, perfil y ajustes en `localStorage` |
@@ -120,7 +120,7 @@ Cada producto se evalúa en cinco dimensiones:
 
 ## Estado de adopción
 
-- **Implementado y probado en unidad/contrato:** chat, 17 páginas, catálogo, SSE, fast lane, agente local, inspector, biblioteca local, perfil y ajustes.
+- **Implementado y probado en unidad/contrato:** chat, 18 páginas, catálogo, SSE, fast lane, agente local, inspector, biblioteca local, perfil, canon Ω∞ y ajustes.
 - **Implementado con dependencia de configuración:** proveedores externos, Stripe, PostgreSQL, BookPI durable y webhooks.
 - **Diseñado, no habilitado:** ejecución de skills administrativas desde la UI, instalación de marketplace, checkout público sin operador, runtime local de pesos abiertos y generación multimedia.
 - **Rechazado por diseño:** autonomía sin aprobación, ocultamiento del motor, pagos simulados y engagement coercitivo.

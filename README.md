@@ -15,6 +15,7 @@
 | Chat dedicado | `/chat` |
 | Plataforma multipágina | `/platform` |
 | Catálogo público de la plataforma | `/api/v1/platform/catalog` |
+| Canon Génesis Ω∞ y madurez declarada | `/platform/canon` |
 | Estado del nodo | `/platform/status` |
 | Guía para desarrolladores | `/platform/developers` |
 | Inventario generado de rutas | [`docs/api/README.md`](docs/api/README.md) |
@@ -23,7 +24,9 @@
 ## Qué incluye esta revisión
 
 - **Chat dedicado** en `/chat`: sesiones locales, búsqueda de historial, adjuntos de texto, voz nativa con entrega SSE por oración y barge-in —con respaldo a `speechSynthesis`—, exportación Markdown/JSON, inspector de sesión y entrega progresiva SSE.
-- **Plataforma de 17 páginas** agrupadas en cinco áreas (Espacio, Capacidades, Comercial, Confianza y Cuenta local), con HTML renderizado en servidor, activos con hash de contenido, ETag, compresión previa y un 404 real para rutas fuera del catálogo.
+- **Plataforma de 18 páginas** agrupadas en cinco áreas (Espacio, Capacidades, Comercial, Confianza y Cuenta local), con HTML renderizado en servidor, activos con hash de contenido, ETag, compresión previa y un 404 real para rutas fuera del catálogo.
+- **Canon Génesis Ω∞ trazable**: 7 pilares, 14 capas, 25 implementaciones ΩX, 4 capas de memoria, 7 niveles CROWN, 12 agentes y 9 federaciones. Cada entrada declara `verified`, `implemented`, `partial` o `specified` con evidencia local; el canon no se presenta como producción.
+- **Executive Tactical Memory (ETM)**: registro acotado de metas, planes, decisiones y prioridades con TTL, eviction FIFO y cadena SHA-256 verificable. No muta la memoria canónica ni concede autoridad.
 - **Seguridad verificada, no declarada**: contraseñas scrypt, TOTP sin replay, WebAuthn con anclas y firma, certificados con SPKI fijado, dispositivo con reto de un solo uso, evidencia gobernada por claves registradas y sandbox que falla cerrado. 27 pruebas nuevas cubren los caminos positivos y negativos.
 - **HyperCore Turbo v2** aplicado a los cuellos de botella reales: fast lane determinista, caché TTL + LRU con single-flight y stale-while-revalidate, compuerta de concurrencia para proveedores, histogramas acotados de latencia y fragmentación determinista para SSE.
 - **Motores nativos honestos**: LLM determinista con traza, router MoE top-k, TTS es-MX con fairness y memoizador Turbo. Calculan en proceso; no se presentan como redes neuronales entrenadas ni como un MoE de producción.
@@ -50,7 +53,9 @@
 | Área | Responsabilidad |
 | --- | --- |
 | `src/server.ts` | Runtime HTTP, gobernanza, cuotas, wiring de dependencias y rutas cognitivas |
-| `src/platform/` | Catálogo declarativo, render SSR y contrato de las 17 páginas |
+| `src/platform/` | Catálogo declarativo, render SSR y contrato de las 18 páginas |
+| `src/platform/omega-canon.ts` | Registro tipado del canon Génesis Ω∞: madurez, evidencia local y conteos honestos |
+| `src/memory/executive-tactical-memory.ts` | ETM acotada con TTL, eviction FIFO y cadena SHA-256; autoridad `NONE` |
 | `src/routes/platform.ts` | Rutas HTML, activos inmutables y catálogo de plataforma de solo lectura |
 | `src/routes/agents.ts` | Catálogo y ejecución del agente local; aprobación decidida en servidor |
 | `src/agents/` | Runtime determinista, herramientas allowlisted y conocimiento curado |
@@ -109,6 +114,7 @@ La plataforma es multipágina a propósito: la conversación, la administración
 | Comercial | `/platform/pricing` | Planes y cuotas leídas del servidor |
 | Comercial | `/platform/donations` | Apoyo al proyecto; sin pagos simulados |
 | Confianza | `/platform/governance` | Separación entre capacidad, autoridad y evidencia |
+| Confianza | `/platform/canon` | Canon Génesis Ω∞: doctrina, madurez declarada y evidencia local |
 | Confianza | `/platform/docs` | Documentación, madurez y operación |
 | Confianza | `/platform/developers` | Endpoints, ejemplos, límites y compatibilidad |
 | Confianza | `/platform/faq` | Respuestas directas sobre producto, privacidad y costos |
@@ -118,6 +124,22 @@ La plataforma es multipágina a propósito: la conversación, la administración
 | Cuenta local | `/platform/settings` | Motor, lente, streaming, voz y borrado de datos |
 
 Todas las páginas se compilan una vez al arrancar. Los activos se sirven con hash de contenido y caché inmutable; el HTML usa `no-cache` y ETag. `/platform/chat` redirige con `308` a `/chat`. Una página desconocida devuelve `404`, no una redirección silenciosa.
+
+## Canon Génesis Ω∞
+
+El [canon fundacional](docs/spec/ISABELLA-OMEGA-INFINITY-GENESIS-CANON.md) describe la arquitectura objetivo y su trazabilidad. El registro operativo vive en `src/platform/omega-canon.ts`, se publica en `/platform/canon` y viaja en el campo `canon` de `GET /api/v1/platform/catalog`.
+
+| Grupo | Entradas | Estado en este repositorio |
+| --- | --- | --- |
+| Pilares | 7 | Doctrina; no ejecuta |
+| Capas de arquitectura | 14 | `verified`, `implemented`, `partial` o `specified` según evidencia |
+| Implementaciones ΩX | 25 | 4 `verified`, 6 `implemented`, 12 `partial`, 3 `specified` |
+| Memoria | STM, LTM, ETM, institucional | ETM implementada y probada; no muta la memoria canónica |
+| CROWN | 7 niveles | Política declarada; la validación local no es certificación |
+| Agentes y federaciones | 12 y 9 | Objetivos arquitectónicos, no procesos desplegados |
+| Foundation Model | 3 generaciones | Objetivos declarados; no hay pesos fundacionales en el repositorio |
+
+`verified` significa código y prueba automatizada localizados aquí; no es una certificación externa. La cifra de madurez se calcula desde el registro y se valida con pruebas que comprueban la existencia de cada ruta de evidencia.
 
 ## HyperCore Turbo v2
 
@@ -210,7 +232,7 @@ Antes de habilitar cualquier peso abierto, `src/inference/open-model-artifact.ts
 | POST | `/api/v1/agents/run` | Ejecuta el agente local con herramientas allowlisted |
 | GET | `/api/v1/hypercore/turbo/status` | Métricas locales, gate, caché y estado del agente |
 | GET | `/api/v1/hypercore/skills` | Catálogo de skills del motor HyperCore |
-| GET | `/api/v1/platform/catalog` | Catálogo de las 17 páginas; autoridad `READ_ONLY` |
+| GET | `/api/v1/platform/catalog` | Catálogo de las 18 páginas y registro canónico; autoridad `READ_ONLY` |
 | GET | `/api/v1/billing/plans` | Planes y cuotas declaradas por el servidor |
 | POST | `/api/v1/tts/stream` | Entrega progresiva de planes de prosodia por SSE |
 | POST | `/api/v1/tts/interrupt` | Barge-in de un solo uso por actor |

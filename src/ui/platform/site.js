@@ -813,6 +813,83 @@
       </div>`;
   };
 
+  /* ------------------------------------------------------------------ canon */
+
+  const loadCanon = async (root) => {
+    const result = await settled('/api/v1/platform/catalog');
+    const canon = result.ok ? result.data?.canon : null;
+    if (!canon || !Array.isArray(canon.implementations) || !canon.counts) {
+      root.innerHTML = errorBlock('El catálogo no publicó el registro canónico.');
+      return;
+    }
+    const maturityTone = (value) => ({ verified: 'ok', implemented: 'info', partial: 'warn', specified: 'bad' }[value] || '');
+    const counts = canon.maturity || {};
+    const evidence = (entry) => (Array.isArray(entry.evidence) && entry.evidence.length
+      ? entry.evidence.map((path) => `<span class="mono" style="font-size:10px">${esc(path)}</span>`).join('<br>')
+      : '<span class="inspector-empty">sin código localizado</span>');
+    root.innerHTML = `
+      <div class="stat-grid">
+        ${stat('PILARES', fmtNumber(canon.counts.pillars), 'mandatos canónicos', true, true)}
+        ${stat('IMPLEMENTACIONES ΩX', fmtNumber(canon.counts.implementations), 'contratos declarados', false, true)}
+        ${stat('VERIFICADAS', fmtNumber(counts.verified), 'código + prueba local', false, true)}
+        ${stat('ESPECIFICADAS', fmtNumber(counts.specified), 'sin código; no se simulan', false, true)}
+      </div>
+      <div class="live-grid-2">
+        <div class="live-block">
+          <h3>PILARES Ω</h3>
+          <dl class="kv-list">
+            ${canon.pillars.map((pillar) => kvRow(`${pillar.id} · ${pillar.title}`, pillar.mandate)).join('')}
+          </dl>
+        </div>
+        <div class="live-block">
+          <h3>MADUREZ DECLARADA</h3>
+          <div class="pill-row">
+            ${pill(`verified ${fmtNumber(counts.verified)}`, 'ok')}
+            ${pill(`implemented ${fmtNumber(counts.implemented)}`, 'info')}
+            ${pill(`partial ${fmtNumber(counts.partial)}`, 'warn')}
+            ${pill(`specified ${fmtNumber(counts.specified)}`, 'bad')}
+          </div>
+          <dl class="kv-list" style="margin-top:12px">
+            ${kvRow('canon', canon.canonical?.officialName || '—')}
+            ${kvRow('generación', canon.canonical?.generation || '—')}
+            ${kvRow('dominio', canon.canonical?.strategicDomain || '—')}
+            ${kvRow('estado', canon.canonical?.status || '—')}
+            ${kvRow('corte', canon.canonical?.asOf || '—')}
+            ${kvRow('claim de producción', canon.canonical?.productionClaim ? 'SÍ' : 'NO')}
+          </dl>
+        </div>
+      </div>
+      <div class="live-block">
+        <h3>${fmtNumber(canon.counts.implementations)} IMPLEMENTACIONES CANÓNICAS</h3>
+        ${table(['ID', 'CAPACIDAD', 'MADUREZ', 'EVIDENCIA LOCALIZADA'], canon.implementations.map((entry) => [
+          `<span class="mono">${esc(entry.id)}</span>`,
+          `<strong>${esc(entry.title)}</strong><br><small>${esc(entry.note || entry.summary)}</small>`,
+          pill(entry.maturity, maturityTone(entry.maturity)),
+          evidence(entry),
+        ]))}
+      </div>
+      <div class="live-grid-2">
+        <div class="live-block">
+          <h3>CAPAS DE MEMORIA</h3>
+          ${table(['TIER', 'ALCANCE', 'MADUREZ'], canon.memoryTiers.map((tier) => [
+            `<strong>${esc(tier.title)}</strong>`,
+            esc(tier.scope),
+            pill(tier.maturity, maturityTone(tier.maturity)),
+          ]))}
+        </div>
+        <div class="live-block">
+          <h3>ROSTER Y FEDERACIONES</h3>
+          <div class="pill-row">${canon.agentRoster.map((agent) => pill(agent.role)).join('')}</div>
+          <div class="pill-row" style="margin-top:10px">${canon.federations.map((federation) => pill(federation.name, 'info')).join('')}</div>
+          <p class="inspector-note">${esc(canon.disclaimers?.[3] || 'El roster y las federaciones son objetivos arquitectónicos.')}</p>
+        </div>
+      </div>
+      <div class="live-block">
+        <h3>ALCANCE DEL CANON</h3>
+        <p class="inspector-note">${(canon.disclaimers || []).map((item) => esc(item)).join(' ')}</p>
+      </div>`;
+  };
+
   /* ------------------------------------------------------------------ library */
 
   const loadLibrary = (root) => {
@@ -1158,6 +1235,7 @@
       pricing: loadPricing,
       integrations: loadIntegrations,
       governance: loadGovernance,
+      canon: loadCanon,
       library: loadLibrary,
       profile: loadProfile,
       settings: loadSettings,

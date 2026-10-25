@@ -6,7 +6,13 @@
  * SPECIFIED ≠ IMPLEMENTED ≠ TESTED.
  */
 
-export const PLATFORM_CONTRACT_VERSION = "1.0.0" as const;
+import {
+  OMEGA_INVARIANT,
+  buildOmegaCanonPayload,
+  type OmegaCanonPayload,
+} from "./omega-canon";
+
+export const PLATFORM_CONTRACT_VERSION = "1.1.0" as const;
 
 export const PLATFORM_INVARIANT =
   "CAPABILITY ≠ AUTHORITY ≠ EXECUTION ≠ EVIDENCE ≠ LEARNING ≠ PRODUCTION" as const;
@@ -22,6 +28,7 @@ export type PlatformDynamicModule =
   | "pricing"
   | "integrations"
   | "governance"
+  | "canon"
   | "library"
   | "profile"
   | "settings"
@@ -95,8 +102,8 @@ export const PLATFORM_NAV_GROUPS: readonly PlatformNavGroup[] = Object.freeze([
     id: "trust",
     label: "CONFIANZA",
     index: "04",
-    description: "Gobernanza, documentación, API y preguntas frecuentes.",
-    pages: ["governance", "docs", "developers", "faq", "about"],
+    description: "Gobernanza, canon, documentación, API y preguntas frecuentes.",
+    pages: ["governance", "canon", "docs", "developers", "faq", "about"],
   },
   {
     id: "account",
@@ -604,6 +611,61 @@ export const PLATFORM_PAGES: readonly PlatformPage[] = Object.freeze([
     cta: { label: "Leer la documentación", href: "/platform/docs" },
   },
   {
+    id: "canon",
+    kind: "page",
+    path: "/platform/canon",
+    navLabel: "Canon Ω∞",
+    group: "trust",
+    eyebrow: "CANON & TRACEABILITY",
+    title: "Canon Génesis",
+    accent: "Ω∞, con evidencia.",
+    summary:
+      "El marco fundacional canónico se publica como registro de doctrina y trazabilidad. Cada capa y cada implementación declara su madurez real en este repositorio; la doctrina no se presenta como producción.",
+    meta: ["CANON Ω∞", "25 IMPLEMENTACIONES", "MADUREZ DECLARADA"],
+    dynamic: "canon",
+    sections: [
+      {
+        id: "registro",
+        eyebrow: "01 / REGISTRO",
+        title: "La doctrina también se audita.",
+        body:
+          "El canon Génesis Ω∞ describe siete pilares, catorce capas de arquitectura y veinticinco implementaciones ΩX. Este registro los publica con su madurez declarada y la ruta de código que respalda cada entrada.",
+        bullets: [
+          "verified: código y prueba automatizada localizados en este repositorio.",
+          "implemented: código localizado; sin prueba específica ni cableado garantizado.",
+          "partial: sólo una parte del contrato canónico está representada.",
+          "specified: doctrina sin implementación localizada; no se simula.",
+        ],
+        note: OMEGA_INVARIANT,
+      },
+      {
+        id: "memoria",
+        eyebrow: "02 / MEMORIA",
+        title: "STM, LTM, ETM e institucional: alcances distintos.",
+        body:
+          "La memoria ejecutiva táctica (ETM) registra metas, planes, decisiones y prioridades con TTL, capacidad acotada y cadena SHA-256. Verifica integridad; no muta la memoria canónica ni concede autoridad.",
+        bullets: [
+          "STM: estado de sesión y conversación.",
+          "LTM: documentos, conocimiento verificado y evidencia.",
+          "ETM: registro táctico acotado y encadenado.",
+          "Institucional: constitución declarativa.",
+        ],
+        links: [{ label: "Revisar gobernanza", href: "/platform/governance" }],
+      },
+      {
+        id: "limites",
+        eyebrow: "03 / LÍMITES",
+        title: "Un canon no es un despliegue.",
+        body:
+          "Las generaciones del Foundation Model (20B–500B+), el roster de doce agentes y las nueve federaciones son objetivos arquitectónicos. Este repositorio no contiene esos pesos, no ejecuta procesos autónomos desplegados y no opera una federación entre nodos.",
+        note: "El canon no concede autoridad, no ejecuta y no certifica producción.",
+        links: [{ label: "Ver estado real", href: "/platform/status" }],
+      },
+    ],
+    related: ["governance", "docs", "status"],
+    cta: { label: "Leer la documentación", href: "/platform/docs" },
+  },
+  {
     id: "docs",
     kind: "page",
     path: "/platform/docs",
@@ -918,6 +980,7 @@ export interface PlatformCatalogPayload {
   readonly counts: { readonly pages: number; readonly groups: number; readonly chatSurfaces: number };
   readonly nav: readonly PlatformNavGroup[];
   readonly pages: readonly PlatformCatalogEntry[];
+  readonly canon: OmegaCanonPayload;
   readonly disclaimers: readonly string[];
 }
 
@@ -951,10 +1014,12 @@ export function buildPlatformCatalogPayload(now = new Date()): PlatformCatalogPa
       meta: page.meta,
       dynamic: page.dynamic ?? null,
     })),
+    canon: buildOmegaCanonPayload(),
     disclaimers: [
       "Enumerar páginas, skills, packs o planes no autoriza, no instala y no ejecuta.",
       "Los datos de sesión, biblioteca y perfil local pertenecen al navegador, no a una cuenta remota.",
       "SPECIFIED ≠ IMPLEMENTED ≠ TESTED ≠ PRODUCTION.",
+      "El canon Génesis Ω∞ es doctrina y trazabilidad; no acredita producción ni sustituye una evaluación independiente.",
     ],
   };
 }
