@@ -1101,6 +1101,30 @@ paths:
         "413":
           description: texto demasiado largo
 
+  /api/v1/tts/stream:
+    post:
+      summary: Entrega progresiva por SSE de planes de prosodia, una oración completa por evento. No es audio ni streaming PCM del proveedor.
+      description: Eventos meta, chunk, interrupted y done. Cada chunk incluye texto, plan y pausa; la respuesta no autoriza ni ejecuta efectos externos.
+      operationId: streamTtsPlan
+      security: []
+      responses:
+        "200":
+          description: Flujo SSE (text/event-stream)
+        "400":
+          description: text requerido
+        "413":
+          description: texto demasiado largo
+
+  /api/v1/tts/interrupt:
+    post:
+      summary: Marca una interrupción (barge-in) de una sola vez para la sesión del solicitante
+      description: El latch es por actor, caduca y no concede autoridad. La siguiente entrega de /tts/stream para ese actor termina con un evento interrupted.
+      operationId: interruptTts
+      security: []
+      responses:
+        "200":
+          description: OK
+
   /api/v1/tts/synthesize:
     post:
       summary: Síntesis con anti-replay y sello de evidencia; audio solo si un backend real lo entrega, si no un plan para la voz del navegador

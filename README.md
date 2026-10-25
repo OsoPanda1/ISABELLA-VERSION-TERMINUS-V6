@@ -81,6 +81,9 @@ Estos motores calculan dentro del proceso. Ninguno concede autoridad ni ejecuta 
 | Hyper Core Turbo (memoizador) | `src/hypercore/turbo-optimizer.ts` | Memoizador acotado con desalojo LRU real, `hitRate` como fracción (0..1), latencia p50/p95 y muestras de contexto en buffer aparte | Una caché distribuida o un benchmark de throughput |
 | HyperCore Turbo v2 (compuerta) | `src/performance/hypercore-turbo.ts` | TTL + LRU con single-flight, stale-while-revalidate, compuerta de proveedores, histogramas y fragmentación SSE | Streaming nativo del proveedor |
 | Router cognitivo de voz | `src/tts/router.ts` | Softmax top-k con término de fairness `−β·share` sobre backends reales | Expertos neuronales aprendidos |
+| Entrega de voz progresiva | `src/tts/streaming.ts` | Segmentación de oraciones es-MX sobre deltas, eliminación de bloques de razonamiento partidos, topes de búfer y barge-in por actor con TTL y consumo único | Audio PCM, vocoder o streaming nativo del proveedor |
+| Presupuesto de contexto | `src/inference/context-budget.ts` | Estimación determinista de tokens, protección de system prompt/ancla/cola y resumen extractivo **literal** del medio; publica la estrategia aplicada | Un resumen generativo o una memoria canónica |
+| Inspector de artefactos abiertos | `src/inference/open-model-artifact.ts` | Cabeceras GGUF v1–v3, manifiesto, SHA-256, tamaño, procedencia HTTPS y clasificación SPDX de licencia; nunca carga pesos | Una descarga, una ejecución o una aprobación de producción |
 
 ### Honestidad de métricas
 
@@ -190,6 +193,8 @@ Reglas para integrar agentes open source sin romper la gobernanza:
 
 Los adaptadores `OllamaAdapter` y `OllamaProvider` existen en el repositorio, pero el encadenamiento cognitivo principal **no afirma** que Ollama, llama.cpp u otro runtime local de pesos abiertos esté activo por defecto. Habilitarlo exige configuración, pruebas de integración y un gate de seguridad explícito. Esta es una ruta de evolución, no una capacidad certificada.
 
+Antes de habilitar cualquier peso abierto, `src/inference/open-model-artifact.ts` inspecciona la cabecera GGUF (v1–v3) y el manifiesto sin cargar el modelo: verifica SHA-256, tamaño y procedencia HTTPS, y clasifica la licencia en SPDX (`permissive`, `copyleft`, `proprietary` o `unknown`). Un informe válido demuestra integridad del archivo, **no** aprobación de producción ni permiso de uso comercial; por eso declara `authority: "NONE"` y `productionApproved: false`. El inspector no descarga, no ejecuta y no está expuesto como ruta HTTP.
+
 ## APIs públicas
 
 | Método | Endpoint | Función |
@@ -206,8 +211,10 @@ Los adaptadores `OllamaAdapter` y `OllamaProvider` existen en el repositorio, pe
 | GET | `/api/v1/hypercore/skills` | Catálogo de skills del motor HyperCore |
 | GET | `/api/v1/platform/catalog` | Catálogo de las 17 páginas; autoridad `READ_ONLY` |
 | GET | `/api/v1/billing/plans` | Planes y cuotas declaradas por el servidor |
+| POST | `/api/v1/tts/stream` | Entrega progresiva de planes de prosodia por SSE |
+| POST | `/api/v1/tts/interrupt` | Barge-in de un solo uso por actor |
 
-El inventario completo y generado de **230 rutas** está en [`docs/api/README.md`](docs/api/README.md) y [`docs/api/route-inventory.json`](docs/api/route-inventory.json). La superficie está congelada por una prueba de contrato; añadir o renombrar una ruta exige regenerar el inventario deliberadamente.
+El inventario completo y generado de **232 rutas** está en [`docs/api/README.md`](docs/api/README.md) y [`docs/api/route-inventory.json`](docs/api/route-inventory.json). La superficie está congelada por una prueba de contrato; añadir o renombrar una ruta exige regenerar el inventario deliberadamente.
 
 ### Motores nativos y economía
 
@@ -231,18 +238,20 @@ curl -s http://127.0.0.1:3000/api/v1/cognition/route \
   -d '{"input":"Explica el invariante de gobernanza.","modelEngine":"auto","focusLens":"governance","history":[]}'
 ```
 
-Campos relevantes de la respuesta: `output`, `responseEngine`, `fastLane`, `fastLaneInfo`, `decision`, `nativeRouting`, `conversationContextTurns` y la disponibilidad declarada de proveedores. La cabecera `Server-Timing: cognition;dur=...` mide la ruta cognitiva.
+Campos relevantes de la respuesta: `output`, `responseEngine`, `fastLane`, `fastLaneInfo`, `decision`, `nativeRouting`, `conversationContextTurns`, `contextBudget` y la disponibilidad declarada de proveedores. La cabecera `Server-Timing: cognition;dur=...` mide la ruta cognitiva.
 
 ### Entrega progresiva
 
 `POST /api/v1/cognition/stream` con el mismo cuerpo devuelve `text/event-stream`:
 
-- `meta`: `requestId`, `modelEngine`, `admitted`, `streamMode`.
+- `meta`: `requestId`, `modelEngine`, `admitted`, `streamMode`, `contextBudget`.
 - `chunk`: `index`, `text`.
-- `done`: `responseEngine`, `fastLane`, `fastLaneInfo`, `chunks`, `latencyMs`, `providerReadiness`, `disclaimers`.
+- `done`: `responseEngine`, `fastLane`, `fastLaneInfo`, `chunks`, `latencyMs`, `providerReadiness`, `contextBudget`, `disclaimers`.
 - `error`: código saneado.
 
 La respuesta se genera completa y luego se fragmenta de forma determinista. **No es streaming nativo del proveedor.** Un fragmento no es evidencia ni autorización.
+
+La voz sigue la misma disciplina con `POST /api/v1/tts/stream`: emite `meta`, `chunk`, `interrupted` y `done` con planes de prosodia por oración —ritmo, tono, pausas y respiración—, no audio PCM. `POST /api/v1/tts/interrupt` marca un barge-in de un solo uso y alcance por actor; una entrega en curso responde `interrupted` sin chunks posteriores y la marca se consume. Ambos declaran `authorizationPerformed: false` y `executionPerformed: false`.
 
 ### Límites de tasa
 
@@ -260,7 +269,7 @@ La cuota de proveedor solo se consume cuando la petición puede alcanzar un prov
 ### Límites de entrada
 
 - Entrada cognitiva máxima: **20.000 caracteres**.
-- Historial saneado a **8 turnos**; el historial es contexto no confiable, nunca instrucciones de sistema.
+- Historial saneado a **8 turnos** y comprimido antes de llegar al proveedor con un presupuesto determinista (`CHAT_CONTEXT_MAX_INPUT_TOKENS`, 512–32.000; por defecto 3.000). Se conservan el system prompt, el ancla y los últimos turnos; el medio se resume de forma extractiva literal, nunca generativa. El historial sigue siendo contexto no confiable, jamás instrucciones de sistema.
 - Agente local: **4.000 caracteres**, 3 herramientas, 1.500 ms por herramienta.
 - Adjuntos del chat: 120 KB por archivo y 240 KB por mensaje.
 
@@ -422,8 +431,9 @@ Ejecutada antes del push sobre el árbol de este commit:
 | `pnpm run typecheck` | Sin errores |
 | `pnpm run lint` | Sin errores ni advertencias |
 | `node scripts/repository-assurance.mjs` | PASS: 43/44 comprobaciones; 0 fallos; 1 advertencia (RA-028) |
-| `vitest run --maxWorkers=4` | 302 archivos y 1.787 pruebas aprobadas; 0 fallos |
-| `esbuild` + `node --check` | Bundle ESM generado; sintaxis válida |
+| `vitest run --maxWorkers=4` | 305 archivos y 1.824 pruebas aprobadas; 0 fallos |
+| `esbuild` + `node --check` | Bundle ESM generado; sintaxis válida en servidor y UI |
+| `prettier --check` (archivos nuevos) | Los seis archivos nuevos cumplen el estilo; el resto del árbol conserva el desajuste histórico |
 
 La suite se ejecutó con paralelismo limitado para evitar el agotamiento de recursos de Windows que interrumpió el arranque de workers en una primera pasada. `pnpm run format:check` sigue pendiente por el desajuste histórico descrito en los gates. Esta evidencia es local y no sustituye el resultado de la CI remota.
 

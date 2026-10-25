@@ -13,6 +13,7 @@ import { NativeFsimAdapter, nativeConfigFromEnv } from "./native-adapter";
 import { normalizeEsMx } from "./normalize";
 import { planProsody } from "./prosody";
 import { CognitiveRouter, routeFeatures, type RouteDecision } from "./router";
+import { SentenceChunker, chunkPauseMs } from "./streaming";
 import type { ExpertKind, ProsodyPlan, SpeechRequest, VoiceMode } from "./types";
 import { MX_REGIONS, VOICE_MODES } from "./types";
 
@@ -32,6 +33,20 @@ export interface PlanResult {
   readonly plan: ProsodyPlan;
   readonly route: RouteDecision;
   readonly planDigest: string;
+}
+
+export interface SpeechPlanChunk {
+  readonly index: number;
+  readonly total: number;
+  readonly text: string;
+  readonly plan: ProsodyPlan;
+  readonly pauseAfterMs: number;
+  readonly estimatedDurationMs: number;
+}
+
+export interface StreamPlanResult extends PlanResult {
+  readonly chunks: readonly SpeechPlanChunk[];
+  readonly estimatedDurationMs: number;
 }
 
 export type SynthesisResult =
@@ -82,6 +97,28 @@ export class GenesisTtsEngine {
     return { traceId, normalizedText, plan, route, planDigest: digestJson({ p: plan.phrases, c: plan.cues.map((c) => c.id) }) };
   }
 
+  /**
+   * Sentence-level delivery plan for progressive playback. Chunks are planned
+   * independently so a player can start after the first one; no audio is produced
+   * here and no backend is contacted.
+   */
+  planStream(req: SpeechRequest): StreamPlanResult {
+    const planned = this.plan(req);
+    const mode: VoiceMode = req.mode && VOICE_MODES.includes(req.mode) ? req.mode : "CONVERSACION";
+    const chunker = new SentenceChunker({ minLength: 6, maxChunkChars: 240 });
+    const pieces = [...chunker.feed(planned.normalizedText), ...chunker.flush()];
+    const chunks = pieces.map((text, index): SpeechPlanChunk => {
+      const plan = planProsody(text, { ...(req.emotionVector ? { emotion: req.emotionVector } : {}), mode });
+      const pauseAfterMs = index === pieces.length - 1 ? 0 : chunkPauseMs(text, plan.emotion);
+      return { index, total: pieces.length, text, plan, pauseAfterMs, estimatedDurationMs: plan.estimatedDurationMs };
+    });
+    return {
+      ...planned,
+      chunks,
+      estimatedDurationMs: chunks.reduce((sum, chunk) => sum + chunk.estimatedDurationMs + chunk.pauseAfterMs, 0),
+    };
+  }
+
   async synthesize(req: SpeechRequest, timeoutMs = 20_000): Promise<SynthesisResult> {
     const started = Date.now();
     const gov = this.governor.validate({ nonce: req.nonce, actorId: req.actorId, textLength: req.text.trim().length });
@@ -125,14 +162,14 @@ export class GenesisTtsEngine {
     return {
       engine: "genesis-tts-mx-prime",
       profile: ISABELLA_VOICE_PROFILE.id,
-      implemented: ["normalizer-es-mx", "prosody-planner", "cultural-cues-rule-based", "emotion-12-axes-heuristic", "cognitive-router-gating", "memory-voice-core", "governance-anti-replay", "evidence-sha3-512", "native-adapter-retry-backoff"],
+      implemented: ["normalizer-es-mx", "prosody-planner", "cultural-cues-rule-based", "emotion-12-axes-heuristic", "cognitive-router-gating", "memory-voice-core", "governance-anti-replay", "evidence-sha3-512", "native-adapter-retry-backoff", "incremental-sentence-chunker", "sse-speech-plan-stream", "barge-in-latch"],
       backends: {
         "native-fsim": this.native ? (probe?.reachable ? { state: "reachable", telemetry } : { state: "unreachable", reason: probe && !probe.reachable ? probe.reason : "UNKNOWN", telemetry }) : { state: "not_configured" },
         "server-tts": { state: speech.textToSpeech ? "configured" : "not_configured" },
         "browser-speech": { state: "client" },
       },
       audioServerSide: Boolean(probe?.reachable) || speech.textToSpeech,
-      specificationOnly: ["AMoSE neural experts", "MTAA-Ω attention", "BigVGAN vocoder", "Acoustic DNA", "HCT-L/HCT-Q GPU kernels", "Emotion Matrix Ω-X128 (12 axes implemented)"],
+      specificationOnly: ["AMoSE neural experts", "MTAA-Ω attention", "BigVGAN vocoder", "Acoustic DNA", "HCT-L/HCT-Q GPU kernels", "Emotion Matrix Ω-X128 (12 axes implemented)", "provider-native PCM/audio streaming (the implemented stream carries plans, not audio)"],
       designTargetsNotMeasured: true,
     };
   }

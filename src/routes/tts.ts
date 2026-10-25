@@ -5,6 +5,7 @@
 // state: engine-generated.
 import type { Application, Request, Response } from "express";
 import type { GenesisTtsEngine } from "../tts/engine";
+import { BargeInRegistry } from "../tts/streaming";
 import { MX_REGIONS, VOICE_MODES, type MxRegion, type SpeechRequest, type VoiceMode } from "../tts/types";
 import type { FixedWindowRateLimiter } from "../security/rate-limit";
 
@@ -20,6 +21,40 @@ export interface TtsRouteDeps {
   readonly authorizeAdmin: (req: Request, res: Response) => boolean;
   /** Evidence sink (BookPI). Must never throw into the request path. */
   readonly recordEvidence: (event: { traceId: string; backend: string; evidenceHash: string; actor: string }) => void;
+  /** Optional latch override for tests; a process-local registry is created otherwise. */
+  readonly bargeIn?: BargeInRegistry;
+}
+
+function startEventStream(res: Response): void {
+  res.status(200);
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+}
+
+function writeEvent(res: Response, event: string, payload: Record<string, unknown>): "ended" | "written" | "backpressure" {
+  if (res.writableEnded || res.destroyed) return "ended";
+  return res.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`) ? "written" : "backpressure";
+}
+
+function waitForDrain(res: Response, timeoutMs = 5_000): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      res.off("drain", finish);
+      res.off("close", finish);
+      resolve();
+    };
+    timer = setTimeout(finish, timeoutMs);
+    res.once("drain", finish);
+    res.once("close", finish);
+  });
 }
 
 function actorOf(req: Request): string {
@@ -43,6 +78,7 @@ function parse(body: unknown, actorId: string): { ok: true; value: SpeechRequest
 
 export function registerTtsRoutes(deps: TtsRouteDeps): void {
   const { app, engine } = deps;
+  const bargeIn = deps.bargeIn ?? new BargeInRegistry();
 
   app.get("/api/v1/tts/status", async (_req, res) => {
     res.json({ success: true, ...(await engine.status()) });
@@ -54,6 +90,74 @@ export function registerTtsRoutes(deps: TtsRouteDeps): void {
     if (!parsed.ok) { res.status(parsed.error === "TTS_TEXT_SIZE_LIMIT_EXCEEDED" ? 413 : 400).json({ success: false, error: parsed.error }); return; }
     const { traceId, normalizedText, plan, route } = engine.plan(parsed.value);
     res.json({ success: true, authorizationPerformed: false, executionPerformed: false, traceId, normalizedText, plan, route });
+  });
+
+  // Progressive delivery of the prosody plan, one complete sentence at a time. This is
+  // NOT provider audio streaming: the payload carries text + plan and the browser speaks it.
+  app.post("/api/v1/tts/stream", async (req, res) => {
+    if (!deps.enforceRateLimit(req, res, deps.rateLimiter, "tts-stream")) return;
+    const actor = actorOf(req);
+    const parsed = parse(req.body, actor);
+    if (!parsed.ok) { res.status(parsed.error === "TTS_TEXT_SIZE_LIMIT_EXCEEDED" ? 413 : 400).json({ success: false, error: parsed.error }); return; }
+    const planned = engine.planStream(parsed.value);
+    startEventStream(res);
+    if (writeEvent(res, "meta", {
+      traceId: planned.traceId,
+      totalChunks: planned.chunks.length,
+      normalizedChars: planned.normalizedText.length,
+      estimatedDurationMs: planned.estimatedDurationMs,
+      planDigest: planned.planDigest,
+      route: planned.route,
+      streamMode: "sentence-plan-progressive",
+      authorizationPerformed: false,
+      executionPerformed: false,
+      note: "Entrega incremental de planes de prosodia; no es audio ni streaming PCM del proveedor.",
+    }) === "ended") return;
+    for (const chunk of planned.chunks) {
+      if (res.writableEnded || res.destroyed) return;
+      if (bargeIn.consume(actor)) {
+        writeEvent(res, "interrupted", { success: true, traceId: planned.traceId, atChunk: chunk.index });
+        res.end();
+        return;
+      }
+      const delivery = writeEvent(res, "chunk", {
+        traceId: planned.traceId,
+        index: chunk.index,
+        total: chunk.total,
+        text: chunk.text,
+        pauseAfterMs: chunk.pauseAfterMs,
+        estimatedDurationMs: chunk.estimatedDurationMs,
+        plan: chunk.plan,
+      });
+      if (delivery === "ended") return;
+      if (delivery === "backpressure") await waitForDrain(res);
+      // Yield once per chunk so an interrupt request can be observed between chunks.
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    writeEvent(res, "done", {
+      success: true,
+      traceId: planned.traceId,
+      chunks: planned.chunks.length,
+      estimatedDurationMs: planned.estimatedDurationMs,
+      authorizationPerformed: false,
+      executionPerformed: false,
+    });
+    // A mark that arrived after the final chunk has nothing left to stop.
+    bargeIn.clear(actor);
+    res.end();
+  });
+
+  app.post("/api/v1/tts/interrupt", (req, res) => {
+    if (!deps.enforceRateLimit(req, res, deps.rateLimiter, "tts-interrupt")) return;
+    const actor = actorOf(req);
+    res.json({
+      success: true,
+      marked: bargeIn.mark(actor),
+      ttlMs: bargeIn.ttlMs,
+      scope: "actor",
+      authorizationPerformed: false,
+      executionPerformed: false,
+    });
   });
 
   app.post("/api/v1/tts/synthesize", async (req, res) => {
