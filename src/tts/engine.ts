@@ -121,12 +121,13 @@ export class GenesisTtsEngine {
   async status(): Promise<Record<string, unknown>> {
     const probe = this.native ? await this.native.probe() : null;
     const speech = describeSpeechReadiness(this.deps.env);
+    const telemetry = this.native?.telemetry() ?? null;
     return {
       engine: "genesis-tts-mx-prime",
       profile: ISABELLA_VOICE_PROFILE.id,
-      implemented: ["normalizer-es-mx", "prosody-planner", "cultural-cues-rule-based", "emotion-12-axes-heuristic", "cognitive-router-gating", "memory-voice-core", "governance-anti-replay", "evidence-sha3-512"],
+      implemented: ["normalizer-es-mx", "prosody-planner", "cultural-cues-rule-based", "emotion-12-axes-heuristic", "cognitive-router-gating", "memory-voice-core", "governance-anti-replay", "evidence-sha3-512", "native-adapter-retry-backoff"],
       backends: {
-        "native-fsim": this.native ? (probe?.reachable ? { state: "reachable" } : { state: "unreachable", reason: probe && !probe.reachable ? probe.reason : "UNKNOWN" }) : { state: "not_configured" },
+        "native-fsim": this.native ? (probe?.reachable ? { state: "reachable", telemetry } : { state: "unreachable", reason: probe && !probe.reachable ? probe.reason : "UNKNOWN", telemetry }) : { state: "not_configured" },
         "server-tts": { state: speech.textToSpeech ? "configured" : "not_configured" },
         "browser-speech": { state: "client" },
       },

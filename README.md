@@ -25,9 +25,11 @@
 - **Chat dedicado** en `/chat`: sesiones locales, búsqueda de historial, adjuntos de texto, voz del navegador, exportación Markdown/JSON, inspector de sesión y entrega progresiva SSE.
 - **Plataforma de 17 páginas** agrupadas en cinco áreas (Espacio, Capacidades, Comercial, Confianza y Cuenta local), con HTML renderizado en servidor, activos con hash de contenido, ETag, compresión previa y un 404 real para rutas fuera del catálogo.
 - **HyperCore Turbo v2** aplicado a los cuellos de botella reales: fast lane determinista, caché TTL + LRU con single-flight y stale-while-revalidate, compuerta de concurrencia para proveedores, histogramas acotados de latencia y fragmentación determinista para SSE.
+- **Motores nativos honestos**: LLM determinista con traza, router MoE top-k, TTS es-MX con fairness y memoizador Turbo. Calculan en proceso; no se presentan como redes neuronales entrenadas ni como un MoE de producción.
+- **Ocho flujos de monetización cotizables** por unidades reales, con aritmética entera y reparto en puntos base. Cotizar no cobra ni transfiere.
 - **Agente local gratuito y determinista**: siete herramientas allowlisted, sin modelo generativo, sin shell, sin filesystem y sin red externa. Las escrituras exigen un token administrativo verificado por el servidor, nunca un campo del cuerpo HTTP.
 - **Rutas públicas de cognición** JSON y SSE con cuota separada: las respuestas locales no consumen la cuota de proveedores externos.
-- **Contratos congelados**: 223 rutas inventariadas desde `src/`, pruebas de entorno, pruebas de seguridad y pruebas de rendimiento de CPU.
+- **Contratos congelados**: 230 rutas inventariadas desde `src/`, pruebas de entorno, pruebas de seguridad y pruebas de rendimiento de CPU.
 - **Verdad operativa visible**: la interfaz declara el motor real, la latencia, los fragmentos y el estado de readiness. Un fallback local no se presenta como un LLM.
 - **Paleta preservada**: cristal cian `#9ff7ff`, lila `#c9b8ff`, menta `#a9f5d0`, rosa `#ffb9d8`, tinta `#07131b` y fondo `#070c13`.
 
@@ -52,16 +54,40 @@
 | `src/routes/agents.ts` | Catálogo y ejecución del agente local; aprobación decidida en servidor |
 | `src/agents/` | Runtime determinista, herramientas allowlisted y conocimiento curado |
 | `src/performance/hypercore-turbo.ts` | Caché, coalescing, gate, histogramas y chunking determinista |
+| `src/hypercore/turbo-optimizer.ts` | Memoizador LRU con métricas de acierto y latencia por proceso |
 | `src/inference/local-fast-lane.ts` | Detección de intenciones locales acotadas y no ambiguas |
+| `src/routes/native-engines.ts` | API de motores nativos: inventario, generación local y diagnóstico MoE |
+| `src/tts/` y `src/lib/native-ml/` | Voz es-MX, router con fairness, TTS nativo y MoE top-k gobernado |
 | `src/security/rate-limit.ts` | Límites de ventana fija por proceso, con fallo cerrado bajo presión |
 | `src/ui/platform/` | Chat dedicado (`chat.html`, `chat.js`) y plataforma multipágina (`site.css`, `site.js`) |
-| `src/commerce/` y `src/economy/` | Suscripciones, reparto, ledger de doble entrada, webhooks y outbox |
+| `src/commerce/` y `src/economy/` | Suscripciones, reparto, ledger de doble entrada, webhooks, outbox y flujos de monetización |
+| `src/routes/economy.ts` | API v3: valuación, cotización dinámica, regalías y flujos de monetización |
 | `src/bookpi/` | Evidencia encadenada; backend en memoria, JSONL o PostgreSQL según configuración |
 | `src/ige-omega/` | Sonda acotada de salud del gateway Rust; no implica inferencia autenticada |
 | `test/` | Contratos de rutas, entorno, seguridad, agentes, HyperCore y rendimiento |
 | `scripts/` | Inventario de rutas, aseguramiento del repositorio, smoke tests y evidencia |
 
 Los motores de monetización heredados que producen simulaciones o estructuras en memoria no deben usarse como fuente de verdad financiera. Los nuevos settlements pasan por la política compartida de `src/commerce/revenue-share.ts` y el motor normalizado de Revenue Fabric.
+
+## Motores nativos (in-process)
+
+Estos motores calculan dentro del proceso. Ninguno concede autoridad ni ejecuta efectos gobernados: son superficies de cómputo, no de decisión.
+
+| Motor | Archivo | Qué hace de verdad | Qué NO es |
+| --- | --- | --- | --- |
+| LLM nativo | `src/inference/local-engine.ts` | Coincidencia determinista de intenciones con traza de términos, puntaje de coincidencia y distribución de intenciones servidas | Un modelo neuronal entrenado |
+| MoE nativo | `src/lib/native-ml/moe-native.ts` | Router top-k con SGD puro en TypeScript; artefactos con verificación de hash y diagnóstico de balance (entropía, Gini, desviación de carga) | Un MoE de producción con miles de expertos |
+| TTS nativo | `src/tts/` | Normalización es-MX, prosodia, pistas culturales, emoción heurística de 12 ejes, enrutamiento con fairness, memoria de pronunciación y gobernanza anti-replay | Un vocoder neural (AMoSE/BigVGAN) |
+| Hyper Core Turbo (memoizador) | `src/hypercore/turbo-optimizer.ts` | Memoizador acotado con desalojo LRU real, `hitRate` como fracción (0..1), latencia p50/p95 y muestras de contexto en buffer aparte | Una caché distribuida o un benchmark de throughput |
+| HyperCore Turbo v2 (compuerta) | `src/performance/hypercore-turbo.ts` | TTL + LRU con single-flight, stale-while-revalidate, compuerta de proveedores, histogramas y fragmentación SSE | Streaming nativo del proveedor |
+| Router cognitivo de voz | `src/tts/router.ts` | Softmax top-k con término de fairness `−β·share` sobre backends reales | Expertos neuronales aprendidos |
+
+### Honestidad de métricas
+
+- `hitRate` es una fracción de operaciones del proceso (0..1); `cacheHitRate` es el mismo valor en porcentaje (0..100). Nunca puede superar 1.
+- Las cifras de latencia son mediciones de reloj de pared del trabajo envuelto, no de la red ni del proveedor.
+- El diagnóstico MoE reporta el router **inicial (no entrenado)** como línea base; entrenar es una operación gobernada y separada, con aprobación `PENDING_REVIEW`.
+- Un acierto de caché no es una autorización y una traza no es evidencia de producción.
 
 ## Superficies web
 
@@ -181,7 +207,21 @@ Los adaptadores `OllamaAdapter` y `OllamaProvider` existen en el repositorio, pe
 | GET | `/api/v1/platform/catalog` | Catálogo de las 17 páginas; autoridad `READ_ONLY` |
 | GET | `/api/v1/billing/plans` | Planes y cuotas declaradas por el servidor |
 
-El inventario completo y generado de **223 rutas** está en [`docs/api/README.md`](docs/api/README.md) y [`docs/api/route-inventory.json`](docs/api/route-inventory.json). La superficie está congelada por una prueba de contrato; añadir o renombrar una ruta exige regenerar el inventario deliberadamente.
+El inventario completo y generado de **230 rutas** está en [`docs/api/README.md`](docs/api/README.md) y [`docs/api/route-inventory.json`](docs/api/route-inventory.json). La superficie está congelada por una prueba de contrato; añadir o renombrar una ruta exige regenerar el inventario deliberadamente.
+
+### Motores nativos y economía
+
+| Método | Endpoint | Función |
+| --- | --- | --- |
+| GET | `/api/v1/native/engines` | Inventario de motores nativos con su estado y límites declarados |
+| GET | `/api/v1/native/llm/status` | Estado del LLM nativo y distribución de intenciones servidas |
+| POST | `/api/v1/native/llm/generate` | Generación determinista con traza; requiere administración |
+| POST | `/api/v1/native/moe/diagnostics` | Diagnóstico real de balance del router MoE; requiere administración |
+| GET | `/api/v1/hf/references` | Referencias verificadas del Hub por dominio nativo (`?domain=llm\|moe\|tts\|asr`) |
+| GET | `/api/v3/economy/streams` | Catálogo de flujos de monetización con resumen por cadencia |
+| POST | `/api/v3/economy/quote` | Cotiza un flujo; `fundsMoved:false`, sin cobro ni transferencia |
+
+Las respuestas de los motores nativos declaran `authorizationPerformed:false` y `executionPerformed:false`. Generar texto, diagnosticar un router o cotizar un flujo no concede autoridad, no cobra y no produce efectos gobernados.
 
 ### Conversación
 
@@ -289,6 +329,23 @@ Verifica respaldo, permisos y resultado de cada migración. No ejecutes cambios 
 
 `checkout.session.completed` por sí solo no concede elegibilidad: el estado pagado se determina con eventos de suscripción firmados y un periodo vigente.
 
+## Flujos nativos de monetización
+
+`src/economy/monetization-streams.ts` define ocho flujos medidos por unidades que el runtime nativo puede contar de verdad. Todos usan aritmética entera sobre unidades menores (centavos) y reparto exacto en puntos base; el remanente de redondeo lo absorbe la plataforma.
+
+| ID | Flujo | Unidad | Cadencia |
+| --- | --- | --- | --- |
+| `M-21-native-llm-tokens` | LLM nativo por token | `inference_token` | uso |
+| `M-22-moe-routing` | Enrutamiento MoE por consulta | `moe_route` | uso |
+| `M-23-native-tts-chars` | TTS nativo por carácter | `tts_character` | uso |
+| `M-24-native-asr-seconds` | ASR nativo por segundo | `asr_second` | uso |
+| `M-25-evidence-seals` | Sellos de evidencia BookPI | `evidence_seal` | uso |
+| `M-26-sovereign-data-vault` | Bóveda de datos soberana | `vault_gb_month` | recurrente |
+| `M-27-federation-capacity` | Capacidad de federación | `federation_hour` | recurrente |
+| `M-28-agent-tasks` | Tareas de agente verificadas | `agent_task` | evento |
+
+Los precios son referencias de configuración, **no un promedio de mercado verificado** ni una garantía de ingresos. La participación del creador se limita al rango de política 50–80%. La cotización calcula; no cobra, no debita y no transfiere. El medidor persistido de estos flujos aún no está conectado al ledger económico.
+
 ## Política de reparto v5
 
 La política aplica sobre el **pool distribuible**, después de costes directos, impuestos, comisiones de pasarela y reservas configuradas.
@@ -356,6 +413,20 @@ pnpm run smoke:production
 
 No se afirma que estas comprobaciones estén aprobadas en CI remota hasta que el pipeline muestre resultados exitosos. `pnpm run build` ejecuta el aseguramiento estructural del repositorio, la suite completa y el bundle de producción; los bloqueos de aseguramiento no se omiten.
 
+### Verificación local de esta revisión
+
+Ejecutada antes del push sobre el árbol de este commit:
+
+| Comprobación | Resultado |
+| --- | --- |
+| `pnpm run typecheck` | Sin errores |
+| `pnpm run lint` | Sin errores ni advertencias |
+| `node scripts/repository-assurance.mjs` | PASS: 43/44 comprobaciones; 0 fallos; 1 advertencia (RA-028) |
+| `vitest run --maxWorkers=4` | 302 archivos y 1.787 pruebas aprobadas; 0 fallos |
+| `esbuild` + `node --check` | Bundle ESM generado; sintaxis válida |
+
+La suite se ejecutó con paralelismo limitado para evitar el agotamiento de recursos de Windows que interrumpió el arranque de workers en una primera pasada. `pnpm run format:check` sigue pendiente por el desajuste histórico descrito en los gates. Esta evidencia es local y no sustituye el resultado de la CI remota.
+
 ## Gates pendientes para liberar
 
 - Ejecutar CI completa en el remoto y confirmar typecheck, lint, formato, pruebas y build.
@@ -368,8 +439,10 @@ No se afirma que estas comprobaciones estén aprobadas en CI remota hasta que el
 - Certificar cualquier runtime local de pesos abiertos (Ollama/llama.cpp/vLLM) antes de presentarlo como proveedor activo.
 - Sustituir el rate limiting por proceso por un control distribuido si se despliega en múltiples réplicas.
 - Probar recuperación ante caída, rotación de claves y restauración de evidencia.
+- Conectar el medidor real de los flujos nativos (tokens, rutas MoE, caracteres TTS, sellos) al ledger económico: hoy la cotización existe, la medición persistida no.
+- Alinear el formato histórico con `prettier.config.mjs`: la verificación global reporta archivos preexistentes y debe resolverse antes de exigir `format:check` como gate.
 
-**No confundir:** catálogo ≠ disponibilidad; sesión de checkout ≠ suscripción activa; devengo ≠ dinero pagado al creador; caché ≠ permiso; fragmento SSE ≠ evidencia; código implementado ≠ despliegue verificado.
+**No confundir:** catálogo ≠ disponibilidad; sesión de checkout ≠ suscripción activa; devengo ≠ dinero pagado al creador; cotización ≠ cobro; caché ≠ permiso; fragmento SSE ≠ evidencia; código implementado ≠ despliegue verificado.
 
 ## Registro y licencia
 
