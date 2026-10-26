@@ -28,6 +28,7 @@ function harness(
       mimeType: 'audio/wav',
       dataUrl: 'data:audio/wav;base64,AAAA',
       bytes: 3,
+      voice: 'Celeste-PlayAI',
     }),
   });
   registerTtsRoutes({

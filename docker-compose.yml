@@ -171,6 +171,11 @@ services:
         condition: service_started
     environment:
       NODE_ENV: production
+      # Explicit operator opt-in: prompts and bounded history may leave the node to text.pollinations.ai.
+      # Remove these three lines (or set ISABELLA_KEYLESS_FREE_PROVIDER=off) to disable keyless inference.
+      ISABELLA_KEYLESS_FREE_PROVIDER: pollinations
+      KEYLESS_FREE_PROVIDER_TIMEOUT_MS: "30000"
+      CHAT_CHAIN_BUDGET_MS: "45000"
       # Never commit the connection string: define DATABASE_URL in the untracked .env (see .env.example).
       DATABASE_URL: ${DATABASE_URL:?define DATABASE_URL in .env, e.g. postgresql://isabella_admin:<password from secrets/db_password.txt>@postgres:5432/isabella_db}
       OLLAMA_BASE_URL: http://ollama:11434

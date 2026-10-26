@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 const html = fs.readFileSync('src/ui/index.html', 'utf8');
 const js = fs.readFileSync('src/ui/app.js', 'utf8');
+const cognitionClient = fs.readFileSync('src/ui/cognition-client.js', 'utf8');
 const chatPlus = fs.readFileSync('src/ui/chat-plus.js', 'utf8');
 const css = fs.readFileSync('src/ui/cinematic.css', 'utf8');
 const server = fs.readFileSync('src/server.ts', 'utf8');
@@ -18,15 +19,21 @@ for (const id of ['navToggle', 'primaryLinks', 'runtimeStatus', 'soundToggle', '
   assert.ok(ids.has(id), `Missing interactive UI element #${id}`);
   assert.ok(js.includes(`byId('${id}')`) || js.includes(`byId("${id}")`) || js.includes(`#${id}`), `Missing interaction wiring for #${id}`);
 }
-assert.ok(js.includes("fetch('/api/v1/cognition/route'"), 'Chat must call the existing cognition route');
+assert.ok(
+  js.includes("fetch('/api/v1/cognition/route'") ||
+    (cognitionClient.includes("route: '/api/v1/cognition/route'") &&
+      cognitionClient.includes('fetch(ENDPOINTS.route') &&
+      js.includes('window.IsabellaCognition')),
+  'Chat must call the existing cognition route'
+);
 assert.ok(js.includes('response.ok') && js.includes('payloadFor') && js.includes('/^data:audio\\/(?:mpeg|mp3|wav);base64,/'), 'Server TTS playback must require a valid audio payload');
 assert.ok(js.includes("fetch('/api/v1/tts/synthesize'"), 'Voice reading must call the canonical TTS endpoint');
 assert.ok(js.includes("fetch('/api/v1/cognition/speech'"), 'Voice reading must retain the legacy speech fallback endpoint');
 assert.ok(js.includes("fetch('/api/v1/health'"), 'UI must check the health endpoint');
-assert.ok(server.includes('app.get("/api/v1/health"'), 'The runtime health endpoint must exist');
+assert.ok(server.includes("app.get('/api/v1/health'"), 'The runtime health endpoint must exist');
 assert.ok(chatPlus.includes("if (!catalog)"), 'Pricing failures must render an explicit unavailable state instead of an endless loading message');
 assert.ok(chatPlus.includes("document.querySelectorAll('.plans-interval')") && chatPlus.includes('const paint = () =>'), 'Monthly/yearly controls must rerender real catalog data');
-assert.ok(server.includes('app.get("/api/v1/billing/prices"'), 'The public pricing catalog route must exist');
+assert.ok(server.includes("app.get('/api/v1/billing/prices'"), 'The public pricing catalog route must exist');
 assert.ok(chatPlus.includes("fetch('/api/v1/billing/prices'"), 'The plans UI must load the public pricing catalog from the server');
 assert.ok(typeof vercelConfig.functions?.["api/index.js"]?.includeFiles === 'string', 'Vercel includeFiles must be a glob string, not an array');
 assert.ok(vercelConfig.functions["api/index.js"].includeFiles.includes('dist/**') && vercelConfig.functions["api/index.js"].includeFiles.includes('src/ui/**') && vercelConfig.functions["api/index.js"].includeFiles.includes('src/assets/video/**'), 'Express function must bundle the server, UI, and intro media assets');
@@ -34,10 +41,10 @@ assert.equal(vercelConfig.rewrites?.length, 1, 'Vercel must route application pa
 assert.equal(vercelConfig.rewrites?.[0]?.destination, '/api', 'Vercel rewrite must target the API function');
 assert.ok(fs.existsSync('api/index.js'), 'The serverless Express entrypoint must exist');
 assert.ok(server.includes('serveAsset(req, res, htmlAsset'), 'The root UI must use the startup-cached, compressed HTML asset');
-assert.ok(server.includes('app.get("/ui/chat-plus.js"'), 'Runtime must serve the Chat+ enhancement layer');
+assert.ok(server.includes("app.get('/ui/chat-plus.js'"), 'Runtime must serve the Chat+ enhancement layer');
 assert.ok(fs.existsSync('src/ui/chat-plus.js') && !/innerHTML\s*=/.test(chatPlus), 'Chat+ must exist and never assign innerHTML');
 assert.ok(fs.existsSync('src/assets/video/IntroVideoIsabella-web.mp4'), 'The fast-start web rendition of the intro must be present');
-assert.ok(server.includes('fs.readFileSync(path.join(uiPath, "cinematic.css")'), 'The stylesheet route must serve the current CSS asset');
+assert.ok(server.includes("fs.readFileSync(path.join(uiPath, 'cinematic.css')"), 'The stylesheet route must serve the current CSS asset');
 assert.ok(css.includes('.nav-links.is-open'), 'Responsive menu open state must be styled');
 assert.ok(css.includes('@media (max-width:1180px){\n  .topbar{position:sticky') && css.includes('.nav-toggle{display:inline-flex'), 'The primary navigation toggle must be visible wherever tablet navigation links are collapsed');
 assert.ok(css.includes('.side-rail.rail-left.is-open,.side-rail.rail-right.is-open'), 'Responsive side rails must be hidden until opened and reveal on click');
@@ -107,7 +114,7 @@ assert.ok(js.includes('introMediaFallbackLocked'), 'Intro fallback must be termi
 assert.ok(html.slice(html.indexOf('id="immersionGate"'), html.indexOf('<video id="introVideo"')).includes('id="skipIntro"'), 'The intro bypass must remain inside the modal consent gate');
 assert.ok(js.includes('trapImmersionDialogFocus') && js.includes("event.key === 'Escape'"), 'The consent dialog must trap keyboard focus and close on Escape');
 assert.ok(js.includes("immersionConsent?.focus({ preventScroll: true })"), 'Keyboard focus must enter the consent dialog on open');
-assert.ok(server.includes('app.get("/assets/video/IntroVideoIsabella.mp4"'), 'Runtime must serve the intro video');
+assert.ok(server.includes("app.get('/assets/video/IntroVideoIsabella.mp4'"), 'Runtime must serve the intro video');
 assert.ok(server.includes('IntroVideoIsabella.mp4'), 'Runtime video route must target the canonical asset');
 assert.ok(js.includes('INTRO_SCENE_MS = 4_200'), 'Intro timing must be scene-based and bounded');
 assert.ok(js.includes("intro.dataset.scene = String(sceneIndex)"), 'Scene changes must drive camera angles');
@@ -125,7 +132,10 @@ assert.ok(js.includes('const exportConversation ='), 'Conversation export must b
 assert.ok(js.includes('const resetConversation = ('), 'New-session/restart behavior must clear the visible conversation and rotate the session ID');
 assert.ok(js.includes('commandPalette.showModal()'), 'The command center must use a native dialog when supported');
 assert.ok(js.includes("event.key.toLowerCase() === 'k'"), 'The command center must expose the Ctrl/Cmd+K keyboard shortcut');
-assert.ok(js.includes("event.key === 'Enter' && !event.shiftKey"), 'Enter must send while Shift+Enter preserves newlines');
+assert.ok(
+  /event\.key === 'Enter'\s*&&\s*!event\.shiftKey/.test(js),
+  'Enter must send while Shift+Enter preserves newlines'
+);
 assert.ok(js.includes("saveDraft(paragraph.dataset.raw || paragraph.textContent || '')"), 'Assistant answers must have a working local save action');
 
 console.log('CINEMATIC_INTRO_12_SCENES_OK');

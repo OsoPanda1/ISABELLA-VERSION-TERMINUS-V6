@@ -132,8 +132,6 @@ function parsePlanRequest(req: Request): ParsedPlanRequest | ParsedError {
   if (nonce !== undefined && !/^[\w-]{8,120}$/.test(nonce)) {
     return { ok: false, status: 400, error: 'IVCC_NONCE_INVALID' };
   }
-  const voice =
-    typeof body.voice === 'string' && /^[\w-]{1,40}$/.test(body.voice) ? body.voice : undefined;
   const mode: VoiceMode | undefined =
     typeof body.mode === 'string' && (VOICE_MODES as readonly string[]).includes(body.mode)
       ? (body.mode as VoiceMode)
@@ -157,7 +155,6 @@ function parsePlanRequest(req: Request): ParsedPlanRequest | ParsedError {
       ...(mode ? { mode } : {}),
       ...(region ? { region } : {}),
       ...(emotion ? { emotion } : {}),
-      ...(voice ? { voice } : {}),
       ...(nonce ? { nonce } : {}),
       ...(typeof body.memory === 'boolean' ? { memory: body.memory } : {}),
       ...(consentToken ? { consentToken } : {}),
@@ -263,14 +260,6 @@ export function registerIvccRoutes(deps: IvccRouteDeps): void {
       }
       traits.pauseStyle = rawTraits.pauseStyle;
     }
-    if (
-      body.voice !== undefined &&
-      body.voice !== null &&
-      (typeof body.voice !== 'string' || !/^[\w-]{1,40}$/.test(body.voice))
-    ) {
-      fail(res, 400, 'IVCC_VOICE_HINT_INVALID');
-      return;
-    }
     const region = typeof body.region === 'string' ? body.region : undefined;
     if (region !== undefined && !(MX_REGIONS as readonly string[]).includes(region)) {
       fail(res, 400, 'IVCC_REGION_INVALID');
@@ -283,7 +272,6 @@ export function registerIvccRoutes(deps: IvccRouteDeps): void {
           label,
           ...(tier ? { tier: tier as IvccPlanRequest['tier'] } : {}),
           ...(Object.keys(traits).length ? { traits: traits as never } : {}),
-          ...(body.voice !== undefined ? { voice: body.voice as string | null } : {}),
           ...(region ? { region: region as MxRegion } : {}),
         },
         actorOf(req)

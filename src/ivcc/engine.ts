@@ -8,6 +8,7 @@
  * the result. Voice capability never authorizes or executes an action.
  */
 import { randomUUID } from 'node:crypto';
+import { CANONICAL_VOICE_ID } from '../inference/voice-profile';
 import { splitSentences } from '../omega-runtime/text';
 import { normalizeEsMx } from '../tts/normalize';
 import { MX_REGIONS, VOICE_MODES, type MxRegion, type VoiceMode } from '../tts/types';
@@ -147,7 +148,14 @@ function syntheticProfile(nowIso: string, subjectHash: string): IvccVoiceProfile
   const traits: VoiceTraits = { ...DEFAULT_TRAITS, warmth: 0.74, formality: 0.64 };
   const tier: IvccTier = 'L';
   const region: MxRegion = 'cdmx';
-  const base = { id: SYNTHETIC_PROFILE_ID, subjectHash, traits, tier, voiceHint: null, region };
+  const base = {
+    id: SYNTHETIC_PROFILE_ID,
+    subjectHash,
+    traits,
+    tier,
+    voiceHint: CANONICAL_VOICE_ID,
+    region,
+  };
   return {
     ...base,
     label: 'Isabella (sintética)',
@@ -546,7 +554,7 @@ export class IvccEngine {
           label: profile.label,
           synthetic: profile.synthetic,
           tier: requestedTier,
-          voice: profile.voiceHint,
+          voice: profile.voiceHint ?? CANONICAL_VOICE_ID,
           cloning: false,
           identityDigest: profile.identityDigest,
         },
@@ -672,7 +680,7 @@ export class IvccEngine {
       request.mode && VOICE_MODES.includes(request.mode) ? request.mode : 'CONVERSACION';
     const region: MxRegion =
       request.region && MX_REGIONS.includes(request.region) ? request.region : profile.region;
-    const voice = request.voice ?? profile.voiceHint ?? undefined;
+    const voice = profile.voiceHint ?? CANONICAL_VOICE_ID;
     const chunks = chunkTextForTts(planned.normalizedText);
     const attempted = new Set<string>();
     const audios: Array<{ backend: string; mimeType: string; dataUrl: string; bytes: number }> = [];
@@ -964,25 +972,12 @@ export class IvccEngine {
         executionPerformed: false,
       };
     }
-    if (
-      input.voice != null &&
-      (typeof input.voice !== 'string' || !/^[\w-]{1,40}$/.test(input.voice))
-    ) {
-      return {
-        status: 'denied',
-        traceId,
-        reason: 'IVCC_VOICE_HINT_INVALID',
-        auditSeq: null,
-        authorizationPerformed: false,
-        executionPerformed: false,
-      };
-    }
     const region: MxRegion =
       input.region && MX_REGIONS.includes(input.region) ? input.region : 'cdmx';
     const traits = normalizeTraits(input.traits);
     const subjectHash = this.consent.hashSubject(input.subjectRef);
     const synthetic = input.subjectRef.startsWith('synthetic:');
-    const voiceHint = input.voice ?? null;
+    const voiceHint = CANONICAL_VOICE_ID;
     const id = `vpr_${sha256Hex(canonicalJson({ subjectHash, tier, traits, voiceHint, region })).slice(0, 16)}`;
     return this.consent.transaction((tx) => {
       const consent = validateConsentInState(

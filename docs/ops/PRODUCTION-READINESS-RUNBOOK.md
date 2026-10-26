@@ -65,7 +65,10 @@ El código de esta rama incorpora `SupabaseIkesPersistence` y conecta el motor a
 
 - La inferencia externa keyless queda desactivada por defecto.
 - Para habilitar un proveedor externo, el operador debe configurar expresamente `ISABELLA_KEYLESS_FREE_PROVIDER=pollinations` o un proveedor con credenciales, tras revisar tratamiento de datos, límites, disponibilidad y condiciones.
+- Superficies explícitas de opt-in ya revisadas: `npm run start:free` / `npm run dev:free` (solo proceso local), `vercel.json` (`env`) y `docker-compose.yml` (servicio `app`). Retirar la variable o fijarla en `off` desactiva el proveedor.
+- Con el opt-in activo, el prompt y el historial acotado pueden salir hacia `text.pollinations.ai`; la respuesta se divulga como `keyless-free`, nunca como inferencia soberana. El límite gratuito por IP es best-effort y no sustituye un proveedor con credenciales.
 - No enviar información confidencial a proveedores gratuitos sin aprobación explícita.
+- Voz canónica única: todo el runtime resuelve `isabella-esmx-female-v1` (es-MX, femenina). `GROQ_TTS_VOICE` solo acepta voces femeninas conocidas de PlayAI; un valor masculino o desconocido vuelve a `Celeste-PlayAI`. Los cuerpos de solicitud no pueden elegir voz y el navegador aplica la misma política (nombres femeninos preferidos y exclusión de voces masculinas).
 - Ejecutar el smoke test del gateway y registrar proveedor/modelo efectivo, latencia, fallback y errores sin registrar prompts o secretos.
 
 ### 6. Instrumentar observabilidad

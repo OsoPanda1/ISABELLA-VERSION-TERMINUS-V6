@@ -146,10 +146,10 @@ describe("native adapter + engine", () => {
     const e = new GenesisTtsEngine({ env: {}, native, serverTts: async () => null });
     const r = await e.synthesize({ text: "Hola, ¿qué onda?", mode: "PODCAST", actorId: "u" });
     expect(r.status).toBe("client-plan");
-    if (r.status === "client-plan") { expect(r.audio).toBeNull(); expect(r.backend).toBe("browser-speech"); expect(r.plan.phrases.length).toBeGreaterThan(0); }
+    if (r.status === "client-plan") { expect(r.audio).toBeNull(); expect(r.backend).toBe("browser-speech"); expect(r.plan.phrases.length).toBeGreaterThan(0); expect(r.voice).toBe("isabella-esmx-female-v1"); }
   });
   it("uses server TTS bytes when configured and ranked, and denies replayed nonces", async () => {
-    const e = new GenesisTtsEngine({ env: { GROQ_API_KEY: "k", GROQ_TTS_MODEL: "m" }, native: null, serverTts: async () => ({ provider: "groq", mimeType: "audio/wav", dataUrl: "data:audio/wav;base64,AAAA", bytes: 3 }) });
+    const e = new GenesisTtsEngine({ env: { GROQ_API_KEY: "k", GROQ_TTS_MODEL: "m" }, native: null, serverTts: async () => ({ provider: "groq", mimeType: "audio/wav", dataUrl: "data:audio/wav;base64,AAAA", bytes: 3, voice: "Celeste-PlayAI" }) });
     const first = await e.synthesize({ text: "Texto de prueba para el servidor de voz.", mode: "PODCAST", actorId: "u", nonce: "abcdefgh1" });
     expect(first.status === "audio" && first.backend).toBe("server-tts");
     const replay = await e.synthesize({ text: "Texto de prueba para el servidor de voz.", mode: "PODCAST", actorId: "u", nonce: "abcdefgh1" });
@@ -179,6 +179,8 @@ describe("native adapter + engine", () => {
     expect(s.audioServerSide).toBe(false);
     expect((s.backends as Record<string, { state: string }>)["native-fsim"]?.state).toBe("not_configured");
     expect(s.designTargetsNotMeasured).toBe(true);
+    expect((s.voice as { id: string; gender: string }).id).toBe("isabella-esmx-female-v1");
+    expect((s.voice as { id: string; gender: string }).gender).toBe("female");
     expect(JSON.stringify(s)).toContain("BigVGAN");
   });
 });

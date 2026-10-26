@@ -1037,17 +1037,17 @@
         resolve();
         return;
       }
+      if (window.IsabellaVoice) {
+        window.IsabellaVoice.speak(text).then(
+          () => resolve(),
+          () => resolve()
+        );
+        return;
+      }
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'es-MX';
-      utterance.rate = 1.02;
+      utterance.rate = 0.93;
       utterance.pitch = 1;
-      try {
-        const voices = window.speechSynthesis.getVoices();
-        const preferred = voices.find((voice) => /^es/i.test(voice.lang));
-        if (preferred) utterance.voice = preferred;
-      } catch {
-        /* the default voice remains */
-      }
       utterance.onend = () => resolve();
       utterance.onerror = () => resolve();
       window.speechSynthesis.speak(utterance);

@@ -300,7 +300,6 @@ export interface IvccPlanRequest {
   readonly mode?: VoiceMode;
   readonly region?: MxRegion;
   readonly emotion?: Partial<Record<string, number>>;
-  readonly voice?: string;
   readonly nonce?: string;
   readonly memory?: boolean;
   readonly consentToken?: string;
@@ -428,7 +427,6 @@ export interface IvccCreateProfileInput {
   readonly label: string;
   readonly tier?: IvccTier;
   readonly traits?: Partial<VoiceTraits>;
-  readonly voice?: string | null;
   readonly region?: MxRegion;
 }
 

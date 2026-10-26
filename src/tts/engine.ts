@@ -6,7 +6,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { synthesizeSpeech, describeSpeechReadiness } from '../inference/speech';
-import { ISABELLA_VOICE_PROFILE } from '../inference/voice-profile';
+import { ISABELLA_VOICE_PROFILE, resolveCanonicalVoice } from '../inference/voice-profile';
 import { MemoryVoiceCore } from './memory';
 import { TtsGovernor, digestJson, sealTtsEvidence } from './governance';
 import { NativeFsimAdapter, nativeConfigFromEnv } from './native-adapter';
@@ -68,6 +68,7 @@ export type SynthesisResult =
       readonly evidenceHash: string;
       readonly latencyMs: number;
       readonly attempted: readonly ExpertKind[];
+      readonly voice: string;
     };
 
 export class GenesisTtsEngine {
@@ -162,6 +163,7 @@ export class GenesisTtsEngine {
       return { status: 'denied', traceId: `tts_${randomUUID()}`, reason: gov.reason };
     const mode: VoiceMode = req.mode && VOICE_MODES.includes(req.mode) ? req.mode : 'CONVERSACION';
     const region = req.region && MX_REGIONS.includes(req.region) ? req.region : 'cdmx';
+    const voice = resolveCanonicalVoice(this.deps.env);
     const planned = this.plan(req);
     const attempted: ExpertKind[] = [];
     let audio: { mimeType: string; dataUrl: string; bytes: number } | null = null;
@@ -181,7 +183,7 @@ export class GenesisTtsEngine {
             emotion: { ...planned.plan.emotion },
             actorId: req.actorId,
             nonce: req.nonce,
-            voiceId: req.voice,
+            voiceId: voice.nativeVoiceId,
           },
           timeoutMs
         );
@@ -193,7 +195,6 @@ export class GenesisTtsEngine {
       } else if (r.id === 'server-tts') {
         const out = await this.serverTts(this.deps.env, {
           text: planned.normalizedText,
-          ...(req.voice ? { voice: req.voice } : {}),
           timeoutMs,
         });
         if (out) {
@@ -219,6 +220,7 @@ export class GenesisTtsEngine {
       }),
       latencyMs: Date.now() - started,
       attempted,
+      voice: voice.id,
     };
   }
 
@@ -227,9 +229,18 @@ export class GenesisTtsEngine {
     const probe = this.native ? await this.native.probe() : null;
     const speech = describeSpeechReadiness(this.deps.env);
     const telemetry = this.native?.telemetry() ?? null;
+    const voice = resolveCanonicalVoice(this.deps.env);
     return {
       engine: 'genesis-tts-mx-prime',
       profile: ISABELLA_VOICE_PROFILE.id,
+      voice: {
+        id: voice.id,
+        label: voice.label,
+        language: voice.language,
+        gender: voice.gender,
+        nativeVoiceId: voice.nativeVoiceId,
+        providerVoice: voice.providerVoice,
+      },
       implemented: [
         'normalizer-es-mx',
         'prosody-planner',

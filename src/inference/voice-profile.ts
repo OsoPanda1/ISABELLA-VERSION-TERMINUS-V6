@@ -49,6 +49,49 @@ export const ISABELLA_PROSODY: ProsodyPlan = Object.freeze({
   clausePauseMs: 140,
 });
 
+/**
+ * Canonical Isabella voice. Every backend (neural service, server TTS, browser)
+ * must resolve to this single female es-MX identity; per-request overrides are
+ * ignored by design. Operators may map the native service voice with
+ * `ISABELLA_NATIVE_VOICE_ID`, but the public identity never changes.
+ */
+export const CANONICAL_VOICE_ID = 'isabella-esmx-female-v1';
+export const CANONICAL_PROVIDER_VOICE = 'Celeste-PlayAI';
+export const CANONICAL_NATIVE_VOICE_ID = 'isabella-esmx-v1';
+export const CANONICAL_VOICE_LANGUAGE = 'es-MX';
+
+export interface CanonicalVoice {
+  readonly id: string;
+  readonly label: string;
+  readonly language: typeof CANONICAL_VOICE_LANGUAGE;
+  readonly gender: 'female';
+  readonly nativeVoiceId: string;
+  readonly providerVoice: string;
+}
+
+// Only known female provider voices are accepted from configuration; a male or
+// unknown value falls back to the canonical female voice instead of being used.
+const FEMALE_PROVIDER_VOICE =
+  /^(arista|celeste|cheyenne|deedee|gail|indigo|jennifer|judy|mamaw|nyla|ruby|shelby|tiffany)-playai$/i;
+
+export function resolveCanonicalVoice(
+  env: Record<string, string | undefined> = {}
+): CanonicalVoice {
+  const requestedProvider = (env.GROQ_TTS_VOICE ?? '').trim();
+  const providerVoice = FEMALE_PROVIDER_VOICE.test(requestedProvider)
+    ? requestedProvider
+    : CANONICAL_PROVIDER_VOICE;
+  const nativeVoiceId = (env.ISABELLA_NATIVE_VOICE_ID ?? '').trim() || CANONICAL_NATIVE_VOICE_ID;
+  return Object.freeze({
+    id: CANONICAL_VOICE_ID,
+    label: 'Isabella — voz femenina es-MX',
+    language: CANONICAL_VOICE_LANGUAGE,
+    gender: 'female',
+    nativeVoiceId,
+    providerVoice,
+  });
+}
+
 export interface VoiceCandidate {
   readonly name: string;
   readonly lang: string;
@@ -67,12 +110,24 @@ const PREFERRED_NAMES = [
   'dalia',
   'elvira',
   'salome',
+  'ximena',
+  'valentina',
+  'camila',
+  'lucia',
+  'sofia',
+  'sofía',
 ] as const;
 
-/** Higher is better; negative means "not Spanish, never use". Mirrors src/ui/app.js chooseIsabellaVoice. */
+// Known male or gender-ambiguous system voices. Browsers expose no gender
+// metadata, so a name denylist is the only reliable guard against a male voice.
+const MALE_VOICE_NAME =
+  /\b(jorge|diego|carlos|pablo|javier|enrique|raul|raúl|miguel|pedro|juan|alvaro|álvaro|marcos|lucas|mateo|andres|andrés|ricardo|fernando|gonzalo|roberto|eduardo|alex|daniel|david|mark|george|james|fred|ralph|thomas|oliver|arthur|eric|liam|guy|ryan|brian|christopher|steffan|aaron|tony|mason|troy|atlas|briggs|calum|cillian|mikail|mitch|quinn|thunder|zubenelgenubi|sadachbia|sadaltager)\b/i;
+
+/** Higher is better; negative means "not Spanish or not female, never use". Mirrors the shared browser policy. */
 export function scoreVoiceCandidate(c: VoiceCandidate): number {
   const lang = c.lang.replace('_', '-');
   if (!lang.toLowerCase().startsWith('es')) return -1;
+  if (MALE_VOICE_NAME.test(c.name)) return -1;
   const langIdx = PREFERRED_LANGS.findIndex((l) => l.toLowerCase() === lang.toLowerCase());
   const named = PREFERRED_NAMES.some((n) => c.name.toLowerCase().includes(n)) ? 100 : 0;
   return named + (langIdx >= 0 ? 40 - langIdx * 5 : 20) + (c.localService ? 2 : 0);
