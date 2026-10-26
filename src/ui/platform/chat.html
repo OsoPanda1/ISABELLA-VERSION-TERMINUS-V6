@@ -40,13 +40,6 @@
         </label>
       </div>
 
-      <nav class="chat-side-nav" aria-label="Superficies de la plataforma">
-        <a href="/platform">PANEL</a>
-        <a href="/platform/skills">SKILLS</a>
-        <a href="/platform/tools">TOOLS</a>
-        <a href="/platform/docs">DOCS</a>
-      </nav>
-
       <div class="chat-sessions">
         <div class="chat-sessions-label"><span>HISTORIAL LOCAL</span><span id="sessionCount">00</span></div>
         <div class="session-list" id="sessionList" role="list"></div>
@@ -69,10 +62,6 @@
         </div>
         <div class="chat-topbar-spacer"></div>
         <span class="chat-engine-badge" id="engineBadge"><i aria-hidden="true"></i><span id="engineBadgeText">AUTO · VERIFICANDO</span></span>
-        <div class="chat-top-actions">
-          <button class="chat-icon-button" id="exportButton" type="button" aria-label="Exportar conversación en Markdown" title="Exportar Markdown">↓</button>
-          <button class="chat-icon-button inspector-toggle" id="inspectorToggle" type="button" aria-label="Abrir contexto de sesión" aria-controls="chatInspector" aria-expanded="false" title="Contexto de sesión">◎</button>
-        </div>
       </header>
 
       <div class="chat-thread" id="chatThread">
@@ -134,15 +123,6 @@
                 <option value="governance">GOBERNANZA</option>
               </select>
             </label>
-            <button class="composer-tool" id="attachButton" type="button" title="Adjuntar archivos de texto (se leen solo en este navegador)">
-              <span aria-hidden="true">⌁</span><span class="label">ADJUNTAR</span>
-            </button>
-            <button class="composer-tool" id="micButton" type="button" aria-pressed="false" title="Dictado por voz del navegador">
-              <span aria-hidden="true">◉</span><span class="label">VOZ</span>
-            </button>
-            <button class="composer-tool" id="ttsButton" type="button" aria-pressed="false" title="Leer respuestas en voz alta">
-              <span aria-hidden="true">◁))</span><span class="label">LEER</span>
-            </button>
             <span class="composer-spacer"></span>
             <button class="send-button" id="sendButton" type="submit" aria-label="Enviar mensaje">↑</button>
           </div>
@@ -152,7 +132,7 @@
       </div>
     </main>
 
-    <aside class="chat-inspector" id="chatInspector" aria-label="Contexto de la sesión">
+    <aside class="chat-inspector" id="chatInspector" hidden aria-label="Contexto de la sesión">
       <div class="inspector-head">
         <strong>CONTEXTO DE SESIÓN</strong>
         <button class="chat-icon-button inspector-close" id="inspectorClose" type="button" aria-label="Cerrar panel de contexto">×</button>

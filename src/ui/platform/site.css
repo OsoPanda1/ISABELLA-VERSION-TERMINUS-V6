@@ -2713,7 +2713,9 @@ body.chat-app {
   grid-template-columns: 30px minmax(0, 1fr);
   gap: 12px;
   margin-bottom: 26px;
-  animation: msg-in 0.4s var(--ease) both;
+  opacity: 1;
+  visibility: visible;
+  transform: none;
 }
 
 @keyframes msg-in {
@@ -2818,14 +2820,22 @@ body.chat-app {
 }
 
 .msg-content {
+  display: block;
+  min-width: 0;
   font-size: 14px;
   line-height: 1.78;
   color: var(--text-soft);
+  opacity: 1;
+  visibility: visible;
   overflow-wrap: anywhere;
 }
 
 .msg-content p {
+  display: block;
   margin: 0 0 10px;
+  color: inherit;
+  opacity: 1;
+  visibility: visible;
 }
 
 .msg-content p:last-child {

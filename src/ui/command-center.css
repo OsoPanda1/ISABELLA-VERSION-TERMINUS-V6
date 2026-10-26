@@ -1160,6 +1160,35 @@ body.panel-open { overflow: hidden; }
 }
 .panel-close:hover { border-color: var(--crystal-line-strong); color: var(--crystal-cyan); }
 
+/* Focused chat: preserve readable message content and remove decorative duplicates. */
+#chat .message,
+#chat .message .message-body,
+#chat .message p,
+#chat .message .md-body,
+#chat .message .md-body * {
+  opacity: 1 !important;
+  visibility: visible !important;
+  color: #dfeaf3 !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+#chat .message.user p,
+#chat .message.user .md-body,
+#chat .message.user .md-body * { color: #ffedf4 !important; }
+#chat .messages { contain: layout paint; isolation: isolate; }
+.side-rail,
+.rail-launcher,
+.workspace-context-bar,
+.workspace-modebar,
+.hero-product,
+.prompt-starters,
+.command-launcher,
+#soundToggle,
+.nav-links a:not([data-nav-target="chat"]),
+#chat .modes { display: none !important; }
+.topbar { min-height: 58px; }
+#chat { margin-top: 20px; }
+#chat .console-actions { margin-left: auto; }
+
 .panel-visible > div > .eyebrow,
 .panel-visible > .eyebrow,
 .panel-visible .pane-label { color: var(--crystal-cyan); }
