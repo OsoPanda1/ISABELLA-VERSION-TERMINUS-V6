@@ -120,6 +120,8 @@ Los adaptadores para proveedores externos o runtimes locales solo están activos
 
 ## Estado operativo
 
+**Avance global de implementación: no publicado como porcentaje único.** El estado se comunica por capacidades verificables, gates reproducibles y un denominador de requisitos ponderados y reproducible; pasar una prueba no equivale a certificar todo el sistema.
+
 | Área                 | Estado observable                                                                               |
 | -------------------- | ----------------------------------------------------------------------------------------------- |
 | Servidor HTTP        | Implementado en `src/server.ts` con Express                                                     |

@@ -762,7 +762,9 @@ async function generateDeepSeekNarrative(
       signal: budget ? budget.signal(providerTimeoutMs) : AbortSignal.timeout(providerTimeoutMs),
     });
     if (!response.ok) throw new Error(`DeepSeek HTTP ${response.status}`);
-    const body = (await response.json()) as { choices?: Array<{ message?: { content?: unknown } }> };
+    const body = (await response.json()) as {
+      choices?: Array<{ message?: { content?: unknown } }>;
+    };
     const text = extractAssistantText(body);
     if (!text) throw new Error('DeepSeek returned empty content');
     return text;
