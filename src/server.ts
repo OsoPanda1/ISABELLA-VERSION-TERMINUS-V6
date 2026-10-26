@@ -1989,54 +1989,78 @@ app.post('/api/v1/cognition/route', async (req, res) => {
       if (modelEngine === 'auto') {
         // Hedge configured providers so an unavailable route does not stall the user. Any provider
         // that can consume credits must independently enforce the exact operator opt-in before network I/O.
-        const winner = await gatedProviderCall('auto-chain', () =>
-          hedgedFirst<string>(
-            [
-              {
-                label: 'keyless-free',
-                run: () =>
-                  generateKeylessFreeNarrative(systemPrompt, input, providerHistory, chainBudget),
-              },
-              {
-                label: 'gateway',
-                run: () =>
-                  generateGatewayNarrative(systemPrompt, input, providerHistory, chainBudget),
-              },
-              {
-                label: 'deepseek',
-                run: () =>
-                  generateDeepSeekNarrative(systemPrompt, input, providerHistory, chainBudget),
-              },
-              {
-                label: 'openrouter-free',
-                run: () =>
-                  generateFreeOpenRouterNarrative(
-                    systemPrompt,
-                    input,
-                    providerHistory,
-                    chainBudget
-                  ),
-              },
-              {
-                label: 'huggingface-free',
-                run: () =>
-                  generateHuggingFaceNarrative(systemPrompt, input, providerHistory, chainBudget),
-              },
-              {
-                label: 'open-science',
-                run: () =>
-                  generateCompatibleProviderNarrative(
-                    systemPrompt,
-                    input,
-                    providerHistory,
-                    chainBudget
-                  ),
-              },
-            ],
-            chatHedgeDelayMs,
-            chainBudget
-          )
-        );
+        const deepSeekKey = config().DEEPSEEK_APIKEY?.trim();
+        const winner = deepSeekKey
+          ? await gatedProviderCall('deepseek-primary', async () => {
+              const value = await generateDeepSeekNarrative(
+                systemPrompt,
+                input,
+                providerHistory,
+                chainBudget
+              );
+              return value ? { label: 'deepseek', value } : undefined;
+            })
+          : await gatedProviderCall('auto-chain', () =>
+              hedgedFirst<string>(
+                [
+                  // When DeepSeek is configured, it is the explicit operator-selected
+                  // provider and must be attempted before anonymous/free or billed routes.
+                  // This avoids returning a generic fallback while a real key is available.
+                  {
+                    label: 'deepseek',
+                    run: () =>
+                      generateDeepSeekNarrative(systemPrompt, input, providerHistory, chainBudget),
+                  },
+                  {
+                    label: 'keyless-free',
+                    run: () =>
+                      generateKeylessFreeNarrative(
+                        systemPrompt,
+                        input,
+                        providerHistory,
+                        chainBudget
+                      ),
+                  },
+                  {
+                    label: 'gateway',
+                    run: () =>
+                      generateGatewayNarrative(systemPrompt, input, providerHistory, chainBudget),
+                  },
+                  {
+                    label: 'openrouter-free',
+                    run: () =>
+                      generateFreeOpenRouterNarrative(
+                        systemPrompt,
+                        input,
+                        providerHistory,
+                        chainBudget
+                      ),
+                  },
+                  {
+                    label: 'huggingface-free',
+                    run: () =>
+                      generateHuggingFaceNarrative(
+                        systemPrompt,
+                        input,
+                        providerHistory,
+                        chainBudget
+                      ),
+                  },
+                  {
+                    label: 'open-science',
+                    run: () =>
+                      generateCompatibleProviderNarrative(
+                        systemPrompt,
+                        input,
+                        providerHistory,
+                        chainBudget
+                      ),
+                  },
+                ],
+                chatHedgeDelayMs,
+                chainBudget
+              )
+            );
         if (winner) {
           generativeNarrative = winner.value;
           responseEngine = winner.label as typeof responseEngine;
