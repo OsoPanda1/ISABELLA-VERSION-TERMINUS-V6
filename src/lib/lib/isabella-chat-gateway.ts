@@ -764,7 +764,7 @@ export async function handleIsabellaChat(
     attempts.push({
       provider: 'deepseek',
       key: providerKeys.deepseek,
-      model: process.env.DEEPSEEK_MODEL?.trim() || 'deepseek-chat',
+      model: config().DEEPSEEK_MODEL.trim(),
     });
   if (providerKeys.groq)
     attempts.push({

@@ -48,6 +48,7 @@ import {
   verifyCertificate,
 } from './litle';
 import { bookPiSecret } from './security/secrets';
+import { config } from './lib/lib/config';
 import { verifyBearerToken } from './security/api-token';
 import { FixedWindowRateLimiter } from './security/rate-limit';
 import { hashSourceContent } from './memory/ikes';
@@ -462,6 +463,7 @@ const keylessFreeTimeoutMs = boundedMilliseconds(
   60_000
 );
 let gatewayCooldownUntil = 0;
+let deepSeekCooldownUntil = 0;
 let openRouterCooldownUntil = 0;
 let huggingFaceCooldownUntil = 0;
 let compatibleProviderCooldownUntil = 0;
@@ -728,6 +730,54 @@ function generateSovereignFallback(
     localPlan +
     '\n\nPara darte una respuesta específica, pega el contexto, archivo o restricción principal. Si el proveedor generativo se habilita, Isabella cambiará automáticamente a respuestas de modelo y conservará este mismo flujo de seguridad.'
   );
+}
+
+/** Direct DeepSeek chat completion. The operator-provided key enables real model responses. */
+async function generateDeepSeekNarrative(
+  systemPrompt: string,
+  input: string,
+  history: PublicChatTurn[] = [],
+  budget?: DeadlineBudget
+): Promise<string | null> {
+  if (budget?.expired()) return null;
+  const key = config().DEEPSEEK_APIKEY?.trim();
+  if (!key || Date.now() < deepSeekCooldownUntil) return null;
+  try {
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: config().DEEPSEEK_MODEL.trim(),
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...history.slice(-8).map((turn) => ({ role: turn.role, content: turn.content })),
+          { role: 'user', content: input },
+        ],
+        temperature: 0.35,
+        max_tokens: 900,
+        stream: false,
+      }),
+      signal: budget ? budget.signal(providerTimeoutMs) : AbortSignal.timeout(providerTimeoutMs),
+    });
+    if (!response.ok) throw new Error(`DeepSeek HTTP ${response.status}`);
+    const body = (await response.json()) as {
+      choices?: Array<{ message?: { content?: unknown } }>;
+    };
+    const text = extractAssistantText(body);
+    if (!text) throw new Error('DeepSeek returned empty content');
+    return text;
+  } catch (error) {
+    if (budget?.cancelled()) return null;
+    deepSeekCooldownUntil = Date.now() + providerCooldownMs;
+    console.error('[Isabella] DeepSeek unavailable; cooldown activated', {
+      message: (error instanceof Error ? error.message : String(error)).slice(0, 250),
+      cooldownMs: providerCooldownMs,
+    });
+    return null;
+  }
 }
 
 /** OpenAI-compatible free-model routing. Never uses a paid model ID by default. */
@@ -1951,6 +2001,11 @@ app.post('/api/v1/cognition/route', async (req, res) => {
                 label: 'gateway',
                 run: () =>
                   generateGatewayNarrative(systemPrompt, input, providerHistory, chainBudget),
+              },
+              {
+                label: 'deepseek',
+                run: () =>
+                  generateDeepSeekNarrative(systemPrompt, input, providerHistory, chainBudget),
               },
               {
                 label: 'openrouter-free',

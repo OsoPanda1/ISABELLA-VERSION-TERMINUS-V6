@@ -144,6 +144,7 @@ export const envSchema = z
     GROQ_API_KEY: optionalString(),
     XAI_API_KEY: optionalString(),
     DEEPSEEK_APIKEY: optionalString(),
+    DEEPSEEK_MODEL: z.string().default('deepseek-chat'),
     // Free federation is opt-in and only accepts explicitly configured, HTTPS endpoints.
     FREE_AI_FEDERATION_ENABLED: bool(false),
     FREE_AI_FEDERATION_ENDPOINTS: optionalString(),
