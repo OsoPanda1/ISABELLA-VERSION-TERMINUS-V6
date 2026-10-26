@@ -332,6 +332,135 @@
     return jsonRequest(payload, signal, emit);
   };
 
+  /* Canonical browser voice policy — mirrors src/inference/voice-profile.ts.
+   * One female es-MX identity: no page may select another voice. */
+  const VOICE_LANGUAGE = 'es-MX';
+  const VOICE_RATE = 0.93;
+  const VOICE_PITCH = 1.0;
+  const PREFERRED_VOICE_NAMES = [
+    'sabina',
+    'paulina',
+    'monica',
+    'mónica',
+    'marisol',
+    'helena',
+    'luciana',
+    'dalia',
+    'elvira',
+    'salome',
+    'ximena',
+    'valentina',
+    'camila',
+    'lucia',
+    'sofia',
+    'sofía',
+  ];
+  const MALE_VOICE_NAME =
+    /\b(jorge|diego|carlos|pablo|javier|enrique|raul|raúl|miguel|pedro|juan|alvaro|álvaro|marcos|lucas|mateo|andres|andrés|ricardo|fernando|gonzalo|roberto|eduardo|alex|daniel|david|mark|george|james|fred|ralph|thomas|oliver|arthur|eric|liam|guy|ryan|brian|christopher|steffan|aaron|tony|mason|troy|atlas|briggs|calum|cillian|mikail|mitch|quinn|thunder|zubenelgenubi|sadachbia|sadaltager)\b/i;
+  const PREFERRED_VOICE_LANGS = ['es-MX', 'es-419', 'es-US', 'es-ES'];
+
+  const scoreBrowserVoice = (voice) => {
+    const lang = String(voice?.lang || '').replace('_', '-');
+    if (!/^es/i.test(lang)) return -1;
+    const name = String(voice?.name || '');
+    if (MALE_VOICE_NAME.test(name)) return -1;
+    const langIndex = PREFERRED_VOICE_LANGS.findIndex(
+      (candidate) => candidate.toLowerCase() === lang.toLowerCase()
+    );
+    const named = PREFERRED_VOICE_NAMES.some((candidate) => name.toLowerCase().includes(candidate))
+      ? 100
+      : 0;
+    return named + (langIndex >= 0 ? 40 - langIndex * 5 : 20) + (voice?.localService ? 2 : 0);
+  };
+
+  const listBrowserVoices = () => {
+    try {
+      return Array.from(window.speechSynthesis?.getVoices?.() || []);
+    } catch {
+      return [];
+    }
+  };
+
+  const pickBrowserVoice = (voices = listBrowserVoices()) => {
+    let best = null;
+    let bestScore = 0;
+    for (const voice of voices) {
+      const score = scoreBrowserVoice(voice);
+      if (score > bestScore) {
+        best = voice;
+        bestScore = score;
+      }
+    }
+    return best;
+  };
+
+  const voicesReady = () =>
+    new Promise((resolve) => {
+      const synth = window.speechSynthesis;
+      if (!synth) {
+        resolve([]);
+        return;
+      }
+      const current = listBrowserVoices();
+      if (current.length > 0) {
+        resolve(current);
+        return;
+      }
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        try {
+          synth.removeEventListener?.('voiceschanged', done);
+        } catch {
+          /* listener already gone */
+        }
+        resolve(listBrowserVoices());
+      };
+      try {
+        synth.addEventListener?.('voiceschanged', done, { once: true });
+      } catch {
+        /* older engines lack addEventListener */
+      }
+      setTimeout(done, 800);
+    });
+
+  const applyBrowserVoice = (utterance, voices = listBrowserVoices()) => {
+    if (!utterance) return utterance;
+    utterance.lang = VOICE_LANGUAGE;
+    utterance.rate = VOICE_RATE;
+    utterance.pitch = VOICE_PITCH;
+    const voice = pickBrowserVoice(voices);
+    if (voice) utterance.voice = voice;
+    return utterance;
+  };
+
+  const speakWithCanonicalVoice = async (text, handlers = {}) => {
+    const clean = String(text ?? '').trim();
+    const synth = window.speechSynthesis;
+    if (!clean || !synth) return false;
+    const voices = await voicesReady();
+    return new Promise((resolve) => {
+      const utterance = new SpeechSynthesisUtterance(clean);
+      applyBrowserVoice(utterance, voices);
+      utterance.onend = () => {
+        try {
+          handlers.onEnd?.();
+        } finally {
+          resolve(true);
+        }
+      };
+      utterance.onerror = () => {
+        try {
+          handlers.onError?.();
+        } finally {
+          resolve(false);
+        }
+      };
+      synth.speak(utterance);
+    });
+  };
+
   window.IsabellaCognition = Object.freeze({
     version: '1.0.0',
     endpoints: ENDPOINTS,
@@ -339,5 +468,16 @@
     normalizeHistory,
     compactTrace,
     generate,
+  });
+
+  window.IsabellaVoice = Object.freeze({
+    id: 'isabella-esmx-female-v1',
+    language: VOICE_LANGUAGE,
+    rate: VOICE_RATE,
+    pitch: VOICE_PITCH,
+    pick: pickBrowserVoice,
+    apply: applyBrowserVoice,
+    speak: speakWithCanonicalVoice,
+    voicesReady,
   });
 })();

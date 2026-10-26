@@ -141,6 +141,47 @@ export interface KeylessFreeMessage {
   readonly content: string;
 }
 
+export interface LocalOllamaProviderConfig {
+  readonly name: 'ollama-local';
+  readonly endpoint: string;
+  readonly model: string;
+}
+
+const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0']);
+
+/**
+ * Local Ollama inference is keyless and must never be confused with a paid
+ * OpenAI-compatible provider. It is opt-in and restricted to loopback/private
+ * addresses unless the operator explicitly allows a remote host.
+ */
+export function resolveLocalOllamaProvider(
+  env: Readonly<Record<string, string | undefined>>
+): LocalOllamaProviderConfig | null {
+  if (env.OLLAMA_ENABLED?.trim().toLowerCase() !== 'true') return null;
+  const model = env.OLLAMA_MODEL?.trim();
+  if (!model) return null;
+  const rawBase = (env.OLLAMA_BASE_URL?.trim() || 'http://127.0.0.1:11434').replace(/\/+$/, '');
+  let base: URL;
+  try {
+    base = new URL(rawBase);
+  } catch {
+    return null;
+  }
+  if (base.protocol !== 'http:' && base.protocol !== 'https:') return null;
+  const host = base.hostname.toLowerCase();
+  const privateHost =
+    LOOPBACK_HOSTS.has(host) ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+  if (!privateHost && env.OLLAMA_ALLOW_REMOTE?.trim().toLowerCase() !== 'true') return null;
+  return Object.freeze({
+    name: 'ollama-local',
+    endpoint: `${rawBase}/api/chat`,
+    model,
+  });
+}
+
 const KEYLESS_FREE_ENABLE_VALUES: ReadonlySet<string> = new Set([
   'on',
   'true',

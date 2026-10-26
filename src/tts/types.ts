@@ -42,7 +42,6 @@ export interface SpeechRequest {
   readonly mode?: VoiceMode;
   readonly region?: MxRegion;
   readonly emotionVector?: Partial<Record<string, number>>;
-  readonly voice?: string;
 }
 
 export interface CulturalCue {

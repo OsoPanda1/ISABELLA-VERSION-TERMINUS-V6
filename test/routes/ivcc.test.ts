@@ -46,7 +46,7 @@ function makeTts(): GenesisTtsEngine {
     native: null,
     serverTts: async () => {
       const wav = wavDataUrl();
-      return { provider: 'groq', mimeType: 'audio/wav', dataUrl: wav.url, bytes: wav.bytes };
+      return { provider: 'groq', mimeType: 'audio/wav', dataUrl: wav.url, bytes: wav.bytes, voice: 'Celeste-PlayAI' };
     },
   });
 }

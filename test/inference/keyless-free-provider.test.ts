@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildKeylessFreeMessages, extractKeylessFreeText, resolveKeylessFreeProvider } from "../../src/inference/provider-policy";
+import { buildKeylessFreeMessages, extractKeylessFreeText, resolveKeylessFreeProvider, resolveLocalOllamaProvider } from "../../src/inference/provider-policy";
 
 describe("keyless free provider policy", () => {
   it("stays off unless the operator explicitly enables it", () => {
@@ -52,5 +52,56 @@ describe("keyless free provider policy", () => {
     expect(extractKeylessFreeText("  hola\r\nmundo  ")).toBe("hola\nmundo");
     expect(extractKeylessFreeText("   ")).toBeNull();
     expect(extractKeylessFreeText("abcdef", 3)).toBe("abc");
+  });
+});
+
+describe("local Ollama provider policy", () => {
+  it("stays off unless enabled with an explicit model", () => {
+    expect(resolveLocalOllamaProvider({})).toBeNull();
+    expect(resolveLocalOllamaProvider({ OLLAMA_ENABLED: "true" })).toBeNull();
+    expect(resolveLocalOllamaProvider({ OLLAMA_ENABLED: "false", OLLAMA_MODEL: "qwen2.5:0.5b" })).toBeNull();
+  });
+
+  it("defaults to the loopback Ollama API and normalizes trailing slashes", () => {
+    const config = resolveLocalOllamaProvider({
+      OLLAMA_ENABLED: "true",
+      OLLAMA_MODEL: "  qwen2.5:0.5b  ",
+      OLLAMA_BASE_URL: "http://127.0.0.1:11434///",
+    });
+    expect(config).toEqual({
+      name: "ollama-local",
+      endpoint: "http://127.0.0.1:11434/api/chat",
+      model: "qwen2.5:0.5b",
+    });
+    expect(Object.isFrozen(config)).toBe(true);
+  });
+
+  it("rejects remote hosts unless the operator explicitly allows them", () => {
+    const remote = {
+      OLLAMA_ENABLED: "true",
+      OLLAMA_MODEL: "qwen2.5:0.5b",
+      OLLAMA_BASE_URL: "https://ollama.example.com",
+    };
+    expect(resolveLocalOllamaProvider(remote)).toBeNull();
+    expect(resolveLocalOllamaProvider({ ...remote, OLLAMA_ALLOW_REMOTE: "true" })?.endpoint).toBe(
+      "https://ollama.example.com/api/chat",
+    );
+  });
+
+  it("rejects malformed and non-HTTP endpoints", () => {
+    expect(
+      resolveLocalOllamaProvider({
+        OLLAMA_ENABLED: "true",
+        OLLAMA_MODEL: "m",
+        OLLAMA_BASE_URL: "file:///etc/passwd",
+      }),
+    ).toBeNull();
+    expect(
+      resolveLocalOllamaProvider({
+        OLLAMA_ENABLED: "true",
+        OLLAMA_MODEL: "m",
+        OLLAMA_BASE_URL: "not a url",
+      }),
+    ).toBeNull();
   });
 });

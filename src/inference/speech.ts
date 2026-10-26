@@ -7,6 +7,8 @@
  * fallback and is owned by the client, not by this module.
  */
 
+import { resolveCanonicalVoice } from './voice-profile';
+
 export const SPEECH_CONTRACT_VERSION = '1.0.0';
 
 export type SpeechProvider = 'groq';
@@ -22,6 +24,7 @@ export interface SynthesizedSpeech {
   mimeType: string;
   dataUrl: string;
   bytes: number;
+  voice: string;
 }
 
 export interface Transcription {
@@ -41,7 +44,6 @@ const DEFAULT_GROQ_BASE = 'https://api.groq.com/openai/v1';
 // Do not silently select an English-only model for Spanish-language output.
 // Operators must explicitly configure a model suitable for their target language.
 const DEFAULT_TTS_MODEL = '';
-const DEFAULT_TTS_VOICE = 'troy';
 const DEFAULT_STT_MODEL = 'whisper-large-v3';
 
 // Caché LRU de síntesis para reducir latencia en textos repetidos.
@@ -83,7 +85,8 @@ function groqSpeechConfig(env: Record<string, string | undefined>): GroqSpeechCo
     key,
     baseUrl: (nonEmpty(env.GROQ_BASE_URL) ?? DEFAULT_GROQ_BASE).replace(/\/+$/, ''),
     ttsModel: nonEmpty(env.GROQ_TTS_MODEL) ?? DEFAULT_TTS_MODEL,
-    ttsVoice: nonEmpty(env.GROQ_TTS_VOICE) ?? DEFAULT_TTS_VOICE,
+    // One canonical female identity: request bodies cannot select another voice.
+    ttsVoice: resolveCanonicalVoice(env).providerVoice,
     sttModel: nonEmpty(env.GROQ_STT_MODEL) ?? DEFAULT_STT_MODEL,
   };
 }
@@ -103,14 +106,14 @@ export function describeSpeechReadiness(env: Record<string, string | undefined>)
  */
 export async function synthesizeSpeech(
   env: Record<string, string | undefined>,
-  input: { text: string; voice?: string; format?: 'wav' | 'mp3'; timeoutMs?: number }
+  input: { text: string; format?: 'wav' | 'mp3'; timeoutMs?: number }
 ): Promise<SynthesizedSpeech | null> {
   const config = groqSpeechConfig(env);
   if (!config || !config.ttsModel) return null;
   const text = nonEmpty(input.text)?.slice(0, 2_000);
   if (!text) return null;
   const format = input.format === 'mp3' ? 'mp3' : 'wav';
-  const cacheKey = `${config.ttsModel}|${nonEmpty(input.voice) ?? config.ttsVoice}|${format}|${text}`;
+  const cacheKey = `${config.ttsModel}|${config.ttsVoice}|${format}|${text}`;
   const cached = ttsCache.get(cacheKey);
   if (cached !== undefined) return cached;
   try {
@@ -120,7 +123,7 @@ export async function synthesizeSpeech(
       body: JSON.stringify({
         model: config.ttsModel,
         input: text,
-        voice: nonEmpty(input.voice) ?? config.ttsVoice,
+        voice: config.ttsVoice,
         response_format: format,
       }),
       signal: AbortSignal.timeout(input.timeoutMs ?? 30_000),
@@ -133,6 +136,7 @@ export async function synthesizeSpeech(
       mimeType: format === 'mp3' ? 'audio/mpeg' : 'audio/wav',
       dataUrl: `data:${format === 'mp3' ? 'audio/mpeg' : 'audio/wav'};base64,${buffer.toString('base64')}`,
       bytes: buffer.byteLength,
+      voice: config.ttsVoice,
     };
     ttsCache.set(cacheKey, result);
     if (ttsCache.size > TTS_CACHE_MAX) {

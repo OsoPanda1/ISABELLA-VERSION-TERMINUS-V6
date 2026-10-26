@@ -105,7 +105,6 @@ function parse(
     for (const [k, v] of Object.entries(b.emotionVector as Record<string, unknown>).slice(0, 32))
       if (typeof v === 'number' && Number.isFinite(v)) emotionVector[k] = v;
   const nonce = typeof b.nonce === 'string' ? b.nonce : undefined;
-  const voice = typeof b.voice === 'string' && /^[\w-]{1,40}$/.test(b.voice) ? b.voice : undefined;
   return {
     ok: true,
     value: {
@@ -115,7 +114,6 @@ function parse(
       ...(mode ? { mode } : {}),
       ...(region ? { region } : {}),
       ...(Object.keys(emotionVector).length ? { emotionVector } : {}),
-      ...(voice ? { voice } : {}),
     },
   };
 }

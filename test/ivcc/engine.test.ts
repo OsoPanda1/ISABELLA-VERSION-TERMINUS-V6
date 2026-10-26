@@ -39,6 +39,7 @@ function makeTts(onCall?: () => Promise<void> | void): GenesisTtsEngine {
         mimeType: 'audio/wav',
         dataUrl: wav.url,
         bytes: wav.bytes,
+        voice: 'Celeste-PlayAI',
       };
     },
   });
@@ -68,6 +69,7 @@ describe('IVCC engine', () => {
     if (plan.status !== 'planned') return;
     expect(plan.identity.synthetic).toBe(true);
     expect(plan.identity.cloning).toBe(false);
+    expect(plan.identity.voice).toBe('isabella-esmx-female-v1');
     expect(plan.normalizedText.length).toBeGreaterThan(0);
     expect(plan.cognitive.emotion.urgency).toBeTypeOf('number');
     expect(plan.plan.units.length).toBeGreaterThan(0);
@@ -86,6 +88,7 @@ describe('IVCC engine', () => {
     if ('reason' in profile) return;
     expect(profile.created).toBe(true);
     expect(profile.profile.synthetic).toBe(false);
+    expect(profile.profile.voiceHint).toBe('isabella-esmx-female-v1');
 
     const blocked = await engine.plan({ text: 'Hola.', subjectRef: PERSON }, 'session:test-1234');
     expect(blocked.status).toBe('denied');

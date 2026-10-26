@@ -1,0 +1,24 @@
+#!/usr/bin/env node
+/**
+ * Explicit operator opt-in for the keyless external provider.
+ * This is an operator action, not a silent default: it only sets non-secret
+ * defaults for this process and states the data-egress disclosure up front.
+ *
+ * Usage:
+ *   npm run start:free      -> builds dist and serves it
+ *   npm run dev:free        -> runs src/server.ts through tsx
+ */
+import process from 'node:process';
+
+const useSource = process.argv.includes('--src');
+process.env.ISABELLA_KEYLESS_FREE_PROVIDER ??= 'pollinations';
+process.env.KEYLESS_FREE_PROVIDER_TIMEOUT_MS ??= '30000';
+process.env.CHAT_CHAIN_BUDGET_MS ??= '45000';
+
+console.warn(
+  '[Isabella] Free external inference ENABLED for this process: prompts and bounded history may be sent to ' +
+    (process.env.KEYLESS_FREE_PROVIDER_URL || 'https://text.pollinations.ai') +
+    '. Responses are disclosed as "keyless-free". Set ISABELLA_KEYLESS_FREE_PROVIDER=off to disable.'
+);
+
+await import(useSource ? '../src/server.ts' : '../dist/server.js');

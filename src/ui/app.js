@@ -865,13 +865,13 @@ const speakMessage = async (text) => {
     let response = await fetch('/api/v1/tts/synthesize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: clean, sessionId, format: 'mp3', voice: 'troy' }),
+      body: JSON.stringify({ text: clean, sessionId, format: 'mp3' }),
     });
     if (!response.ok) {
       response = await fetch('/api/v1/cognition/speech', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: clean, sessionId, format: 'mp3', voice: 'troy' }),
+        body: JSON.stringify({ text: clean, sessionId, format: 'mp3' }),
       });
     }
     if (response.ok) {
@@ -895,8 +895,13 @@ const speakMessage = async (text) => {
   if ('speechSynthesis' in window) {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(clean);
-    utterance.lang = 'es-MX';
-    utterance.rate = 1;
+    if (window.IsabellaVoice) {
+      window.IsabellaVoice.apply(utterance);
+    } else {
+      utterance.lang = 'es-MX';
+      utterance.rate = 0.93;
+      utterance.pitch = 1;
+    }
     window.speechSynthesis.speak(utterance);
   }
 };
