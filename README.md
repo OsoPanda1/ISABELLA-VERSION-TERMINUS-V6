@@ -244,6 +244,10 @@ La respuesta SSE emite eventos `meta`, `chunk`, `done` y `error`. La fragmentaci
 
 Nunca se debe exponer una clave al navegador ni insertar una clave en el código fuente. El motor ganador debe ser visible en la respuesta o en el estado del nodo.
 
+## Gates pendientes para liberar
+
+Antes de declarar una versión operativa, deben conservarse como evidencia verificable: el resultado de `pnpm install --frozen-lockfile`, `pnpm run lint`, `pnpm run typecheck`, `pnpm test`, `pnpm run security:suite`, `pnpm run build` y los gates de IGE-Ω (`cargo fmt --check`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo test --workspace --all-targets --all-features` y `cargo build --workspace --release --locked`). La convención `SPECIFIED ≠ IMPLEMENTED ≠ TESTED` recuerda que una capacidad descrita no equivale a una capacidad implementada ni a una capacidad verificada.
+
 ## Seguridad, privacidad y gobernanza
 
 - Secretos de servidor nunca se envían al cliente: claves de Stripe, Supabase service role, tokens administrativos y credenciales de proveedores permanecen en el proceso.

@@ -48,6 +48,7 @@ import {
   verifyCertificate,
 } from './litle';
 import { bookPiSecret } from './security/secrets';
+import { config } from './lib/lib/config';
 import { verifyBearerToken } from './security/api-token';
 import { FixedWindowRateLimiter } from './security/rate-limit';
 import { hashSourceContent } from './memory/ikes';
@@ -739,7 +740,7 @@ async function generateDeepSeekNarrative(
   budget?: DeadlineBudget
 ): Promise<string | null> {
   if (budget?.expired()) return null;
-  const key = process.env.DEEPSEEK_APIKEY?.trim();
+  const key = config().DEEPSEEK_APIKEY?.trim();
   if (!key || Date.now() < deepSeekCooldownUntil) return null;
   try {
     const response = await fetch('https://api.deepseek.com/chat/completions', {
@@ -749,7 +750,7 @@ async function generateDeepSeekNarrative(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: process.env.DEEPSEEK_MODEL?.trim() || 'deepseek-chat',
+        model: config().DEEPSEEK_MODEL.trim(),
         messages: [
           { role: 'system', content: systemPrompt },
           ...history.slice(-8).map((turn) => ({ role: turn.role, content: turn.content })),
