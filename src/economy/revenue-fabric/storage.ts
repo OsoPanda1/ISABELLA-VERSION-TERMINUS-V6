@@ -4,62 +4,73 @@
  * Persistent storage for ledger, settlements, wallets, usage events
  */
 
-import { Pool, type PoolConfig } from "pg";
-import Stripe from "stripe";
-import { ImmutableLedger, type LedgerJournal } from "./immutable-ledger";
-import type { SettlementResult } from "./normalized-settlement";
-import type { UsageEvent, AggregatedUsage } from "./metering-service";
-import type { Wallet } from "./types";
+import { Pool, type PoolConfig } from 'pg';
+import Stripe from 'stripe';
+import { ImmutableLedger, type LedgerJournal } from './immutable-ledger';
+import type { SettlementResult } from './normalized-settlement';
+import type { UsageEvent, AggregatedUsage } from './metering-service';
+import type { Wallet } from './types';
 
 function toMinorUnits(amount: number): number {
-  if (!Number.isFinite(amount) || amount < 0) throw new Error("SETTLEMENT_AMOUNT_INVALID");
+  if (!Number.isFinite(amount) || amount < 0) throw new Error('SETTLEMENT_AMOUNT_INVALID');
   const minor = Math.round((amount + Number.EPSILON) * 100);
   if (!Number.isSafeInteger(minor) || Math.abs(minor / 100 - amount) > 0.000001) {
-    throw new Error("SETTLEMENT_AMOUNT_MUST_HAVE_MAX_TWO_DECIMALS");
+    throw new Error('SETTLEMENT_AMOUNT_MUST_HAVE_MAX_TWO_DECIMALS');
   }
   return minor;
 }
 
 function fromStoredAmount(value: unknown, amountUnit: unknown): number {
   const numeric = Number(value);
-  if (!Number.isFinite(numeric)) throw new Error("SETTLEMENT_STORAGE_AMOUNT_INVALID");
-  return amountUnit === "minor_v2" ? numeric / 100 : numeric;
+  if (!Number.isFinite(numeric)) throw new Error('SETTLEMENT_STORAGE_AMOUNT_INVALID');
+  return amountUnit === 'minor_v2' ? numeric / 100 : numeric;
 }
 
-function sameSettlementPayload(row: Record<string, unknown>, settlement: SettlementResult): boolean {
-  const amountUnit = row.amount_unit === "minor_v2" ? "minor_v2" : "legacy_major";
+function sameSettlementPayload(
+  row: Record<string, unknown>,
+  settlement: SettlementResult
+): boolean {
+  const amountUnit = row.amount_unit === 'minor_v2' ? 'minor_v2' : 'legacy_major';
   const moneyFields = [
-    ["gross_amount", settlement.grossAmount],
-    ["direct_cost", settlement.directCost],
-    ["tax_amount", settlement.taxAmount],
-    ["gateway_fee", settlement.gatewayFee],
-    ["operating_income", settlement.operatingIncome],
-    ["emergency_amount", settlement.emergencyAmount],
-    ["innovation_amount", settlement.innovationAmount],
-    ["treasury_amount", settlement.treasuryAmount],
-    ["distributable_pool", settlement.distributablePool],
-    ["user_share", settlement.userShare],
-    ["platform_share", settlement.platformShare],
-    ["platform_phoenix_fund", settlement.platformPhoenixFund],
-    ["platform_infrastructure", settlement.platformInfrastructure],
-    ["platform_dao", settlement.platformDao],
+    ['gross_amount', settlement.grossAmount],
+    ['direct_cost', settlement.directCost],
+    ['tax_amount', settlement.taxAmount],
+    ['gateway_fee', settlement.gatewayFee],
+    ['operating_income', settlement.operatingIncome],
+    ['emergency_amount', settlement.emergencyAmount],
+    ['innovation_amount', settlement.innovationAmount],
+    ['treasury_amount', settlement.treasuryAmount],
+    ['distributable_pool', settlement.distributablePool],
+    ['user_share', settlement.userShare],
+    ['platform_share', settlement.platformShare],
+    ['platform_phoenix_fund', settlement.platformPhoenixFund],
+    ['platform_infrastructure', settlement.platformInfrastructure],
+    ['platform_dao', settlement.platformDao],
   ] as const;
-  if (moneyFields.some(([field, expected]) => Math.abs(fromStoredAmount(row[field], amountUnit) - expected) > 0.005)) return false;
+  if (
+    moneyFields.some(
+      ([field, expected]) => Math.abs(fromStoredAmount(row[field], amountUnit) - expected) > 0.005
+    )
+  )
+    return false;
   const rateFields = [
-    ["user_rate", settlement.userRate],
-    ["platform_rate", settlement.platformRate],
-    ["iets_score", settlement.ietsScore],
+    ['user_rate', settlement.userRate],
+    ['platform_rate', settlement.platformRate],
+    ['iets_score', settlement.ietsScore],
   ] as const;
-  if (rateFields.some(([field, expected]) => Math.abs(Number(row[field]) - expected) > 0.0001)) return false;
-  return row.idempotency_key === settlement.idempotencyKey
-    && row.stream === settlement.stream
-    && row.currency === settlement.currency
-    && row.creator_id === (settlement.creatorId ?? null)
-    && Boolean(row.creator_eligible) === settlement.creatorEligible
-    && row.creator_eligibility_reason === settlement.creatorEligibilityReason
-    && row.iets_tier === settlement.ietsTier
-    && row.policy_version === settlement.policyVersion
-    && (row.external_payment_id ?? null) === (settlement.externalPaymentId ?? null);
+  if (rateFields.some(([field, expected]) => Math.abs(Number(row[field]) - expected) > 0.0001))
+    return false;
+  return (
+    row.idempotency_key === settlement.idempotencyKey &&
+    row.stream === settlement.stream &&
+    row.currency === settlement.currency &&
+    row.creator_id === (settlement.creatorId ?? null) &&
+    Boolean(row.creator_eligible) === settlement.creatorEligible &&
+    row.creator_eligibility_reason === settlement.creatorEligibilityReason &&
+    row.iets_tier === settlement.ietsTier &&
+    row.policy_version === settlement.policyVersion &&
+    (row.external_payment_id ?? null) === (settlement.externalPaymentId ?? null)
+  );
 }
 
 export interface RevenueFabricStorageConfig {
@@ -76,10 +87,10 @@ export class RevenueFabricStorage {
       ...config.poolConfig,
       allowExitOnIdle: true,
     });
-    if (config.poolConfig.connectionString && process.env.RUNTIME_SMOKE !== "1") {
+    if (config.poolConfig.connectionString && process.env.RUNTIME_SMOKE !== '1') {
       this.schemaReady = this.initializeSchema();
       void this.schemaReady.catch((error: unknown) => {
-        console.error("[RevenueFabricStorage] schema initialization failed", error);
+        console.error('[RevenueFabricStorage] schema initialization failed', error);
       });
     }
   }
@@ -291,7 +302,7 @@ export class RevenueFabricStorage {
         );
       `);
     } catch (error) {
-      console.error("Revenue Fabric schema initialization failed:", error);
+      console.error('Revenue Fabric schema initialization failed:', error);
       throw error;
     } finally {
       client.release();
@@ -353,7 +364,7 @@ export class RevenueFabricStorage {
       const result = await client.query(
         `SELECT * FROM revenue_ledger_journals ORDER BY occurred_at DESC`
       );
-      return result.rows.map(row => ({
+      return result.rows.map((row) => ({
         journalId: row.journal_id,
         idempotencyKey: row.idempotency_key,
         settlementId: row.settlement_id,
@@ -381,46 +392,48 @@ export class RevenueFabricStorage {
   // ==================== Settlements ====================
   async saveSettlementWithJournal(
     settlement: SettlementResult,
-    journal: LedgerJournal,
+    journal: LedgerJournal
   ): Promise<{ idempotent: boolean }> {
     const client = await this.pool.connect();
     try {
-      await client.query("BEGIN");
-      await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)", ["isabella-revenue-fabric-ledger"]);
+      await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [
+        'isabella-revenue-fabric-ledger',
+      ]);
 
       const existing = await client.query(
-        "SELECT * FROM revenue_settlements WHERE idempotency_key = $1 FOR UPDATE",
-        [settlement.idempotencyKey],
+        'SELECT * FROM revenue_settlements WHERE idempotency_key = $1 FOR UPDATE',
+        [settlement.idempotencyKey]
       );
       if (existing.rows[0]) {
         if (!sameSettlementPayload(existing.rows[0] as Record<string, unknown>, settlement)) {
-          throw new Error("SETTLEMENT_IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD");
+          throw new Error('SETTLEMENT_IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD');
         }
         const existingJournal = await client.query(
-          "SELECT entry_hash FROM revenue_ledger_journals WHERE idempotency_key = $1",
-          [settlement.idempotencyKey],
+          'SELECT entry_hash FROM revenue_ledger_journals WHERE idempotency_key = $1',
+          [settlement.idempotencyKey]
         );
         if (!existingJournal.rows[0] || existingJournal.rows[0].entry_hash !== journal.entryHash) {
-          throw new Error("SETTLEMENT_JOURNAL_IDEMPOTENCY_MISMATCH");
+          throw new Error('SETTLEMENT_JOURNAL_IDEMPOTENCY_MISMATCH');
         }
         await client.query(
           `INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, event_id, payload, status)
            VALUES ('Settlement', $1, 'settlement.posted', $1, $2::jsonb, 'PENDING')
            ON CONFLICT (event_id) DO NOTHING`,
-          [settlement.idempotencyKey, JSON.stringify({ settlement, journal })],
+          [settlement.idempotencyKey, JSON.stringify({ settlement, journal })]
         );
-        await client.query("COMMIT");
+        await client.query('COMMIT');
         return { idempotent: true };
       }
 
       const priorJournal = await client.query(
-        "SELECT journal_id, entry_hash FROM revenue_ledger_journals WHERE idempotency_key = $1 FOR UPDATE",
-        [settlement.idempotencyKey],
+        'SELECT journal_id, entry_hash FROM revenue_ledger_journals WHERE idempotency_key = $1 FOR UPDATE',
+        [settlement.idempotencyKey]
       );
       let journalId = journal.journalId;
       if (priorJournal.rows[0]) {
         if (priorJournal.rows[0].entry_hash !== journal.entryHash) {
-          throw new Error("LEDGER_IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD");
+          throw new Error('LEDGER_IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD');
         }
         journalId = priorJournal.rows[0].journal_id;
       } else {
@@ -431,19 +444,28 @@ export class RevenueFabricStorage {
              SELECT 1 FROM revenue_ledger_journals AS child
              WHERE child.previous_hash = head.entry_hash
            )
-           LIMIT 2`,
+           LIMIT 2`
         );
-        if (heads.rows.length > 1) throw new Error("LEDGER_CHAIN_MULTIPLE_HEADS_REQUIRES_RECONCILIATION");
-        const currentHead = heads.rows[0]?.entry_hash ?? "GENESIS";
-        if (journal.previousHash !== currentHead) throw new Error("LEDGER_CHAIN_HEAD_CHANGED_RETRY");
+        if (heads.rows.length > 1)
+          throw new Error('LEDGER_CHAIN_MULTIPLE_HEADS_REQUIRES_RECONCILIATION');
+        const currentHead = heads.rows[0]?.entry_hash ?? 'GENESIS';
+        if (journal.previousHash !== currentHead)
+          throw new Error('LEDGER_CHAIN_HEAD_CHANGED_RETRY');
 
         await client.query(
           `INSERT INTO revenue_ledger_journals
            (journal_id, idempotency_key, settlement_id, postings, previous_hash, entry_hash, occurred_at, policy_version)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-          [journal.journalId, journal.idempotencyKey, journal.settlementId ?? null,
-            JSON.stringify(journal.postings), journal.previousHash, journal.entryHash,
-            journal.occurredAt, journal.policyVersion],
+          [
+            journal.journalId,
+            journal.idempotencyKey,
+            journal.settlementId ?? null,
+            JSON.stringify(journal.postings),
+            journal.previousHash,
+            journal.entryHash,
+            journal.occurredAt,
+            journal.policyVersion,
+          ]
         );
       }
 
@@ -455,29 +477,47 @@ export class RevenueFabricStorage {
           iets_score, iets_tier, policy_version, occurred_at, external_payment_id, journal_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)`,
         [
-          settlement.idempotencyKey, settlement.stream, settlement.currency,
-          toMinorUnits(settlement.grossAmount), toMinorUnits(settlement.directCost),
-          toMinorUnits(settlement.taxAmount), toMinorUnits(settlement.gatewayFee),
-          toMinorUnits(settlement.operatingIncome), toMinorUnits(settlement.emergencyAmount),
-          toMinorUnits(settlement.innovationAmount), toMinorUnits(settlement.treasuryAmount),
-          toMinorUnits(settlement.distributablePool), settlement.userRate, settlement.platformRate,
-          toMinorUnits(settlement.userShare), toMinorUnits(settlement.platformShare),
-          toMinorUnits(settlement.platformPhoenixFund), toMinorUnits(settlement.platformInfrastructure), toMinorUnits(settlement.platformDao),
-          settlement.creatorId ?? null, settlement.creatorEligible, settlement.creatorEligibilityReason, "minor_v2",
-          settlement.ietsScore, settlement.ietsTier, settlement.policyVersion, settlement.occurredAt,
-          settlement.externalPaymentId ?? null, journalId,
-        ],
+          settlement.idempotencyKey,
+          settlement.stream,
+          settlement.currency,
+          toMinorUnits(settlement.grossAmount),
+          toMinorUnits(settlement.directCost),
+          toMinorUnits(settlement.taxAmount),
+          toMinorUnits(settlement.gatewayFee),
+          toMinorUnits(settlement.operatingIncome),
+          toMinorUnits(settlement.emergencyAmount),
+          toMinorUnits(settlement.innovationAmount),
+          toMinorUnits(settlement.treasuryAmount),
+          toMinorUnits(settlement.distributablePool),
+          settlement.userRate,
+          settlement.platformRate,
+          toMinorUnits(settlement.userShare),
+          toMinorUnits(settlement.platformShare),
+          toMinorUnits(settlement.platformPhoenixFund),
+          toMinorUnits(settlement.platformInfrastructure),
+          toMinorUnits(settlement.platformDao),
+          settlement.creatorId ?? null,
+          settlement.creatorEligible,
+          settlement.creatorEligibilityReason,
+          'minor_v2',
+          settlement.ietsScore,
+          settlement.ietsTier,
+          settlement.policyVersion,
+          settlement.occurredAt,
+          settlement.externalPaymentId ?? null,
+          journalId,
+        ]
       );
       await client.query(
         `INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, event_id, payload, status)
          VALUES ('Settlement', $1, 'settlement.posted', $1, $2::jsonb, 'PENDING')
          ON CONFLICT (event_id) DO NOTHING`,
-        [settlement.idempotencyKey, JSON.stringify({ settlement, journal })],
+        [settlement.idempotencyKey, JSON.stringify({ settlement, journal })]
       );
-      await client.query("COMMIT");
+      await client.query('COMMIT');
       return { idempotent: false };
     } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
+      await client.query('ROLLBACK').catch(() => undefined);
       throw error;
     } finally {
       client.release();
@@ -487,7 +527,7 @@ export class RevenueFabricStorage {
   async saveSettlement(settlement: SettlementResult, journalId: string): Promise<void> {
     const journal = await this.getJournal(settlement.idempotencyKey);
     if (!journal || journal.journalId !== journalId) {
-      throw new Error("SETTLEMENT_JOURNAL_MUST_BE_PERSISTED_WITH_MATCHING_ID");
+      throw new Error('SETTLEMENT_JOURNAL_MUST_BE_PERSISTED_WITH_MATCHING_ID');
     }
     await this.saveSettlementWithJournal(settlement, journal);
   }
@@ -501,7 +541,7 @@ export class RevenueFabricStorage {
       );
       if (result.rows.length === 0) return null;
       const row = result.rows[0];
-      const amountUnit = row.amount_unit ?? "legacy_major";
+      const amountUnit = row.amount_unit ?? 'legacy_major';
       return {
         idempotencyKey: row.idempotency_key,
         stream: row.stream,
@@ -524,7 +564,7 @@ export class RevenueFabricStorage {
         platformDao: fromStoredAmount(row.platform_dao, amountUnit),
         creatorId: row.creator_id ?? undefined,
         creatorEligible: Boolean(row.creator_eligible),
-        creatorEligibilityReason: row.creator_eligibility_reason ?? "legacy_unknown",
+        creatorEligibilityReason: row.creator_eligibility_reason ?? 'legacy_unknown',
         ietsScore: Number(row.iets_score),
         ietsTier: row.iets_tier,
         policyVersion: row.policy_version,
@@ -537,7 +577,11 @@ export class RevenueFabricStorage {
   }
 
   // ==================== Wallets ====================
-  async getOrCreateWallet(userId: string, walletType = "earnings", currency = "USD"): Promise<Wallet> {
+  async getOrCreateWallet(
+    userId: string,
+    walletType = 'earnings',
+    currency = 'USD'
+  ): Promise<Wallet> {
     const client = await this.pool.connect();
     try {
       const result = await client.query(
@@ -572,27 +616,29 @@ export class RevenueFabricStorage {
     canEarn: boolean
   ): Promise<Wallet> {
     if (!canEarn) {
-      throw new Error("WALLET_CREDIT_DENIED: User not eligible to earn (free tier or inactive subscription)");
+      throw new Error(
+        'WALLET_CREDIT_DENIED: User not eligible to earn (free tier or inactive subscription)'
+      );
     }
-    if (amount <= 0) throw new Error("CREDIT_AMOUNT_MUST_BE_POSITIVE");
+    if (amount <= 0) throw new Error('CREDIT_AMOUNT_MUST_BE_POSITIVE');
 
     const client = await this.pool.connect();
     try {
-      await client.query("BEGIN");
-      
+      await client.query('BEGIN');
+
       // Get or create wallet
       const walletResult = await client.query(
         `INSERT INTO revenue_wallets (user_id, wallet_type, currency)
          VALUES ($1, 'earnings', 'USD')
          ON CONFLICT (user_id, wallet_type, currency) DO UPDATE SET version = revenue_wallets.version + 1
          RETURNING *`,
-        ["userId"]
+        ['userId']
       );
       const wallet = walletResult.rows[0];
-      
+
       const newAvailable = Number(wallet.available_balance) + amount;
       const newVersion = Number(wallet.version) + 1;
-      
+
       // Update wallet
       await client.query(
         `UPDATE revenue_wallets 
@@ -600,16 +646,16 @@ export class RevenueFabricStorage {
          WHERE id = $3`,
         [newAvailable, newVersion, wallet.id]
       );
-      
+
       // Record transaction
       await client.query(
         `INSERT INTO wallet_transactions (wallet_id, user_id, amount, direction, type, reference_id, description, balance_after)
          VALUES ($1, $2, $3, 'CREDIT', $4, $5, $6, $7)`,
-        [wallet.id, userId, amount, type, "settlement", description, newAvailable]
+        [wallet.id, userId, amount, type, 'settlement', description, newAvailable]
       );
-      
-      await client.query("COMMIT");
-      
+
+      await client.query('COMMIT');
+
       return {
         id: wallet.id,
         userId: wallet.user_id,
@@ -621,52 +667,58 @@ export class RevenueFabricStorage {
         version: newVersion,
       };
     } catch (error) {
-      await client.query("ROLLBACK");
+      await client.query('ROLLBACK');
       throw error;
     } finally {
       client.release();
     }
   }
 
-  async debitWallet(userId: string, amount: number, type: string, referenceId: string, description: string): Promise<Wallet> {
-    if (amount <= 0) throw new Error("DEBIT_AMOUNT_MUST_BE_POSITIVE");
+  async debitWallet(
+    userId: string,
+    amount: number,
+    type: string,
+    referenceId: string,
+    description: string
+  ): Promise<Wallet> {
+    if (amount <= 0) throw new Error('DEBIT_AMOUNT_MUST_BE_POSITIVE');
 
     const client = await this.pool.connect();
     try {
-      await client.query("BEGIN");
-      
+      await client.query('BEGIN');
+
       const walletResult = await client.query(
         `SELECT * FROM revenue_wallets WHERE user_id = $1 AND wallet_type = 'earnings' AND currency = 'USD' FOR UPDATE`,
         [userId]
       );
-      
+
       if (walletResult.rows.length === 0) {
-        throw new Error("WALLET_NOT_FOUND");
+        throw new Error('WALLET_NOT_FOUND');
       }
-      
+
       const wallet = walletResult.rows[0];
       const available = Number(wallet.available_balance);
-      
+
       if (available < amount) {
-        throw new Error("INSUFFICIENT_BALANCE");
+        throw new Error('INSUFFICIENT_BALANCE');
       }
-      
+
       const newAvailable = available - amount;
       const newVersion = Number(wallet.version) + 1;
-      
+
       await client.query(
         `UPDATE revenue_wallets SET available_balance = $1, version = $2, updated_at = NOW() WHERE id = $3`,
         [newAvailable, newVersion, wallet.id]
       );
-      
+
       await client.query(
         `INSERT INTO wallet_transactions (wallet_id, user_id, amount, direction, type, reference_id, description, balance_after)
          VALUES ($1, $2, $3, 'DEBIT', $4, $5, $6, $7)`,
-        [wallet.id, userId, amount, type, "payout", description, newAvailable]
+        [wallet.id, userId, amount, type, 'payout', description, newAvailable]
       );
-      
-      await client.query("COMMIT");
-      
+
+      await client.query('COMMIT');
+
       return {
         id: wallet.id,
         userId: wallet.user_id,
@@ -678,7 +730,7 @@ export class RevenueFabricStorage {
         version: newVersion,
       };
     } catch (error) {
-      await client.query("ROLLBACK");
+      await client.query('ROLLBACK');
       throw error;
     } finally {
       client.release();
@@ -710,12 +762,17 @@ export class RevenueFabricStorage {
   }
 
   // ==================== Wallet Eligibility (D5, D7) ====================
-  async setEarnEligibility(userId: string, canEarn: boolean, tier: string, subscriptionData?: {
-    provider: string;
-    externalId: string;
-    periodEnd: Date;
-    subscriptionStatus?: string;
-  }): Promise<void> {
+  async setEarnEligibility(
+    userId: string,
+    canEarn: boolean,
+    tier: string,
+    subscriptionData?: {
+      provider: string;
+      externalId: string;
+      periodEnd: Date;
+      subscriptionStatus?: string;
+    }
+  ): Promise<void> {
     const client = await this.pool.connect();
     try {
       await client.query(
@@ -730,16 +787,24 @@ export class RevenueFabricStorage {
            subscription_current_period_end = EXCLUDED.subscription_current_period_end,
            last_verified_at = NOW(),
            updated_at = NOW()`,
-        [userId, canEarn, tier, subscriptionData?.subscriptionStatus || "free", 
-         subscriptionData?.provider || null, subscriptionData?.externalId || null, 
-         subscriptionData?.periodEnd || null]
+        [
+          userId,
+          canEarn,
+          tier,
+          subscriptionData?.subscriptionStatus || 'free',
+          subscriptionData?.provider || null,
+          subscriptionData?.externalId || null,
+          subscriptionData?.periodEnd || null,
+        ]
       );
     } finally {
       client.release();
     }
   }
 
-  async getEarnEligibility(userId: string): Promise<{ canEarn: boolean; tier: string; subscriptionStatus: string } | null> {
+  async getEarnEligibility(
+    userId: string
+  ): Promise<{ canEarn: boolean; tier: string; subscriptionStatus: string } | null> {
     const client = await this.pool.connect();
     try {
       const result = await client.query(
@@ -822,9 +887,9 @@ export class RevenueFabricStorage {
         params.push(since);
       }
       query += ` ORDER BY window_start DESC`;
-      
+
       const result = await client.query(query, params);
-      return result.rows.map(row => ({
+      return result.rows.map((row) => ({
         userId: row.user_id,
         resourceType: row.resource_type,
         resourceId: row.resource_id,
@@ -851,22 +916,33 @@ export class RevenueFabricStorage {
   ): Promise<{ sessionId: string; url: string }> {
     const stripeSecret = process.env.STRIPE_SECRET_KEY;
     const publicUrl = process.env.ISABELLA_PUBLIC_URL;
-    if (!stripeSecret || !publicUrl) throw new Error("STRIPE_CHECKOUT_NOT_CONFIGURED");
-    if (!userId || userId.length > 255) throw new Error("CHECKOUT_USER_ID_INVALID");
-    if (!["premium", "vip", "enterprise"].includes(planCode)) throw new Error("CHECKOUT_PLAN_NOT_PURCHASABLE");
+    if (!stripeSecret || !publicUrl) throw new Error('STRIPE_CHECKOUT_NOT_CONFIGURED');
+    if (!userId || userId.length > 255) throw new Error('CHECKOUT_USER_ID_INVALID');
+    if (!['premium', 'vip', 'enterprise'].includes(planCode))
+      throw new Error('CHECKOUT_PLAN_NOT_PURCHASABLE');
 
     const base = new URL(publicUrl);
     const success = new URL(successUrl);
     const cancel = new URL(cancelUrl);
-    if ((base.protocol !== "https:" && base.hostname !== "localhost" && base.hostname !== "127.0.0.1")
-      || success.origin !== base.origin || cancel.origin !== base.origin) {
-      throw new Error("CHECKOUT_REDIRECT_ORIGIN_INVALID");
+    if (
+      (base.protocol !== 'https:' &&
+        base.hostname !== 'localhost' &&
+        base.hostname !== '127.0.0.1') ||
+      success.origin !== base.origin ||
+      cancel.origin !== base.origin
+    ) {
+      throw new Error('CHECKOUT_REDIRECT_ORIGIN_INVALID');
     }
 
     const stripe = new Stripe(stripeSecret);
-    const productName = planCode === "premium" ? "Isabella Premium" : planCode === "vip" ? "Isabella VIP" : "Isabella Enterprise";
+    const productName =
+      planCode === 'premium'
+        ? 'Isabella Premium'
+        : planCode === 'vip'
+          ? 'Isabella VIP'
+          : 'Isabella Enterprise';
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
-      mode: "subscription",
+      mode: 'subscription',
       success_url: success.toString(),
       cancel_url: cancel.toString(),
       client_reference_id: userId,
@@ -876,46 +952,72 @@ export class RevenueFabricStorage {
       line_items: [],
     };
 
-    if (planCode === "premium") {
+    if (planCode === 'premium') {
       const referenceRaw = Number(process.env.ISABELLA_REFERENCE_AI_PRICE_CENTS ?? 2000);
       const markupRaw = Number(process.env.ISABELLA_PRICE_MARKUP_BPS ?? 2500);
-      const referenceCents = Number.isSafeInteger(referenceRaw) && referenceRaw >= 100 && referenceRaw <= 100_000_000 ? referenceRaw : 2000;
-      const markupBps = Number.isSafeInteger(markupRaw) && markupRaw >= 0 && markupRaw <= 100_000 ? markupRaw : 2500;
-      const monthlyCents = Math.min(100_000_000, Math.ceil(referenceCents * (10_000 + markupBps) / 10_000));
+      const referenceCents =
+        Number.isSafeInteger(referenceRaw) && referenceRaw >= 100 && referenceRaw <= 100_000_000
+          ? referenceRaw
+          : 2000;
+      const markupBps =
+        Number.isSafeInteger(markupRaw) && markupRaw >= 0 && markupRaw <= 100_000
+          ? markupRaw
+          : 2500;
+      const monthlyCents = Math.min(
+        100_000_000,
+        Math.ceil((referenceCents * (10_000 + markupBps)) / 10_000)
+      );
       const configuredPremiumPrice = process.env.STRIPE_PRICE_PREMIUM;
       if (configuredPremiumPrice) {
-        if (!/^price_[A-Za-z0-9]+$/.test(configuredPremiumPrice)) throw new Error("STRIPE_PRICE_ID_INVALID:premium");
+        if (!/^price_[A-Za-z0-9]+$/.test(configuredPremiumPrice))
+          throw new Error('STRIPE_PRICE_ID_INVALID:premium');
         const price = await stripe.prices.retrieve(configuredPremiumPrice);
-        if (!price.active || price.currency !== "usd" || price.unit_amount !== monthlyCents || price.recurring?.interval !== "month") {
-          throw new Error("STRIPE_PRICE_POLICY_MISMATCH:premium");
+        if (
+          !price.active ||
+          price.currency !== 'usd' ||
+          price.unit_amount !== monthlyCents ||
+          price.recurring?.interval !== 'month'
+        ) {
+          throw new Error('STRIPE_PRICE_POLICY_MISMATCH:premium');
         }
         sessionParams.line_items = [{ price: configuredPremiumPrice, quantity: 1 }];
       } else {
-        sessionParams.line_items = [{
-          price_data: {
-            currency: "usd",
-            unit_amount: monthlyCents,
-            recurring: { interval: "month" },
-            product_data: { name: productName, description: "Acceso mensual al ecosistema Isabella" },
+        sessionParams.line_items = [
+          {
+            price_data: {
+              currency: 'usd',
+              unit_amount: monthlyCents,
+              recurring: { interval: 'month' },
+              product_data: {
+                name: productName,
+                description: 'Acceso mensual al ecosistema Isabella',
+              },
+            },
+            quantity: 1,
           },
-          quantity: 1,
-        }];
+        ];
       }
     } else {
-      const priceId = process.env["STRIPE_PRICE_" + planCode.toUpperCase()];
-      if (!priceId || !/^price_[A-Za-z0-9]+$/.test(priceId)) throw new Error("STRIPE_PRICE_ID_NOT_CONFIGURED:" + planCode);
+      const priceId = process.env['STRIPE_PRICE_' + planCode.toUpperCase()];
+      if (!priceId || !/^price_[A-Za-z0-9]+$/.test(priceId))
+        throw new Error('STRIPE_PRICE_ID_NOT_CONFIGURED:' + planCode);
       const price = await stripe.prices.retrieve(priceId);
-      if (!price.active || price.currency !== "usd" || price.recurring?.interval !== "month" || price.unit_amount == null) {
-        throw new Error("STRIPE_PRICE_POLICY_MISMATCH:" + planCode);
+      if (
+        !price.active ||
+        price.currency !== 'usd' ||
+        price.recurring?.interval !== 'month' ||
+        price.unit_amount == null
+      ) {
+        throw new Error('STRIPE_PRICE_POLICY_MISMATCH:' + planCode);
       }
       sessionParams.line_items = [{ price: priceId, quantity: 1 }];
     }
 
     const minuteBucket = Math.floor(Date.now() / 60_000);
     const session = await stripe.checkout.sessions.create(sessionParams, {
-      idempotencyKey: "isabella-checkout-" + userId + "-" + planCode + "-" + minuteBucket,
+      idempotencyKey: 'isabella-checkout-' + userId + '-' + planCode + '-' + minuteBucket,
     });
-    if (!session.url) throw new Error("STRIPE_CHECKOUT_URL_MISSING");
+    if (!session.url) throw new Error('STRIPE_CHECKOUT_URL_MISSING');
 
     const client = await this.pool.connect();
     try {
@@ -923,7 +1025,12 @@ export class RevenueFabricStorage {
         `INSERT INTO stripe_checkout_sessions (session_id, user_id, plan_code, status, metadata)
          VALUES ($1, $2, $3, 'pending', $4)
          ON CONFLICT (session_id) DO NOTHING`,
-        [session.id, userId, planCode, JSON.stringify({ userId, planCode, stripeMode: "subscription" })],
+        [
+          session.id,
+          userId,
+          planCode,
+          JSON.stringify({ userId, planCode, stripeMode: 'subscription' }),
+        ]
       );
       return { sessionId: session.id, url: session.url };
     } finally {
@@ -934,10 +1041,11 @@ export class RevenueFabricStorage {
   async createBillingPortalSession(userId: string, returnUrl: string): Promise<{ url: string }> {
     const stripeSecret = process.env.STRIPE_SECRET_KEY;
     const publicUrl = process.env.ISABELLA_PUBLIC_URL;
-    if (!stripeSecret || !publicUrl) throw new Error("STRIPE_BILLING_PORTAL_NOT_CONFIGURED");
+    if (!stripeSecret || !publicUrl) throw new Error('STRIPE_BILLING_PORTAL_NOT_CONFIGURED');
     const base = new URL(publicUrl);
     const returnTarget = new URL(returnUrl);
-    if (returnTarget.origin !== base.origin) throw new Error("BILLING_PORTAL_RETURN_ORIGIN_INVALID");
+    if (returnTarget.origin !== base.origin)
+      throw new Error('BILLING_PORTAL_RETURN_ORIGIN_INVALID');
 
     const client = await this.pool.connect();
     let customerId: string | undefined;
@@ -946,17 +1054,20 @@ export class RevenueFabricStorage {
         `SELECT provider_customer_id FROM commerce_subscriptions
          WHERE workspace_id = $1 AND provider_customer_id IS NOT NULL
          ORDER BY updated_at DESC LIMIT 1`,
-        [userId],
+        [userId]
       );
       customerId = result.rows[0]?.provider_customer_id;
     } finally {
       client.release();
     }
-    if (!customerId) throw new Error("BILLING_PORTAL_CUSTOMER_NOT_FOUND");
+    if (!customerId) throw new Error('BILLING_PORTAL_CUSTOMER_NOT_FOUND');
 
     const stripe = new Stripe(stripeSecret);
-    const session = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: returnTarget.toString() });
-    if (!session.url) throw new Error("STRIPE_BILLING_PORTAL_URL_MISSING");
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customerId,
+      return_url: returnTarget.toString(),
+    });
+    if (!session.url) throw new Error('STRIPE_BILLING_PORTAL_URL_MISSING');
     return { url: session.url };
   }
 
@@ -966,49 +1077,59 @@ export class RevenueFabricStorage {
     type: string;
     data: { object: Record<string, unknown> };
   }): Promise<{ duplicate: boolean; processed: boolean }> {
-    if (!event.id || event.id.length > 248 || !Number.isSafeInteger(event.created) || event.created <= 0) {
-      throw new Error("STRIPE_EVENT_METADATA_INVALID");
+    if (
+      !event.id ||
+      event.id.length > 248 ||
+      !Number.isSafeInteger(event.created) ||
+      event.created <= 0
+    ) {
+      throw new Error('STRIPE_EVENT_METADATA_INVALID');
     }
     const client = await this.pool.connect();
     try {
-      await client.query("BEGIN");
+      await client.query('BEGIN');
       const claimed = await client.query(
         `INSERT INTO inbox_events (event_id, consumer_name, processed_at)
          VALUES ($1, 'stripe-revenue-fabric', NOW())
          ON CONFLICT (event_id) DO NOTHING
          RETURNING event_id`,
-        ["stripe:" + event.id],
+        ['stripe:' + event.id]
       );
       if (claimed.rowCount === 0) {
-        await client.query("COMMIT");
+        await client.query('COMMIT');
         return { duplicate: true, processed: false };
       }
 
-      if (event.type === "checkout.session.completed") {
+      if (event.type === 'checkout.session.completed') {
         const session = event.data.object as {
           id?: string;
           mode?: string;
           payment_status?: string;
           metadata?: { userId?: string; planCode?: string };
         };
-        if (session.mode === "subscription" && (session.payment_status === "paid" || session.payment_status === "no_payment_required")) {
+        if (
+          session.mode === 'subscription' &&
+          (session.payment_status === 'paid' || session.payment_status === 'no_payment_required')
+        ) {
           const userId = session.metadata?.userId;
           const planCode = session.metadata?.planCode;
-          if (!userId || !["premium", "vip", "enterprise"].includes(planCode ?? "")) {
-            throw new Error("STRIPE_CHECKOUT_METADATA_INVALID");
+          if (!userId || !['premium', 'vip', 'enterprise'].includes(planCode ?? '')) {
+            throw new Error('STRIPE_CHECKOUT_METADATA_INVALID');
           }
           await client.query(
             `UPDATE stripe_checkout_sessions
              SET status = 'completed', completed_at = NOW(), status_detail = 'checkout_completed_waiting_for_subscription_event'
              WHERE session_id = $1 AND user_id = $2 AND plan_code = $3`,
-            [session.id ?? "", userId, planCode],
+            [session.id ?? '', userId, planCode]
           );
         }
-      } else if ([
-        "customer.subscription.created",
-        "customer.subscription.updated",
-        "customer.subscription.deleted",
-      ].includes(event.type)) {
+      } else if (
+        [
+          'customer.subscription.created',
+          'customer.subscription.updated',
+          'customer.subscription.deleted',
+        ].includes(event.type)
+      ) {
         const subscription = event.data.object as {
           id?: string;
           customer?: string | { id?: string };
@@ -1019,25 +1140,40 @@ export class RevenueFabricStorage {
         const userId = subscription.metadata?.userId;
         const planCode = subscription.metadata?.planCode;
         const subscriptionId = subscription.id;
-        if (!userId || userId.length > 255 || !subscriptionId
-          || !["premium", "vip", "enterprise"].includes(planCode ?? "")) {
-          throw new Error("STRIPE_SUBSCRIPTION_METADATA_INVALID");
+        if (
+          !userId ||
+          userId.length > 255 ||
+          !subscriptionId ||
+          !['premium', 'vip', 'enterprise'].includes(planCode ?? '')
+        ) {
+          throw new Error('STRIPE_SUBSCRIPTION_METADATA_INVALID');
         }
 
-        const rawStatus = event.type === "customer.subscription.deleted" ? "canceled" : subscription.status;
-        const status = rawStatus === "active" ? "active"
-          : rawStatus === "trialing" ? "trialing"
-          : rawStatus === "past_due" || rawStatus === "unpaid" ? "past_due"
-          : rawStatus === "paused" ? "suspended"
-          : "canceled";
-        const periodEnd = typeof subscription.current_period_end === "number"
-          ? new Date(subscription.current_period_end * 1000)
-          : null;
-        const unexpired = periodEnd !== null && Number.isFinite(periodEnd.getTime()) && periodEnd.getTime() > Date.now();
-        const eligible = planCode !== "free" && status === "active" && unexpired;
-        const customerId = typeof subscription.customer === "string"
-          ? subscription.customer
-          : subscription.customer?.id ?? null;
+        const rawStatus =
+          event.type === 'customer.subscription.deleted' ? 'canceled' : subscription.status;
+        const status =
+          rawStatus === 'active'
+            ? 'active'
+            : rawStatus === 'trialing'
+              ? 'trialing'
+              : rawStatus === 'past_due' || rawStatus === 'unpaid'
+                ? 'past_due'
+                : rawStatus === 'paused'
+                  ? 'suspended'
+                  : 'canceled';
+        const periodEnd =
+          typeof subscription.current_period_end === 'number'
+            ? new Date(subscription.current_period_end * 1000)
+            : null;
+        const unexpired =
+          periodEnd !== null &&
+          Number.isFinite(periodEnd.getTime()) &&
+          periodEnd.getTime() > Date.now();
+        const eligible = planCode !== 'free' && status === 'active' && unexpired;
+        const customerId =
+          typeof subscription.customer === 'string'
+            ? subscription.customer
+            : (subscription.customer?.id ?? null);
 
         await client.query(
           `INSERT INTO commerce_subscriptions
@@ -1054,7 +1190,7 @@ export class RevenueFabricStorage {
              provider_event_created = EXCLUDED.provider_event_created,
              updated_at = NOW()
            WHERE commerce_subscriptions.provider_event_created < EXCLUDED.provider_event_created`,
-          [userId, planCode, status, subscriptionId, customerId, periodEnd, event.created],
+          [userId, planCode, status, subscriptionId, customerId, periodEnd, event.created]
         );
 
         await client.query(
@@ -1072,7 +1208,7 @@ export class RevenueFabricStorage {
              last_verified_at = NOW(),
              updated_at = NOW()
            WHERE wallet_eligibility.provider_event_created < EXCLUDED.provider_event_created`,
-          [userId, eligible, status, subscriptionId, periodEnd, event.created],
+          [userId, eligible, status, subscriptionId, periodEnd, event.created]
         );
       }
 
@@ -1080,12 +1216,12 @@ export class RevenueFabricStorage {
         `INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, event_id, payload, status)
          VALUES ('StripeEvent', $1, $2, $3, $4::jsonb, 'PENDING')
          ON CONFLICT (event_id) DO NOTHING`,
-        [event.id, event.type, "stripe:" + event.id, JSON.stringify(event)],
+        [event.id, event.type, 'stripe:' + event.id, JSON.stringify(event)]
       );
-      await client.query("COMMIT");
+      await client.query('COMMIT');
       return { duplicate: false, processed: true };
     } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
+      await client.query('ROLLBACK').catch(() => undefined);
       throw error;
     } finally {
       client.release();
@@ -1098,7 +1234,7 @@ export class RevenueFabricStorage {
     aggregateId: string,
     eventType: string,
     payload: unknown,
-    eventId?: string,
+    eventId?: string
   ): Promise<void> {
     const client = await this.pool.connect();
     try {
@@ -1106,34 +1242,51 @@ export class RevenueFabricStorage {
         `INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, event_id, payload)
          VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (event_id) DO NOTHING`,
-        [aggregateType, aggregateId, eventType, eventId ?? crypto.randomUUID(), JSON.stringify(payload)]
+        [
+          aggregateType,
+          aggregateId,
+          eventType,
+          eventId ?? crypto.randomUUID(),
+          JSON.stringify(payload),
+        ]
       );
     } finally {
       client.release();
     }
   }
 
-  async getPendingOutboxEvents(limit = 100): Promise<Array<{ id: string; eventType: string; payload: unknown }>> {
+  async getPendingOutboxEvents(
+    limit = 100
+  ): Promise<Array<{ id: string; eventType: string; payload: unknown }>> {
     const client = await this.pool.connect();
     try {
       const result = await client.query(
         `SELECT id, event_type, payload FROM outbox_events WHERE status = 'PENDING' ORDER BY created_at LIMIT $1`,
         [limit]
       );
-      return result.rows.map(row => ({ id: row.id, eventType: row.event_type, payload: row.payload }));
+      return result.rows.map((row) => ({
+        id: row.id,
+        eventType: row.event_type,
+        payload: row.payload,
+      }));
     } finally {
       client.release();
     }
   }
 
-  async getOutboxStats(): Promise<{ pending: number; published: number; failed: number; deadLetter: number }> {
+  async getOutboxStats(): Promise<{
+    pending: number;
+    published: number;
+    failed: number;
+    deadLetter: number;
+  }> {
     const result = await this.pool.query(
       `SELECT
          COUNT(*) FILTER (WHERE status = 'PENDING')::int AS pending,
          COUNT(*) FILTER (WHERE status = 'PUBLISHED')::int AS published,
          COUNT(*) FILTER (WHERE status = 'FAILED')::int AS failed,
          COUNT(*) FILTER (WHERE status = 'FAILED' AND attempts >= 5)::int AS dead_letter
-       FROM outbox_events`,
+       FROM outbox_events`
     );
     const row = result.rows[0] ?? {};
     return {
@@ -1144,16 +1297,23 @@ export class RevenueFabricStorage {
     };
   }
 
-  async getDeadLetterOutboxEvents(limit = 100): Promise<Array<{
-    id: string; eventId: string; eventType: string; payload: unknown; attempts: number; lastError: string | null;
-  }>> {
+  async getDeadLetterOutboxEvents(limit = 100): Promise<
+    Array<{
+      id: string;
+      eventId: string;
+      eventType: string;
+      payload: unknown;
+      attempts: number;
+      lastError: string | null;
+    }>
+  > {
     const result = await this.pool.query(
       `SELECT id, event_id, event_type, payload, attempts, last_error
        FROM outbox_events
        WHERE status = 'FAILED' AND attempts >= 5
        ORDER BY created_at DESC
        LIMIT $1`,
-      [Math.max(1, Math.min(100, Math.floor(limit)))],
+      [Math.max(1, Math.min(100, Math.floor(limit)))]
     );
     return result.rows.map((row) => ({
       id: row.id,
@@ -1171,7 +1331,7 @@ export class RevenueFabricStorage {
        SET status = 'PENDING', attempts = 0, last_error = NULL
        WHERE id = $1 AND status = 'FAILED' AND attempts >= 5
        RETURNING id`,
-      [eventId],
+      [eventId]
     );
     return result.rowCount === 1;
   }
@@ -1233,6 +1393,8 @@ export class RevenueFabricStorage {
   }
 }
 
-export function createRevenueFabricStorage(config: RevenueFabricStorageConfig): RevenueFabricStorage {
+export function createRevenueFabricStorage(
+  config: RevenueFabricStorageConfig
+): RevenueFabricStorage {
   return new RevenueFabricStorage(config);
 }

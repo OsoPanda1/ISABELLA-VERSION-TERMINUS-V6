@@ -15,13 +15,18 @@
   const MAX_LIBRARY_TOTAL = 900_000;
   const MAX_LIBRARY_ITEMS = 24;
 
-  const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  })[character]);
+  const esc = (value) =>
+    String(value ?? '').replace(
+      /[&<>"']/g,
+      (character) =>
+        ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+        })[character]
+    );
 
   const asNumber = (value, fallback = 0) => {
     const number = Number(value);
@@ -48,7 +53,13 @@
   const fmtDate = (value) => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '—';
-    return date.toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleString('es-MX', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
   const shortHash = (value, length = 16) => {
@@ -98,7 +109,10 @@
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(path, { headers: { accept: 'application/json' }, signal: controller.signal });
+      const response = await fetch(path, {
+        headers: { accept: 'application/json' },
+        signal: controller.signal,
+      });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return await response.json();
     } finally {
@@ -114,7 +128,8 @@
     }
   };
 
-  const pill = (label, tone = '') => `<span class="pill${tone ? ` is-${tone}` : ''}">${esc(label)}</span>`;
+  const pill = (label, tone = '') =>
+    `<span class="pill${tone ? ` is-${tone}` : ''}">${esc(label)}</span>`;
 
   const toneForRisk = (risk) => {
     const value = String(risk || '').toUpperCase();
@@ -132,7 +147,8 @@
       ${sub ? `<small>${esc(sub)}</small>` : ''}
     </div>`;
 
-  const kvRow = (label, value) => `<div class="kv-row"><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`;
+  const kvRow = (label, value) =>
+    `<div class="kv-row"><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`;
 
   const table = (headers, rows) => `
     <div class="data-table-wrap">
@@ -142,9 +158,11 @@
       </table>
     </div>`;
 
-  const errorBlock = (message) => `<div class="live-error"><strong>Lectura no disponible</strong>${esc(message)}. La página sigue siendo válida; el servicio puede estar degradado o requerir configuración.</div>`;
+  const errorBlock = (message) =>
+    `<div class="live-error"><strong>Lectura no disponible</strong>${esc(message)}. La página sigue siendo válida; el servicio puede estar degradado o requerir configuración.</div>`;
 
-  const emptyBlock = (title, message) => `<div class="live-empty"><strong>${esc(title)}</strong>${esc(message)}</div>`;
+  const emptyBlock = (title, message) =>
+    `<div class="live-empty"><strong>${esc(title)}</strong>${esc(message)}</div>`;
 
   /* ------------------------------------------------------------------ shell */
 
@@ -174,14 +192,17 @@
       nodes.forEach((node) => node.classList.add('is-visible'));
       return;
     }
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('is-visible');
-          observer.unobserve(entry.target);
-        }
-      });
-    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { rootMargin: '0px 0px -8% 0px', threshold: 0.08 }
+    );
     nodes.forEach((node) => observer.observe(node));
   };
 
@@ -198,10 +219,14 @@
         try {
           await navigator.clipboard.writeText(code.textContent || '');
           button.textContent = 'COPIADO';
-          setTimeout(() => { button.textContent = 'COPIAR'; }, 1600);
+          setTimeout(() => {
+            button.textContent = 'COPIAR';
+          }, 1600);
         } catch {
           button.textContent = 'COPIA MANUAL';
-          setTimeout(() => { button.textContent = 'COPIAR'; }, 1600);
+          setTimeout(() => {
+            button.textContent = 'COPIAR';
+          }, 1600);
         }
       });
       header.append(button);
@@ -233,15 +258,20 @@
 
     const paint = () => {
       if (!filtered.length) {
-        results.innerHTML = '<div class="command-empty">No hay coincidencias. Prueba con «chat», «gobernanza» o «api».</div>';
+        results.innerHTML =
+          '<div class="command-empty">No hay coincidencias. Prueba con «chat», «gobernanza» o «api».</div>';
         return;
       }
-      results.innerHTML = filtered.map((item, index) => `
+      results.innerHTML = filtered
+        .map(
+          (item, index) => `
         <a class="command-result${index === activeIndex ? ' is-active' : ''}" href="${esc(item.href)}" role="option" aria-selected="${index === activeIndex ? 'true' : 'false'}" data-command-item>
           <span class="command-result-index">${String(index + 1).padStart(2, '0')}</span>
           <span class="command-result-copy"><strong>${esc(item.title)}</strong><small>${esc(item.summary)}</small></span>
           <span class="command-result-arrow" aria-hidden="true">→</span>
-        </a>`).join('');
+        </a>`
+        )
+        .join('');
       $$('[data-command-item]', results).forEach((node, index) => {
         node.addEventListener('mouseenter', () => {
           activeIndex = index;
@@ -254,7 +284,11 @@
 
     const filter = () => {
       const query = input.value.trim().toLowerCase();
-      filtered = !query ? items : items.filter((item) => `${item.title} ${item.summary} ${item.keywords}`.toLowerCase().includes(query));
+      filtered = !query
+        ? items
+        : items.filter((item) =>
+            `${item.title} ${item.summary} ${item.keywords}`.toLowerCase().includes(query)
+          );
       activeIndex = 0;
       paint();
     };
@@ -318,20 +352,28 @@
   const readSessions = () => {
     const sessions = readJson(SESSIONS_KEY, []);
     if (!Array.isArray(sessions)) return [];
-    return sessions.filter((session) => session && typeof session.id === 'string' && Array.isArray(session.messages));
+    return sessions.filter(
+      (session) => session && typeof session.id === 'string' && Array.isArray(session.messages)
+    );
   };
 
   const readLibrary = () => {
     const items = readJson(LIBRARY_KEY, []);
     if (!Array.isArray(items)) return [];
-    return items.filter((item) => item && typeof item.id === 'string' && typeof item.text === 'string');
+    return items.filter(
+      (item) => item && typeof item.id === 'string' && typeof item.text === 'string'
+    );
   };
 
   const readSettings = () => {
     const settings = readJson(CHAT_SETTINGS_KEY, {});
     return {
       engine: settings && settings.engine === 'sovereign' ? 'sovereign' : 'auto',
-      lens: settings && ['general', 'territorial', 'epistemic', 'security', 'governance'].includes(settings.lens) ? settings.lens : 'general',
+      lens:
+        settings &&
+        ['general', 'territorial', 'epistemic', 'security', 'governance'].includes(settings.lens)
+          ? settings.lens
+          : 'general',
       streaming: !settings || settings.streaming !== false,
       voice: Boolean(settings && settings.voice),
       reducedMotion: Boolean(settings && settings.reducedMotion),
@@ -344,7 +386,8 @@
     const profile = readJson(PROFILE_KEY, {});
     return {
       name: typeof profile?.name === 'string' ? profile.name.slice(0, 60) : 'Visitante local',
-      role: typeof profile?.role === 'string' ? profile.role.slice(0, 80) : 'Sesión sin cuenta remota',
+      role:
+        typeof profile?.role === 'string' ? profile.role.slice(0, 80) : 'Sesión sin cuenta remota',
     };
   };
 
@@ -424,10 +467,15 @@
       .filter(([, value]) => value && asNumber(value.count) > 0)
       .sort(([, a], [, b]) => asNumber(b.p95) - asNumber(a.p95))
       .slice(0, 6);
-    if (!rows.length) return '<p class="inspector-empty">Aún no hay muestras de latencia en este proceso.</p>';
+    if (!rows.length)
+      return '<p class="inspector-empty">Aún no hay muestras de latencia en este proceso.</p>';
     const max = Math.max(...rows.map(([, value]) => asNumber(value.p95)), 1);
-    return `<div class="bar-list">${rows.map(([name, value]) => `
-      <div class="bar-row"><span title="${esc(name)}">${esc(name.split('.').slice(-2).join('.'))}</span><span class="bar-track"><span class="bar-fill" style="width:${Math.max(2, Math.round((asNumber(value.p95) / max) * 100))}%"></span></span><b>${fmtMs(value.p95)}</b></div>`).join('')}</div>`;
+    return `<div class="bar-list">${rows
+      .map(
+        ([name, value]) => `
+      <div class="bar-row"><span title="${esc(name)}">${esc(name.split('.').slice(-2).join('.'))}</span><span class="bar-track"><span class="bar-fill" style="width:${Math.max(2, Math.round((asNumber(value.p95) / max) * 100))}%"></span></span><b>${fmtMs(value.p95)}</b></div>`
+      )
+      .join('')}</div>`;
   };
 
   /* ------------------------------------------------------------------ status */
@@ -484,9 +532,21 @@
       </div>
       <div class="live-block">
         <h3>BLOQUEOS DE READINESS</h3>
-        ${blockers.length
-          ? `<div class="pill-row">${blockers.slice(0, 12).map((blocker) => pill(typeof blocker === 'string' ? blocker : blocker?.dependency || blocker?.reason || JSON.stringify(blocker), 'warn')).join('')}</div>`
-          : '<p class="inspector-empty">Sin bloqueos reportados por las comprobaciones de configuración e IO local.</p>'}
+        ${
+          blockers.length
+            ? `<div class="pill-row">${blockers
+                .slice(0, 12)
+                .map((blocker) =>
+                  pill(
+                    typeof blocker === 'string'
+                      ? blocker
+                      : blocker?.dependency || blocker?.reason || JSON.stringify(blocker),
+                    'warn'
+                  )
+                )
+                .join('')}</div>`
+            : '<p class="inspector-empty">Sin bloqueos reportados por las comprobaciones de configuración e IO local.</p>'
+        }
         <p class="inspector-note">Readiness por configuración y IO local; no prueba alcanzabilidad externa, cuota ni concurrencia distribuida.</p>
       </div>`;
   };
@@ -541,7 +601,20 @@
         <h3>CATÁLOGO</h3>
         ${table(['SKILL', 'VERSIÓN', 'RIESGO', 'SCOPES', 'MÉTODO'], rows)}
       </div>
-      ${phases.length ? `<div class="live-block"><h3>FASES DECLARADAS</h3><div class="pill-row">${phases.slice(0, 24).map((phase) => pill(typeof phase === 'string' ? phase : phase?.name || phase?.id || JSON.stringify(phase))).join('')}</div></div>` : ''}`;
+      ${
+        phases.length
+          ? `<div class="live-block"><h3>FASES DECLARADAS</h3><div class="pill-row">${phases
+              .slice(0, 24)
+              .map((phase) =>
+                pill(
+                  typeof phase === 'string'
+                    ? phase
+                    : phase?.name || phase?.id || JSON.stringify(phase)
+                )
+              )
+              .join('')}</div></div>`
+          : ''
+      }`;
   };
 
   /* ------------------------------------------------------------------ agents */
@@ -555,7 +628,10 @@
     const data = result.data || {};
     const agent = Array.isArray(data.agents) ? data.agents[0] : null;
     if (!agent) {
-      root.innerHTML = emptyBlock('Sin agente registrado', 'Este proceso no expone un agente local.');
+      root.innerHTML = emptyBlock(
+        'Sin agente registrado',
+        'Este proceso no expone un agente local.'
+      );
       return;
     }
     const policy = data.executionPolicy || {};
@@ -563,7 +639,10 @@
     const rows = tools.map((tool) => [
       `<code>${esc(tool.id)}</code>`,
       esc(tool.name || '—'),
-      pill(tool.sideEffect || 'read', tool.sideEffect === 'write' ? 'warn' : tool.sideEffect === 'admin' ? 'bad' : 'ok'),
+      pill(
+        tool.sideEffect || 'read',
+        tool.sideEffect === 'write' ? 'warn' : tool.sideEffect === 'admin' ? 'bad' : 'ok'
+      ),
       tool.requiresApproval ? pill('requiere aprobación', 'warn') : pill('sin aprobación', 'ok'),
       esc(tool.description || '—'),
     ]);
@@ -611,7 +690,10 @@
     const data = result.data || {};
     const inventory = data.inventory || {};
     const kindCounts = data.kindCounts || {};
-    const kindRows = Object.entries(kindCounts).map(([kind, count]) => [`<code>${esc(kind)}</code>`, fmtNumber(count)]);
+    const kindRows = Object.entries(kindCounts).map(([kind, count]) => [
+      `<code>${esc(kind)}</code>`,
+      fmtNumber(count),
+    ]);
     root.innerHTML = `
       <div class="stat-grid">
         ${stat('CUSTOMIZACIONES', fmtNumber(inventory.customizations), 'registro vivo', true)}
@@ -654,23 +736,40 @@
     const plans = Array.isArray(plansResult.data?.plans) ? plansResult.data.plans : [];
     const prices = Array.isArray(pricesResult.data?.prices) ? pricesResult.data.prices : [];
     const featureLabels = {
-      offer: 'Ofertas', campaign: 'Campañas', landing: 'Landing', checkout: 'Checkout', lead_process: 'Leads',
-      publish: 'Publicación', attribution: 'Atribución', analytics: 'Analítica', recommendations: 'Recomendaciones',
-      funnel: 'Funnels', revenue_dashboard: 'Dashboard', affiliate: 'Afiliados', collect_payment: 'Cobros',
-      marketplace: 'Marketplace', monetizable_automation: 'Automatización', multi_workspace: 'Multi-workspace',
-      scheduled_automation: 'Programación', priority_review: 'Revisión prioritaria',
+      offer: 'Ofertas',
+      campaign: 'Campañas',
+      landing: 'Landing',
+      checkout: 'Checkout',
+      lead_process: 'Leads',
+      publish: 'Publicación',
+      attribution: 'Atribución',
+      analytics: 'Analítica',
+      recommendations: 'Recomendaciones',
+      funnel: 'Funnels',
+      revenue_dashboard: 'Dashboard',
+      affiliate: 'Afiliados',
+      collect_payment: 'Cobros',
+      marketplace: 'Marketplace',
+      monetizable_automation: 'Automatización',
+      multi_workspace: 'Multi-workspace',
+      scheduled_automation: 'Programación',
+      priority_review: 'Revisión prioritaria',
     };
-    const planCards = plans.map((plan) => {
-      const featured = plan.id === 'vip';
-      const features = Array.isArray(plan.features) ? plan.features : [];
-      const quotas = plan.quotas || {};
-      const visibleFeatures = features.length ? features : ['exploración'];
-      const price = prices.find((item) => item.planId === plan.id && item.interval === 'month');
-      return `<article class="plan-card${featured ? ' is-featured' : ''}">
+    const planCards = plans
+      .map((plan) => {
+        const featured = plan.id === 'vip';
+        const features = Array.isArray(plan.features) ? plan.features : [];
+        const quotas = plan.quotas || {};
+        const visibleFeatures = features.length ? features : ['exploración'];
+        const price = prices.find((item) => item.planId === plan.id && item.interval === 'month');
+        return `<article class="plan-card${featured ? ' is-featured' : ''}">
         <span>${esc(String(plan.id || '').toUpperCase())}${featured ? ' · DESTACADO' : ''}</span>
         <h3>${esc(plan.label || plan.id)}</h3>
         <p>${esc(plan.description || '')}</p>
-        <ul>${visibleFeatures.slice(0, 9).map((feature) => `<li>${esc(featureLabels[feature] || feature)}</li>`).join('')}</ul>
+        <ul>${visibleFeatures
+          .slice(0, 9)
+          .map((feature) => `<li>${esc(featureLabels[feature] || feature)}</li>`)
+          .join('')}</ul>
         <dl>
           ${price ? `<dt>Mensual</dt><dd>${esc((price.unitAmount / 100).toLocaleString('es-MX', { style: 'currency', currency: 'USD' }))} ${esc(price.currency || '')}</dd>` : ''}
           <dt>Ofertas</dt><dd>${quotaLabel(quotas.active_offers)}</dd>
@@ -680,7 +779,8 @@
           <dt>Contrato</dt><dd>${plan.contract_required ? 'SÍ' : 'NO'}</dd>
         </dl>
       </article>`;
-    }).join('');
+      })
+      .join('');
     const paymentConfigured = prices.length > 0 && pricesResult.ok;
     root.innerHTML = `
       <div class="plan-grid">${planCards || emptyBlock('Sin planes', 'El servidor no devolvió planes.')}</div>
@@ -696,7 +796,19 @@
         </div>
         <div class="live-block">
           <h3>LISTA DE PRECIOS PÚBLICA</h3>
-          ${prices.length ? `<dl class="kv-list">${prices.slice(0, 8).map((price) => kvRow(`${price.planId} · ${price.interval}`, `${(price.unitAmount / 100).toLocaleString('es-MX', { style: 'currency', currency: 'USD' })}`)).join('')}</dl>` : '<p class="inspector-empty">Sin precios públicos en este proceso.</p>'}
+          ${
+            prices.length
+              ? `<dl class="kv-list">${prices
+                  .slice(0, 8)
+                  .map((price) =>
+                    kvRow(
+                      `${price.planId} · ${price.interval}`,
+                      `${(price.unitAmount / 100).toLocaleString('es-MX', { style: 'currency', currency: 'USD' })}`
+                    )
+                  )
+                  .join('')}</dl>`
+              : '<p class="inspector-empty">Sin precios públicos en este proceso.</p>'
+          }
         </div>
       </div>`;
   };
@@ -730,16 +842,49 @@
       </div>
       <div class="live-block">
         <h3>SUPERFICIES DE INTEGRACIÓN</h3>
-        ${table(['SUPERFICIE', 'MÉTODO', 'AUTENTICACIÓN', 'ESTADO'], [
-          ['<code>/api/v1/cognition/route</code>', 'POST', 'pública con rate limit', pill('wired', 'ok')],
-          ['<code>/api/v1/cognition/stream</code>', 'POST', 'pública con rate limit', pill('wired', 'ok')],
-          ['<code>/api/v1/agents</code>', 'GET', 'pública con rate limit', pill('wired', 'ok')],
-          ['<code>/api/v1/hypercore/skills</code>', 'GET', 'pública con rate limit', pill('wired', 'ok')],
-          ['<code>/api/v1/marketplace</code>', 'GET', 'pública con rate limit', pill('wired', 'ok')],
-          ['<code>/api/v1/billing/plans</code>', 'GET', 'pública', pill('wired', 'ok')],
-          ['<code>/v1/chat/completions</code>', 'POST', 'compatible OpenAI; token según despliegue', pill('condicional', 'info')],
-          ['<code>/api/v1/billing/stripe/webhook</code>', 'POST', 'firma del proveedor', pill('condicional', 'info')],
-        ])}
+        ${table(
+          ['SUPERFICIE', 'MÉTODO', 'AUTENTICACIÓN', 'ESTADO'],
+          [
+            [
+              '<code>/api/v1/cognition/route</code>',
+              'POST',
+              'pública con rate limit',
+              pill('wired', 'ok'),
+            ],
+            [
+              '<code>/api/v1/cognition/stream</code>',
+              'POST',
+              'pública con rate limit',
+              pill('wired', 'ok'),
+            ],
+            ['<code>/api/v1/agents</code>', 'GET', 'pública con rate limit', pill('wired', 'ok')],
+            [
+              '<code>/api/v1/hypercore/skills</code>',
+              'GET',
+              'pública con rate limit',
+              pill('wired', 'ok'),
+            ],
+            [
+              '<code>/api/v1/marketplace</code>',
+              'GET',
+              'pública con rate limit',
+              pill('wired', 'ok'),
+            ],
+            ['<code>/api/v1/billing/plans</code>', 'GET', 'pública', pill('wired', 'ok')],
+            [
+              '<code>/v1/chat/completions</code>',
+              'POST',
+              'compatible OpenAI; token según despliegue',
+              pill('condicional', 'info'),
+            ],
+            [
+              '<code>/api/v1/billing/stripe/webhook</code>',
+              'POST',
+              'firma del proveedor',
+              pill('condicional', 'info'),
+            ],
+          ]
+        )}
       </div>
       <div class="live-grid-2">
         <div class="live-block">
@@ -757,7 +902,21 @@
           <h3>READINESS DECLARADO</h3>
           <p class="inspector-empty">${health.ok ? esc(health.data?.node || 'Nodo Cero') : 'Nodo no leído'} · ${health.ok ? esc(health.data?.version || '—') : '—'}</p>
           <div class="pill-row" style="margin-top:10px">
-            ${blockers.length ? blockers.slice(0, 8).map((blocker) => pill(typeof blocker === 'string' ? blocker : blocker?.dependency || blocker?.reason || 'BLOQUEO', 'warn')).join('') : pill('sin bloqueos reportados', 'ok')}
+            ${
+              blockers.length
+                ? blockers
+                    .slice(0, 8)
+                    .map((blocker) =>
+                      pill(
+                        typeof blocker === 'string'
+                          ? blocker
+                          : blocker?.dependency || blocker?.reason || 'BLOQUEO',
+                        'warn'
+                      )
+                    )
+                    .join('')
+                : pill('sin bloqueos reportados', 'ok')
+            }
           </div>
           <div class="section-links" style="margin-top:14px"><a href="/platform/developers">Guía de API <span aria-hidden="true">↗</span></a><a href="/api/v1/healthz">Readiness JSON <span aria-hidden="true">↗</span></a></div>
         </div>
@@ -805,9 +964,21 @@
         </div>
         <div class="live-block">
           <h3>LÍMITES DECLARADOS</h3>
-          <p class="inspector-empty">${esc((Array.isArray(reinaData.disclaimers) ? reinaData.disclaimers.join(' ') : 'La adjudicación no ejecuta acciones.'))}</p>
+          <p class="inspector-empty">${esc(Array.isArray(reinaData.disclaimers) ? reinaData.disclaimers.join(' ') : 'La adjudicación no ejecuta acciones.')}</p>
           <div class="pill-row" style="margin-top:10px">
-            ${blockers.length ? blockers.slice(0, 8).map((blocker) => pill(typeof blocker === 'string' ? blocker : blocker?.dependency || 'BLOQUEO', 'warn')).join('') : pill('sin bloqueos de configuración', 'ok')}
+            ${
+              blockers.length
+                ? blockers
+                    .slice(0, 8)
+                    .map((blocker) =>
+                      pill(
+                        typeof blocker === 'string' ? blocker : blocker?.dependency || 'BLOQUEO',
+                        'warn'
+                      )
+                    )
+                    .join('')
+                : pill('sin bloqueos de configuración', 'ok')
+            }
           </div>
         </div>
       </div>`;
@@ -822,11 +993,15 @@
       root.innerHTML = errorBlock('El catálogo no publicó el registro canónico.');
       return;
     }
-    const maturityTone = (value) => ({ verified: 'ok', implemented: 'info', partial: 'warn', specified: 'bad' }[value] || '');
+    const maturityTone = (value) =>
+      ({ verified: 'ok', implemented: 'info', partial: 'warn', specified: 'bad' })[value] || '';
     const counts = canon.maturity || {};
-    const evidence = (entry) => (Array.isArray(entry.evidence) && entry.evidence.length
-      ? entry.evidence.map((path) => `<span class="mono" style="font-size:10px">${esc(path)}</span>`).join('<br>')
-      : '<span class="inspector-empty">sin código localizado</span>');
+    const evidence = (entry) =>
+      Array.isArray(entry.evidence) && entry.evidence.length
+        ? entry.evidence
+            .map((path) => `<span class="mono" style="font-size:10px">${esc(path)}</span>`)
+            .join('<br>')
+        : '<span class="inspector-empty">sin código localizado</span>';
     root.innerHTML = `
       <div class="stat-grid">
         ${stat('PILARES', fmtNumber(canon.counts.pillars), 'mandatos canónicos', true, true)}
@@ -861,21 +1036,27 @@
       </div>
       <div class="live-block">
         <h3>${fmtNumber(canon.counts.implementations)} IMPLEMENTACIONES CANÓNICAS</h3>
-        ${table(['ID', 'CAPACIDAD', 'MADUREZ', 'EVIDENCIA LOCALIZADA'], canon.implementations.map((entry) => [
-          `<span class="mono">${esc(entry.id)}</span>`,
-          `<strong>${esc(entry.title)}</strong><br><small>${esc(entry.note || entry.summary)}</small>`,
-          pill(entry.maturity, maturityTone(entry.maturity)),
-          evidence(entry),
-        ]))}
+        ${table(
+          ['ID', 'CAPACIDAD', 'MADUREZ', 'EVIDENCIA LOCALIZADA'],
+          canon.implementations.map((entry) => [
+            `<span class="mono">${esc(entry.id)}</span>`,
+            `<strong>${esc(entry.title)}</strong><br><small>${esc(entry.note || entry.summary)}</small>`,
+            pill(entry.maturity, maturityTone(entry.maturity)),
+            evidence(entry),
+          ])
+        )}
       </div>
       <div class="live-grid-2">
         <div class="live-block">
           <h3>CAPAS DE MEMORIA</h3>
-          ${table(['TIER', 'ALCANCE', 'MADUREZ'], canon.memoryTiers.map((tier) => [
-            `<strong>${esc(tier.title)}</strong>`,
-            esc(tier.scope),
-            pill(tier.maturity, maturityTone(tier.maturity)),
-          ]))}
+          ${table(
+            ['TIER', 'ALCANCE', 'MADUREZ'],
+            canon.memoryTiers.map((tier) => [
+              `<strong>${esc(tier.title)}</strong>`,
+              esc(tier.scope),
+              pill(tier.maturity, maturityTone(tier.maturity)),
+            ])
+          )}
         </div>
         <div class="live-block">
           <h3>ROSTER Y FEDERACIONES</h3>
@@ -897,7 +1078,9 @@
       const items = readLibrary();
       const totalBytes = items.reduce((sum, item) => sum + asNumber(item.size), 0);
       const content = items.length
-        ? `<div class="lib-list">${items.map((item) => `
+        ? `<div class="lib-list">${items
+            .map(
+              (item) => `
             <div class="lib-item" data-lib-id="${esc(item.id)}">
               <div class="lib-item-main">
                 <strong>${esc(item.name)}</strong>
@@ -908,8 +1091,13 @@
                 <button class="icon-action" type="button" data-lib-copy="${esc(item.id)}">COPIAR</button>
                 <button class="icon-action" type="button" data-lib-delete="${esc(item.id)}">BORRAR</button>
               </div>
-            </div>`).join('')}</div>`
-        : emptyBlock('Biblioteca vacía', 'Importa un archivo de texto para conservarlo en este navegador.');
+            </div>`
+            )
+            .join('')}</div>`
+        : emptyBlock(
+            'Biblioteca vacía',
+            'Importa un archivo de texto para conservarlo en este navegador.'
+          );
       root.innerHTML = `
         <div class="stat-grid">
           ${stat('ARCHIVOS', items.length, `de ${MAX_LIBRARY_ITEMS}`, true, true)}
@@ -980,31 +1168,51 @@
       drop.classList.remove('is-dragover');
       ingest(Array.from(event.dataTransfer?.files || []));
     });
-    root.querySelectorAll('[data-lib-view]').forEach((button) => button.addEventListener('click', () => {
-      const item = readLibrary().find((candidate) => candidate.id === button.dataset.libView);
-      if (item) openLibraryViewer(item);
-    }));
-    root.querySelectorAll('[data-lib-copy]').forEach((button) => button.addEventListener('click', async () => {
-      const item = readLibrary().find((candidate) => candidate.id === button.dataset.libCopy);
-      if (!item) return;
-      try {
-        await navigator.clipboard.writeText(item.text);
-        button.textContent = 'COPIADO';
-        setTimeout(() => { button.textContent = 'COPIAR'; }, 1400);
-      } catch {
-        openLibraryViewer(item);
-      }
-    }));
-    root.querySelectorAll('[data-lib-delete]').forEach((button) => button.addEventListener('click', () => {
-      const id = button.dataset.libDelete;
-      writeJson(LIBRARY_KEY, readLibrary().filter((item) => item.id !== id));
-      rerender();
-    }));
+    root.querySelectorAll('[data-lib-view]').forEach((button) =>
+      button.addEventListener('click', () => {
+        const item = readLibrary().find((candidate) => candidate.id === button.dataset.libView);
+        if (item) openLibraryViewer(item);
+      })
+    );
+    root.querySelectorAll('[data-lib-copy]').forEach((button) =>
+      button.addEventListener('click', async () => {
+        const item = readLibrary().find((candidate) => candidate.id === button.dataset.libCopy);
+        if (!item) return;
+        try {
+          await navigator.clipboard.writeText(item.text);
+          button.textContent = 'COPIADO';
+          setTimeout(() => {
+            button.textContent = 'COPIAR';
+          }, 1400);
+        } catch {
+          openLibraryViewer(item);
+        }
+      })
+    );
+    root.querySelectorAll('[data-lib-delete]').forEach((button) =>
+      button.addEventListener('click', () => {
+        const id = button.dataset.libDelete;
+        writeJson(
+          LIBRARY_KEY,
+          readLibrary().filter((item) => item.id !== id)
+        );
+        rerender();
+      })
+    );
     $('[data-lib-export]', root)?.addEventListener('click', () => {
-      download('isabella-biblioteca.json', JSON.stringify(readLibrary(), null, 2), 'application/json');
+      download(
+        'isabella-biblioteca.json',
+        JSON.stringify(readLibrary(), null, 2),
+        'application/json'
+      );
     });
     $('[data-lib-clear]', root)?.addEventListener('click', () => {
-      if (!window.confirm('¿Borrar todos los archivos locales de la biblioteca? Esta acción no se puede deshacer.')) return;
+      if (
+        !window.confirm(
+          '¿Borrar todos los archivos locales de la biblioteca? Esta acción no se puede deshacer.'
+        )
+      )
+        return;
       removeKey(LIBRARY_KEY);
       rerender();
     });
@@ -1016,7 +1224,8 @@
       dialog = document.createElement('dialog');
       dialog.id = 'libViewer';
       dialog.className = 'command-palette lib-viewer';
-      dialog.innerHTML = '<div class="command-panel"><div class="command-head"><span class="command-mark" aria-hidden="true">◇</span><strong id="libViewerTitle" class="mono"></strong><button type="button" class="icon-action" data-lib-viewer-close>CERRAR</button></div><pre class="lib-viewer-text" id="libViewerText"></pre></div>';
+      dialog.innerHTML =
+        '<div class="command-panel"><div class="command-head"><span class="command-mark" aria-hidden="true">◇</span><strong id="libViewerTitle" class="mono"></strong><button type="button" class="icon-action" data-lib-viewer-close>CERRAR</button></div><pre class="lib-viewer-text" id="libViewerText"></pre></div>';
       document.body.append(dialog);
       dialog.addEventListener('click', (event) => {
         if (event.target === dialog || event.target.closest('[data-lib-viewer-close]')) {
@@ -1041,21 +1250,76 @@
     const visitList = Array.isArray(visits) ? visits : [];
     const allMessages = sessions.flatMap((session) => session.messages || []);
     const userMessages = allMessages.filter((message) => message.role === 'user');
-    const hasMath = userMessages.some((message) => /(?:calcula|calcular|cuánto es|cuanto es|resuelve)/i.test(String(message.content || '')));
-    const hasSummary = userMessages.some((message) => /resume|resumen/i.test(String(message.content || '')));
+    const hasMath = userMessages.some((message) =>
+      /(?:calcula|calcular|cuánto es|cuanto es|resuelve)/i.test(String(message.content || ''))
+    );
+    const hasSummary = userMessages.some((message) =>
+      /resume|resumen/i.test(String(message.content || ''))
+    );
     const badges = [
-      { id: 'first', title: 'Primer enlace', description: 'Iniciaste una conversación local.', unlocked: sessions.length > 0 },
-      { id: 'explorer', title: 'Explorador', description: 'Visitaste al menos cinco superficies de la plataforma.', unlocked: new Set(visitList).size >= 5 },
-      { id: 'librarian', title: 'Bibliotecario', description: 'Guardaste un archivo en la biblioteca local.', unlocked: library.length > 0 },
-      { id: 'calculator', title: 'Calculista', description: 'Usaste el agente local para una operación aritmética.', unlocked: hasMath },
-      { id: 'summarizer', title: 'Sintetizador', description: 'Solicitaste un resumen extractivo.', unlocked: hasSummary },
-      { id: 'governance', title: 'Lector de gobernanza', description: 'Abriste la sección de gobernanza y evidencia.', unlocked: visitList.includes('governance') },
-      { id: 'steady', title: 'Constante', description: 'Acumulaste cinco conversaciones locales.', unlocked: sessions.length >= 5 },
+      {
+        id: 'first',
+        title: 'Primer enlace',
+        description: 'Iniciaste una conversación local.',
+        unlocked: sessions.length > 0,
+      },
+      {
+        id: 'explorer',
+        title: 'Explorador',
+        description: 'Visitaste al menos cinco superficies de la plataforma.',
+        unlocked: new Set(visitList).size >= 5,
+      },
+      {
+        id: 'librarian',
+        title: 'Bibliotecario',
+        description: 'Guardaste un archivo en la biblioteca local.',
+        unlocked: library.length > 0,
+      },
+      {
+        id: 'calculator',
+        title: 'Calculista',
+        description: 'Usaste el agente local para una operación aritmética.',
+        unlocked: hasMath,
+      },
+      {
+        id: 'summarizer',
+        title: 'Sintetizador',
+        description: 'Solicitaste un resumen extractivo.',
+        unlocked: hasSummary,
+      },
+      {
+        id: 'governance',
+        title: 'Lector de gobernanza',
+        description: 'Abriste la sección de gobernanza y evidencia.',
+        unlocked: visitList.includes('governance'),
+      },
+      {
+        id: 'steady',
+        title: 'Constante',
+        description: 'Acumulaste cinco conversaciones locales.',
+        unlocked: sessions.length >= 5,
+      },
     ];
-    const initials = profile.name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase() || '').join('') || 'IS';
+    const initials =
+      profile.name
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase() || '')
+        .join('') || 'IS';
     const gallery = [
-      ...library.slice(0, 4).map((item) => ({ id: item.id, title: item.name, meta: `${fmtBytes(item.size)} · biblioteca`, href: '/platform/library' })),
-      ...sessions.slice(0, 4).map((session) => ({ id: session.id, title: session.title || 'Conversación', meta: `${(session.messages || []).length} mensajes · ${fmtDate(session.updatedAt)}`, href: `/chat?session=${encodeURIComponent(session.id)}` })),
+      ...library.slice(0, 4).map((item) => ({
+        id: item.id,
+        title: item.name,
+        meta: `${fmtBytes(item.size)} · biblioteca`,
+        href: '/platform/library',
+      })),
+      ...sessions.slice(0, 4).map((session) => ({
+        id: session.id,
+        title: session.title || 'Conversación',
+        meta: `${(session.messages || []).length} mensajes · ${fmtDate(session.updatedAt)}`,
+        href: `/chat?session=${encodeURIComponent(session.id)}`,
+      })),
     ];
     root.innerHTML = `
       <div class="profile-head">
@@ -1091,19 +1355,33 @@
       </div>`;
     $('[data-profile-save]', root)?.addEventListener('click', () => {
       writeJson(PROFILE_KEY, {
-        name: String($('#profileName', root)?.value || 'Visitante local').trim().slice(0, 60) || 'Visitante local',
-        role: String($('#profileRole', root)?.value || 'Sesión sin cuenta remota').trim().slice(0, 80) || 'Sesión sin cuenta remota',
+        name:
+          String($('#profileName', root)?.value || 'Visitante local')
+            .trim()
+            .slice(0, 60) || 'Visitante local',
+        role:
+          String($('#profileRole', root)?.value || 'Sesión sin cuenta remota')
+            .trim()
+            .slice(0, 80) || 'Sesión sin cuenta remota',
       });
       loadProfile(root);
     });
     $('[data-profile-export]', root)?.addEventListener('click', () => {
-      download('isabella-perfil-local.json', JSON.stringify({
-        profile: readProfile(),
-        sessions: readSessions(),
-        library: readLibrary(),
-        visits: readJson(VISITS_KEY, []),
-        exportedAt: new Date().toISOString(),
-      }, null, 2), 'application/json');
+      download(
+        'isabella-perfil-local.json',
+        JSON.stringify(
+          {
+            profile: readProfile(),
+            sessions: readSessions(),
+            library: readLibrary(),
+            visits: readJson(VISITS_KEY, []),
+            exportedAt: new Date().toISOString(),
+          },
+          null,
+          2
+        ),
+        'application/json'
+      );
     });
   };
 
@@ -1159,7 +1437,13 @@
       });
       applyMotion(readSettings());
     };
-    ['#settingEngine', '#settingLens', '#settingStreaming', '#settingVoice', '#settingMotion'].forEach((selector) => {
+    [
+      '#settingEngine',
+      '#settingLens',
+      '#settingStreaming',
+      '#settingVoice',
+      '#settingMotion',
+    ].forEach((selector) => {
       $(selector, root)?.addEventListener('change', save);
     });
     $('[data-clear-chat]', root)?.addEventListener('click', () => {
@@ -1173,7 +1457,12 @@
       loadSettings(root);
     });
     $('[data-clear-all]', root)?.addEventListener('click', () => {
-      if (!window.confirm('¿Borrar conversaciones, biblioteca, perfil y preferencias de este navegador?')) return;
+      if (
+        !window.confirm(
+          '¿Borrar conversaciones, biblioteca, perfil y preferencias de este navegador?'
+        )
+      )
+        return;
       [SESSIONS_KEY, CHAT_SETTINGS_KEY, PROFILE_KEY, LIBRARY_KEY, VISITS_KEY].forEach(removeKey);
       loadSettings(root);
     });
@@ -1248,7 +1537,9 @@
       try {
         await loader(root);
       } catch (error) {
-        root.innerHTML = errorBlock(error instanceof Error ? error.message : 'Error inesperado al leer la superficie.');
+        root.innerHTML = errorBlock(
+          error instanceof Error ? error.message : 'Error inesperado al leer la superficie.'
+        );
       } finally {
         root.setAttribute('aria-busy', 'false');
       }

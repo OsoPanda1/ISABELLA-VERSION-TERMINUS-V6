@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash } from 'node:crypto';
 
 export interface MoeExpertArtifact {
   expertId: string;
@@ -38,7 +38,7 @@ export interface MoeRouteOptions {
 }
 
 function stableHash(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
 function softmax(logits: number[]): number[] {
@@ -57,7 +57,7 @@ function validateArtifact(expert: MoeExpertArtifact): void {
     !expert.datasetId ||
     !expert.license
   ) {
-    throw new Error(`moe_expert_artifact_invalid:${expert.expertId || "unknown"}`);
+    throw new Error(`moe_expert_artifact_invalid:${expert.expertId || 'unknown'}`);
   }
   if (!Number.isInteger(expert.capacity) || expert.capacity < 1) {
     throw new Error(`moe_expert_capacity_invalid:${expert.expertId}`);
@@ -66,16 +66,16 @@ function validateArtifact(expert: MoeExpertArtifact): void {
 
 export function createMoERoute(
   experts: readonly MoeExpertArtifact[],
-  options: MoeRouteOptions = {},
+  options: MoeRouteOptions = {}
 ) {
   const topK = Math.max(1, Math.min(options.topK ?? 2, experts.length));
   const capacityFactor = Math.max(0.1, options.capacityFactor ?? 1);
-  if (!experts.length) throw new Error("moe_experts_required");
+  if (!experts.length) throw new Error('moe_experts_required');
   for (const expert of experts) validateArtifact(expert);
 
   const registry = new Map(experts.map((expert) => [expert.expertId, expert]));
   if (options.fallbackExpertId && !registry.has(options.fallbackExpertId)) {
-    throw new Error("moe_fallback_expert_not_registered");
+    throw new Error('moe_fallback_expert_not_registered');
   }
 
   return {
@@ -83,7 +83,7 @@ export function createMoERoute(
     capacityFactor,
     experts: [...experts],
     route(_input: number[], logits: number[]): MoeGateDecision[] {
-      if (logits.length !== experts.length) throw new Error("moe_logit_count_mismatch");
+      if (logits.length !== experts.length) throw new Error('moe_logit_count_mismatch');
       const weights = softmax(logits);
       return experts
         .map((expert, index) => ({
@@ -103,14 +103,14 @@ export function createMoERoute(
 export async function executeMoE(
   route: ReturnType<typeof createMoERoute>,
   input: number[],
-  logits: number[],
+  logits: number[]
 ): Promise<MoeExecutionResult> {
   const selected = route.route(input, logits);
   const capacityByExpert = new Map(
     route.experts.map((expert) => [
       expert.expertId,
       Math.max(1, Math.floor(expert.capacity * route.capacityFactor)),
-    ]),
+    ])
   );
   let overflow = false;
   let fallbackUsed = false;
@@ -132,8 +132,8 @@ export async function executeMoE(
   }
 
   if (!outputs.length) {
-    const fallbackId = route.registry.has("fallback") ? "fallback" : undefined;
-    if (!fallbackId) throw new Error("moe_capacity_exhausted_without_fallback");
+    const fallbackId = route.registry.has('fallback') ? 'fallback' : undefined;
+    if (!fallbackId) throw new Error('moe_capacity_exhausted_without_fallback');
     const fallback = route.registry.get(fallbackId)!;
     const output = await fallback.execute(input);
     outputs.push({ expertId: fallback.expertId, weight: 1, output });
@@ -142,7 +142,7 @@ export async function executeMoE(
 
   const totalWeight = outputs.reduce((sum, item) => sum + item.weight, 0) || 1;
   const output = input.map((_, index) =>
-    outputs.reduce((sum, item) => sum + (item.output[index] ?? 0) * (item.weight / totalWeight), 0),
+    outputs.reduce((sum, item) => sum + (item.output[index] ?? 0) * (item.weight / totalWeight), 0)
   );
 
   return {
@@ -180,47 +180,47 @@ export function recordIntelligenceMetric(trace: MoeTrace) {
  * The advanced governed MoE above remains the canonical execution engine.
  */
 export class MoeEngine {
-  private readonly experts: import("./types").ExpertRoute[] = [
-    { expertId: "exp_crown", name: "CROWN Governance Expert", weight: 0.95, domain: "governance" },
-    { expertId: "exp_sophia", name: "SOPHIA Epistemic Expert", weight: 0.92, domain: "academic" },
-    { expertId: "exp_orion", name: "ORION Tool Execution Expert", weight: 0.88, domain: "tools" },
+  private readonly experts: import('./types').ExpertRoute[] = [
+    { expertId: 'exp_crown', name: 'CROWN Governance Expert', weight: 0.95, domain: 'governance' },
+    { expertId: 'exp_sophia', name: 'SOPHIA Epistemic Expert', weight: 0.92, domain: 'academic' },
+    { expertId: 'exp_orion', name: 'ORION Tool Execution Expert', weight: 0.88, domain: 'tools' },
     {
-      expertId: "exp_isa",
-      name: "ISA Presence & Persona Expert",
+      expertId: 'exp_isa',
+      name: 'ISA Presence & Persona Expert',
       weight: 0.96,
-      domain: "presence",
+      domain: 'presence',
     },
-    { expertId: "exp_argus", name: "ARGUS Security Sentinel", weight: 0.99, domain: "security" },
+    { expertId: 'exp_argus', name: 'ARGUS Security Sentinel', weight: 0.99, domain: 'security' },
   ];
 
-  public route(input: string): import("./types").MoeRoutingDecision {
+  public route(input: string): import('./types').MoeRoutingDecision {
     const t0 = performance.now();
     const normalized = input.toLowerCase();
-    const selected: import("./types").ExpertRoute[] = [];
+    const selected: import('./types').ExpertRoute[] = [];
     if (
-      normalized.includes("seguridad") ||
-      normalized.includes("auth") ||
-      normalized.includes("token")
+      normalized.includes('seguridad') ||
+      normalized.includes('auth') ||
+      normalized.includes('token')
     ) {
-      selected.push(this.experts.find((e) => e.expertId === "exp_argus")!);
+      selected.push(this.experts.find((e) => e.expertId === 'exp_argus')!);
     }
     if (
-      normalized.includes("epistem") ||
-      normalized.includes("fuente") ||
-      normalized.includes("verdad")
+      normalized.includes('epistem') ||
+      normalized.includes('fuente') ||
+      normalized.includes('verdad')
     ) {
-      selected.push(this.experts.find((e) => e.expertId === "exp_sophia")!);
+      selected.push(this.experts.find((e) => e.expertId === 'exp_sophia')!);
     }
     if (
-      normalized.includes("ejecuta") ||
-      normalized.includes("herramienta") ||
-      normalized.includes("tool")
+      normalized.includes('ejecuta') ||
+      normalized.includes('herramienta') ||
+      normalized.includes('tool')
     ) {
-      selected.push(this.experts.find((e) => e.expertId === "exp_orion")!);
+      selected.push(this.experts.find((e) => e.expertId === 'exp_orion')!);
     }
     if (selected.length === 0) {
-      selected.push(this.experts.find((e) => e.expertId === "exp_isa")!);
-      selected.push(this.experts.find((e) => e.expertId === "exp_crown")!);
+      selected.push(this.experts.find((e) => e.expertId === 'exp_isa')!);
+      selected.push(this.experts.find((e) => e.expertId === 'exp_crown')!);
     }
     return {
       selectedExperts: selected,

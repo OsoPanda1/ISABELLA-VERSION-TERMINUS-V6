@@ -16,20 +16,20 @@
  * - The creator share is clamped to the repo-wide policy band 50–80% and the
  *   ratio is expressed in basis points so no floating point enters the ledger.
  */
-import { MAX_USER_SHARE_BPS, MIN_USER_SHARE_BPS } from "../commerce/revenue-share";
+import { MAX_USER_SHARE_BPS, MIN_USER_SHARE_BPS } from '../commerce/revenue-share';
 
 /** Metering units the native runtime can actually count. */
 export type MonetizationUnit =
-  | "inference_token"
-  | "moe_route"
-  | "tts_character"
-  | "asr_second"
-  | "evidence_seal"
-  | "vault_gb_month"
-  | "federation_hour"
-  | "agent_task";
+  | 'inference_token'
+  | 'moe_route'
+  | 'tts_character'
+  | 'asr_second'
+  | 'evidence_seal'
+  | 'vault_gb_month'
+  | 'federation_hour'
+  | 'agent_task';
 
-export type MonetizationCadence = "usage" | "recurring" | "one-time" | "event";
+export type MonetizationCadence = 'usage' | 'recurring' | 'one-time' | 'event';
 
 export interface MonetizationStreamSpec {
   readonly id: string;
@@ -65,7 +65,7 @@ export interface MonetizationQuote {
   readonly creatorMinor: number;
   readonly platformMinor: number;
   readonly creatorShareBps: number;
-  readonly currency: "USD";
+  readonly currency: 'USD';
   readonly fundsMoved: false;
   readonly authorizationPerformed: false;
 }
@@ -87,89 +87,89 @@ function clampShare(bps: number): number {
  */
 export const MONETIZATION_STREAMS: readonly MonetizationStreamSpec[] = Object.freeze([
   Object.freeze({
-    id: "M-21-native-llm-tokens",
-    name: "LLM nativo por token",
+    id: 'M-21-native-llm-tokens',
+    name: 'LLM nativo por token',
     unitPriceMinor: 2,
-    unit: "inference_token",
-    cadence: "usage",
+    unit: 'inference_token',
+    cadence: 'usage',
     creatorShareBps: 7500,
-    description: "Cobro por token generado por el motor LLM nativo de Isabella.",
+    description: 'Cobro por token generado por el motor LLM nativo de Isabella.',
     regulatoryReviewRequired: false,
   }),
   Object.freeze({
-    id: "M-22-moe-routing",
-    name: "Enrutamiento MoE por consulta",
+    id: 'M-22-moe-routing',
+    name: 'Enrutamiento MoE por consulta',
     unitPriceMinor: 5,
-    unit: "moe_route",
-    cadence: "usage",
+    unit: 'moe_route',
+    cadence: 'usage',
     creatorShareBps: 7500,
-    description: "Cobro por decisión de enrutamiento del motor MoE con traza auditable.",
+    description: 'Cobro por decisión de enrutamiento del motor MoE con traza auditable.',
     regulatoryReviewRequired: false,
   }),
   Object.freeze({
-    id: "M-23-native-tts-chars",
-    name: "TTS nativo por carácter",
+    id: 'M-23-native-tts-chars',
+    name: 'TTS nativo por carácter',
     unitPriceMinor: 1,
-    unit: "tts_character",
-    cadence: "usage",
+    unit: 'tts_character',
+    cadence: 'usage',
     creatorShareBps: 7500,
-    description: "Cobro por carácter sintetizado por el motor TTS nativo (es-MX).",
+    description: 'Cobro por carácter sintetizado por el motor TTS nativo (es-MX).',
     regulatoryReviewRequired: false,
   }),
   Object.freeze({
-    id: "M-24-native-asr-seconds",
-    name: "ASR nativo por segundo",
+    id: 'M-24-native-asr-seconds',
+    name: 'ASR nativo por segundo',
     unitPriceMinor: 3,
-    unit: "asr_second",
-    cadence: "usage",
+    unit: 'asr_second',
+    cadence: 'usage',
     creatorShareBps: 7500,
-    description: "Cobro por segundo transcrito por el motor de reconocimiento de voz nativo.",
+    description: 'Cobro por segundo transcrito por el motor de reconocimiento de voz nativo.',
     regulatoryReviewRequired: false,
   }),
   Object.freeze({
-    id: "M-25-evidence-seals",
-    name: "Sellos de evidencia BookPI",
+    id: 'M-25-evidence-seals',
+    name: 'Sellos de evidencia BookPI',
     unitPriceMinor: 10,
-    unit: "evidence_seal",
-    cadence: "usage",
+    unit: 'evidence_seal',
+    cadence: 'usage',
     creatorShareBps: 7500,
-    description: "Cobro por sello de evidencia encadenado por hash en el ledger.",
+    description: 'Cobro por sello de evidencia encadenado por hash en el ledger.',
     regulatoryReviewRequired: false,
   }),
   Object.freeze({
-    id: "M-26-sovereign-data-vault",
-    name: "Bóveda de datos soberana",
+    id: 'M-26-sovereign-data-vault',
+    name: 'Bóveda de datos soberana',
     unitPriceMinor: 120,
-    unit: "vault_gb_month",
-    cadence: "recurring",
+    unit: 'vault_gb_month',
+    cadence: 'recurring',
     creatorShareBps: 7000,
-    description: "Cobro mensual por GB alojado en la bóveda de datos con consentimiento explícito.",
+    description: 'Cobro mensual por GB alojado en la bóveda de datos con consentimiento explícito.',
     regulatoryReviewRequired: true,
   }),
   Object.freeze({
-    id: "M-27-federation-capacity",
-    name: "Capacidad de federación",
+    id: 'M-27-federation-capacity',
+    name: 'Capacidad de federación',
     unitPriceMinor: 90,
-    unit: "federation_hour",
-    cadence: "recurring",
+    unit: 'federation_hour',
+    cadence: 'recurring',
     creatorShareBps: 7000,
-    description: "Cobro por hora de capacidad de cómputo federada compartida entre nodos CROWN.",
+    description: 'Cobro por hora de capacidad de cómputo federada compartida entre nodos CROWN.',
     regulatoryReviewRequired: true,
   }),
   Object.freeze({
-    id: "M-28-agent-tasks",
-    name: "Tareas de agente",
+    id: 'M-28-agent-tasks',
+    name: 'Tareas de agente',
     unitPriceMinor: 15,
-    unit: "agent_task",
-    cadence: "event",
+    unit: 'agent_task',
+    cadence: 'event',
     creatorShareBps: 7500,
-    description: "Cobro por tarea de agente completada y verificada con evidencia.",
+    description: 'Cobro por tarea de agente completada y verificada con evidencia.',
     regulatoryReviewRequired: false,
   }),
 ]);
 
 const STREAM_INDEX: ReadonlyMap<string, MonetizationStreamSpec> = new Map(
-  MONETIZATION_STREAMS.map((stream) => [stream.id, stream] as const),
+  MONETIZATION_STREAMS.map((stream) => [stream.id, stream] as const)
 );
 
 export function getMonetizationStream(id: string): MonetizationStreamSpec | undefined {
@@ -186,19 +186,27 @@ export function listMonetizationStreams(): readonly MonetizationStreamSpec[] {
  */
 export function quoteMonetization(input: MonetizationQuoteInput): MonetizationQuote {
   const stream = STREAM_INDEX.get(input.streamId.trim());
-  if (!stream) throw new Error("MONETIZATION_STREAM_NOT_FOUND");
+  if (!stream) throw new Error('MONETIZATION_STREAM_NOT_FOUND');
   if (!Number.isSafeInteger(input.quantity) || input.quantity < 1) {
-    throw new Error("MONETIZATION_QUANTITY_INVALID");
+    throw new Error('MONETIZATION_QUANTITY_INVALID');
   }
-  if (input.quantity > MAX_QUOTE_QUANTITY) throw new Error("MONETIZATION_QUANTITY_TOO_LARGE");
+  if (input.quantity > MAX_QUOTE_QUANTITY) throw new Error('MONETIZATION_QUANTITY_TOO_LARGE');
 
   const discountBps = input.loyaltyDiscountBps ?? 0;
-  if (!Number.isSafeInteger(discountBps) || discountBps < 0 || discountBps > MAX_LOYALTY_DISCOUNT_BPS) {
-    throw new Error("MONETIZATION_DISCOUNT_INVALID");
+  if (
+    !Number.isSafeInteger(discountBps) ||
+    discountBps < 0 ||
+    discountBps > MAX_LOYALTY_DISCOUNT_BPS
+  ) {
+    throw new Error('MONETIZATION_DISCOUNT_INVALID');
   }
   const demandBps = input.demandMultiplierBps ?? 10_000;
-  if (!Number.isSafeInteger(demandBps) || demandBps < 10_000 || demandBps > MAX_DEMAND_MULTIPLIER_BPS) {
-    throw new Error("MONETIZATION_DEMAND_MULTIPLIER_INVALID");
+  if (
+    !Number.isSafeInteger(demandBps) ||
+    demandBps < 10_000 ||
+    demandBps > MAX_DEMAND_MULTIPLIER_BPS
+  ) {
+    throw new Error('MONETIZATION_DEMAND_MULTIPLIER_INVALID');
   }
 
   const grossMinor = stream.unitPriceMinor * input.quantity;
@@ -222,7 +230,7 @@ export function quoteMonetization(input: MonetizationQuoteInput): MonetizationQu
     creatorMinor,
     platformMinor,
     creatorShareBps,
-    currency: "USD" as const,
+    currency: 'USD' as const,
     fundsMoved: false as const,
     authorizationPerformed: false as const,
   });
@@ -239,8 +247,8 @@ export interface MonetizationStreamSummary {
 export function monetizationSummary(): MonetizationStreamSummary {
   return Object.freeze({
     streams: MONETIZATION_STREAMS.length,
-    usageStreams: MONETIZATION_STREAMS.filter((s) => s.cadence === "usage").length,
-    recurringStreams: MONETIZATION_STREAMS.filter((s) => s.cadence === "recurring").length,
+    usageStreams: MONETIZATION_STREAMS.filter((s) => s.cadence === 'usage').length,
+    recurringStreams: MONETIZATION_STREAMS.filter((s) => s.cadence === 'recurring').length,
     regulatoryReviewRequired: MONETIZATION_STREAMS.filter((s) => s.regulatoryReviewRequired).length,
     units: Object.freeze([...new Set(MONETIZATION_STREAMS.map((s) => s.unit))]),
   });

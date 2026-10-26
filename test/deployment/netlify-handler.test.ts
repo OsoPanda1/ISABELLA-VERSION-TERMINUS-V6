@@ -11,10 +11,16 @@ describe('Netlify Express adapter', () => {
     const response = await request('/');
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/html');
-    expect(await response.text()).toContain('id="chat"');
+    const html = await response.text();
+    expect(html).toContain('id="chat"');
+    expect(html.indexOf('/ui/cognition-client.js')).toBeGreaterThan(-1);
+    expect(html.indexOf('/ui/cognition-client.js')).toBeLessThan(html.indexOf('/ui/app.js'));
     const script = await request('/ui/app.js?v=test');
     expect(script.status).toBe(200);
-    expect(await script.text()).toContain('/api/v1/cognition/route');
+    expect(await script.text()).toContain('window.IsabellaCognition');
+    const client = await request('/ui/cognition-client.js?v=test');
+    expect(client.status).toBe(200);
+    expect(await client.text()).toContain('/api/v1/cognition/route');
   }, 60_000);
 
   it('preserves cache validation and HEAD semantics', async () => {
@@ -42,7 +48,9 @@ describe('Netlify Express adapter', () => {
   });
 
   it('preserves compressed binary assets without corrupting bytes', async () => {
-    const response = await request('/ui/app.js', { headers: { 'accept-encoding': 'gzip' } });
+    const response = await request('/ui/cognition-client.js', {
+      headers: { 'accept-encoding': 'gzip' },
+    });
     expect(response.headers.get('content-encoding')).toBe('gzip');
     const script = gunzipSync(Buffer.from(await response.arrayBuffer())).toString('utf8');
     expect(script).toContain('/api/v1/cognition/route');

@@ -12,13 +12,13 @@ import {
   type PlatformNavGroup,
   type PlatformPage,
   type PlatformSection,
-} from "./catalog";
+} from './catalog';
 
 const FAVICON =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%239ff7ff'/%3E%3Cstop offset='.55' stop-color='%23c9b8ff'/%3E%3Cstop offset='1' stop-color='%23a9f5d0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='%23070c13'/%3E%3Ccircle cx='32' cy='32' r='22' fill='none' stroke='url(%23g)' stroke-width='2'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='Georgia,serif' font-size='22' fill='url(%23g)'%3EIS%3C/text%3E%3C/svg%3E";
 
 const GROUP_LABELS: Record<string, string> = Object.fromEntries(
-  PLATFORM_NAV_GROUPS.map((group) => [group.id, group.label]),
+  PLATFORM_NAV_GROUPS.map((group) => [group.id, group.label])
 );
 
 export interface PlatformRenderOptions {
@@ -27,12 +27,12 @@ export interface PlatformRenderOptions {
 }
 
 export function escapeHtml(value: unknown): string {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function assetHref(path: string, version: string): string {
@@ -40,15 +40,18 @@ function assetHref(path: string, version: string): string {
 }
 
 function pad(value: number): string {
-  return String(value).padStart(2, "0");
+  return String(value).padStart(2, '0');
 }
 
 function groupLabel(groupId: string): string {
-  return GROUP_LABELS[groupId] ?? "PLATAFORMA";
+  return GROUP_LABELS[groupId] ?? 'PLATAFORMA';
 }
 
 function pageIndex(page: PlatformPage): number {
-  return Math.max(0, PLATFORM_PAGES.findIndex((candidate) => candidate.id === page.id));
+  return Math.max(
+    0,
+    PLATFORM_PAGES.findIndex((candidate) => candidate.id === page.id)
+  );
 }
 
 function renderNavGroup(group: PlatformNavGroup, active: PlatformPage): string {
@@ -57,14 +60,14 @@ function renderNavGroup(group: PlatformNavGroup, active: PlatformPage): string {
     .filter((page): page is PlatformPage => page !== undefined)
     .map((page) => {
       const current = page.id === active.id;
-      return `<a class="nav-link${current ? " is-current" : ""}" href="${escapeHtml(page.path)}" data-page-link data-page-id="${escapeHtml(page.id)}" data-page-title="${escapeHtml(page.title)}" data-page-summary="${escapeHtml(page.summary)}" data-page-keywords="${escapeHtml([page.title, page.navLabel, page.eyebrow, ...page.meta].join(" "))}"${current ? ' aria-current="page"' : ""}><span class="nav-link-index">${pad(PLATFORM_PAGES.indexOf(page) + 1)}</span><span class="nav-link-label">${escapeHtml(page.navLabel)}</span><span class="nav-link-arrow" aria-hidden="true">→</span></a>`;
+      return `<a class="nav-link${current ? ' is-current' : ''}" href="${escapeHtml(page.path)}" data-page-link data-page-id="${escapeHtml(page.id)}" data-page-title="${escapeHtml(page.title)}" data-page-summary="${escapeHtml(page.summary)}" data-page-keywords="${escapeHtml([page.title, page.navLabel, page.eyebrow, ...page.meta].join(' '))}"${current ? ' aria-current="page"' : ''}><span class="nav-link-index">${pad(PLATFORM_PAGES.indexOf(page) + 1)}</span><span class="nav-link-label">${escapeHtml(page.navLabel)}</span><span class="nav-link-arrow" aria-hidden="true">→</span></a>`;
     })
-    .join("");
+    .join('');
   return `<div class="nav-group"><div class="nav-group-head"><span>${escapeHtml(group.index)}</span><strong>${escapeHtml(group.label)}</strong></div><p class="nav-group-description">${escapeHtml(group.description)}</p>${links}</div>`;
 }
 
 function renderSidebar(active: PlatformPage): string {
-  const groups = PLATFORM_NAV_GROUPS.map((group) => renderNavGroup(group, active)).join("");
+  const groups = PLATFORM_NAV_GROUPS.map((group) => renderNavGroup(group, active)).join('');
   return `<aside id="platform-nav" class="site-sidebar" aria-label="Navegación de la plataforma">
   <div class="sidebar-brand">
     <a class="brand-lockup" href="/platform" aria-label="Isabella Genesis, panorama de la plataforma">
@@ -98,10 +101,10 @@ function renderHero(active: PlatformPage): string {
   const total = PLATFORM_PAGES.length;
   const chips = active.meta
     .map((item) => `<span class="meta-chip">${escapeHtml(item)}</span>`)
-    .join("");
+    .join('');
   const cta = active.cta
     ? `<a class="button button-primary" href="${escapeHtml(active.cta.href)}">${escapeHtml(active.cta.label)} <span aria-hidden="true">↗</span></a>`
-    : "";
+    : '';
   return `<section class="page-hero" aria-labelledby="page-title">
   <div class="page-hero-copy">
     <p class="eyebrow">${escapeHtml(active.eyebrow)}</p>
@@ -121,18 +124,20 @@ function renderHero(active: PlatformPage): string {
 }
 
 function renderSection(section: PlatformSection, index: number): string {
-  const bullets = section.bullets && section.bullets.length > 0
-    ? `<ul class="bullet-grid">${section.bullets.map((bullet) => `<li><span aria-hidden="true">◇</span><p>${escapeHtml(bullet)}</p></li>`).join("")}</ul>`
-    : "";
+  const bullets =
+    section.bullets && section.bullets.length > 0
+      ? `<ul class="bullet-grid">${section.bullets.map((bullet) => `<li><span aria-hidden="true">◇</span><p>${escapeHtml(bullet)}</p></li>`).join('')}</ul>`
+      : '';
   const note = section.note
     ? `<aside class="section-note"><span>NOTA DE HONESTIDAD</span><p>${escapeHtml(section.note)}</p></aside>`
-    : "";
-  const links = section.links && section.links.length > 0
-    ? `<div class="section-links">${section.links.map((link) => `<a href="${escapeHtml(link.href)}"${link.external ? ' rel="noreferrer noopener" target="_blank"' : ""}>${escapeHtml(link.label)} <span aria-hidden="true">↗</span></a>`).join("")}</div>`
-    : "";
+    : '';
+  const links =
+    section.links && section.links.length > 0
+      ? `<div class="section-links">${section.links.map((link) => `<a href="${escapeHtml(link.href)}"${link.external ? ' rel="noreferrer noopener" target="_blank"' : ''}>${escapeHtml(link.label)} <span aria-hidden="true">↗</span></a>`).join('')}</div>`
+      : '';
   const code = section.code
     ? `<div class="blueprint-block"><header><span>EJEMPLO VERIFICABLE</span><b>${escapeHtml(section.id.toUpperCase())}</b></header><pre><code>${escapeHtml(section.code)}</code></pre></div>`
-    : "";
+    : '';
   return `<section class="page-section" data-reveal>
   <div class="section-rail"><span>${escapeHtml(section.eyebrow)}</span><b>${pad(index + 1)}</b></div>
   <div class="section-body">
@@ -147,46 +152,47 @@ function renderSection(section: PlatformSection, index: number): string {
 }
 
 function renderLiveZone(active: PlatformPage): string {
-  if (!active.dynamic) return "";
+  if (!active.dynamic) return '';
   const titles: Record<string, string> = {
-    overview: "Lectura operativa en vivo",
-    status: "Telemetría pública del proceso",
-    skills: "Catálogo vivo de skills",
-    agents: "Agente y herramientas registradas",
-    marketplace: "Inventario de solo lectura",
-    pricing: "Planes y cuotas del servidor",
-    integrations: "Superficies y proveedores declarados",
-    governance: "Evidencia y estado de gobernanza",
-    canon: "Registro canónico y trazabilidad",
-    library: "Biblioteca local",
-    profile: "Perfil y reconocimiento local",
-    settings: "Preferencias del espacio",
-    donations: "Canales de apoyo declarados",
+    overview: 'Lectura operativa en vivo',
+    status: 'Telemetría pública del proceso',
+    skills: 'Catálogo vivo de skills',
+    agents: 'Agente y herramientas registradas',
+    marketplace: 'Inventario de solo lectura',
+    pricing: 'Planes y cuotas del servidor',
+    integrations: 'Superficies y proveedores declarados',
+    governance: 'Evidencia y estado de gobernanza',
+    canon: 'Registro canónico y trazabilidad',
+    library: 'Biblioteca local',
+    profile: 'Perfil y reconocimiento local',
+    settings: 'Preferencias del espacio',
+    donations: 'Canales de apoyo declarados',
   };
   const notes: Record<string, string> = {
-    overview: "Datos públicos del proceso. No sustituyen una prueba de producción.",
-    status: "Métricas locales al proceso; se reinician con el nodo. No son un SLA.",
-    skills: "Listar una skill no la ejecuta ni concede autoridad.",
-    agents: "La aprobación de escrituras se decide en el servidor.",
-    marketplace: "Resolver y planificar no instala, no habilita y no ejecuta.",
-    pricing: "La compra depende de la configuración del operador; no se simula un pago.",
-    integrations: "La configuración declarada no demuestra alcanzabilidad externa.",
-    governance: "La evidencia prueba integridad de registro, no veracidad de un hecho.",
-    canon: "La madurez declarada describe este repositorio; no es certificación externa ni producción.",
-    library: "Los archivos permanecen en este navegador; no se suben al servidor.",
-    profile: "Las insignias son locales y no constituyen una certificación.",
-    settings: "Estas preferencias solo se aplican en este navegador.",
-    donations: "No se recolectan datos de pago en esta superficie.",
+    overview: 'Datos públicos del proceso. No sustituyen una prueba de producción.',
+    status: 'Métricas locales al proceso; se reinician con el nodo. No son un SLA.',
+    skills: 'Listar una skill no la ejecuta ni concede autoridad.',
+    agents: 'La aprobación de escrituras se decide en el servidor.',
+    marketplace: 'Resolver y planificar no instala, no habilita y no ejecuta.',
+    pricing: 'La compra depende de la configuración del operador; no se simula un pago.',
+    integrations: 'La configuración declarada no demuestra alcanzabilidad externa.',
+    governance: 'La evidencia prueba integridad de registro, no veracidad de un hecho.',
+    canon:
+      'La madurez declarada describe este repositorio; no es certificación externa ni producción.',
+    library: 'Los archivos permanecen en este navegador; no se suben al servidor.',
+    profile: 'Las insignias son locales y no constituyen una certificación.',
+    settings: 'Estas preferencias solo se aplican en este navegador.',
+    donations: 'No se recolectan datos de pago en esta superficie.',
   };
   return `<section class="live-zone" data-live="${escapeHtml(active.dynamic)}" data-reveal aria-labelledby="live-title">
   <div class="live-head">
-    <div><p class="eyebrow">LIVE / ${escapeHtml(active.dynamic.toUpperCase())}</p><h2 id="live-title">${escapeHtml(titles[active.dynamic] ?? "Datos en vivo")}</h2></div>
+    <div><p class="eyebrow">LIVE / ${escapeHtml(active.dynamic.toUpperCase())}</p><h2 id="live-title">${escapeHtml(titles[active.dynamic] ?? 'Datos en vivo')}</h2></div>
     <button class="button button-ghost button-sm" type="button" data-live-refresh><span aria-hidden="true">↻</span> Actualizar</button>
   </div>
   <div class="live-content" data-live-content aria-live="polite" aria-busy="true">
     <div class="live-skeleton"><span></span><span></span><span></span></div>
   </div>
-  <p class="live-note">${escapeHtml(notes[active.dynamic] ?? "Lectura informativa; no concede autoridad.")}</p>
+  <p class="live-note">${escapeHtml(notes[active.dynamic] ?? 'Lectura informativa; no concede autoridad.')}</p>
 </section>`;
 }
 
@@ -194,17 +200,25 @@ function renderRelated(active: PlatformPage): string {
   const cards = active.related
     .map((id) => PLATFORM_PAGES.find((page) => page.id === id))
     .filter((page): page is PlatformPage => page !== undefined && page.id !== active.id)
-    .map((page) => `<a class="related-card" href="${escapeHtml(page.path)}"><span>${escapeHtml(page.eyebrow)}</span><strong>${escapeHtml(page.navLabel)}</strong><p>${escapeHtml(page.summary)}</p><b aria-hidden="true">→</b></a>`)
-    .join("");
-  if (!cards) return "";
+    .map(
+      (page) =>
+        `<a class="related-card" href="${escapeHtml(page.path)}"><span>${escapeHtml(page.eyebrow)}</span><strong>${escapeHtml(page.navLabel)}</strong><p>${escapeHtml(page.summary)}</p><b aria-hidden="true">→</b></a>`
+    )
+    .join('');
+  if (!cards) return '';
   return `<section class="related-zone" aria-labelledby="related-title"><div class="related-head"><p class="eyebrow">CONTINUAR</p><h2 id="related-title">Secciones relacionadas</h2></div><div class="related-grid">${cards}</div></section>`;
 }
 
 function renderFooter(): string {
-  const groups = PLATFORM_NAV_GROUPS.map((group) => `<div><span>${escapeHtml(group.label)}</span>${group.pages.map((id) => {
-    const page = PLATFORM_PAGES.find((candidate) => candidate.id === id);
-    return page ? `<a href="${escapeHtml(page.path)}">${escapeHtml(page.navLabel)}</a>` : "";
-  }).join("")}</div>`).join("");
+  const groups = PLATFORM_NAV_GROUPS.map(
+    (group) =>
+      `<div><span>${escapeHtml(group.label)}</span>${group.pages
+        .map((id) => {
+          const page = PLATFORM_PAGES.find((candidate) => candidate.id === id);
+          return page ? `<a href="${escapeHtml(page.path)}">${escapeHtml(page.navLabel)}</a>` : '';
+        })
+        .join('')}</div>`
+  ).join('');
   return `<footer class="site-footer">
   <div class="footer-brand"><span class="brand-mark" aria-hidden="true"><i></i><b>IS</b></span><div><strong>ISABELLA VILLASEÑOR AI</strong><p>Genesis TINA V6 · Nodo Cero · Real del Monte, Hidalgo, México.</p></div></div>
   <div class="footer-groups">${groups}</div>
@@ -261,7 +275,7 @@ ${renderCommandPalette()}
 }
 
 export function renderPlatformPage(page: PlatformPage, options: PlatformRenderOptions): string {
-  const sections = page.sections.map((section, index) => renderSection(section, index)).join("");
+  const sections = page.sections.map((section, index) => renderSection(section, index)).join('');
   const main = `<main id="main" class="site-main" data-page-root>
 ${renderHero(page)}
 <div class="content-column">
@@ -288,19 +302,20 @@ ${renderFooter()}`;
 
 export function renderNotFoundPage(options: PlatformRenderOptions): string {
   const page: PlatformPage = {
-    id: "404",
-    kind: "page",
-    path: "/platform",
-    navLabel: "No encontrado",
-    group: "workspace",
-    eyebrow: "404 / RUTA NO ENCONTRADA",
-    title: "Esta página no existe",
-    accent: "en este nodo.",
-    summary: "La ruta solicitada no pertenece al catálogo de la plataforma. Puedes volver al panorama, abrir el chat dedicado o buscar otra sección con la paleta de comandos.",
-    meta: ["404", "CATÁLOGO CERRADO", "SIN REDIRECCIÓN SILENCIOSA"],
+    id: '404',
+    kind: 'page',
+    path: '/platform',
+    navLabel: 'No encontrado',
+    group: 'workspace',
+    eyebrow: '404 / RUTA NO ENCONTRADA',
+    title: 'Esta página no existe',
+    accent: 'en este nodo.',
+    summary:
+      'La ruta solicitada no pertenece al catálogo de la plataforma. Puedes volver al panorama, abrir el chat dedicado o buscar otra sección con la paleta de comandos.',
+    meta: ['404', 'CATÁLOGO CERRADO', 'SIN REDIRECCIÓN SILENCIOSA'],
     sections: [],
-    related: ["overview", "chat", "docs"],
-    cta: { label: "Volver al panorama", href: "/platform" },
+    related: ['overview', 'chat', 'docs'],
+    cta: { label: 'Volver al panorama', href: '/platform' },
   };
   const main = `<main id="main" class="site-main" data-page-root>
 ${renderHero(page)}
@@ -315,10 +330,10 @@ ${renderSidebar(page)}
 ${main}
 ${renderFooter()}`;
   return renderDocument({
-    title: "Página no encontrada",
+    title: 'Página no encontrada',
     description: page.summary,
-    bodyClass: "platform-page group-workspace",
-    dataPage: "404",
+    bodyClass: 'platform-page group-workspace',
+    dataPage: '404',
     cssHref: options.cssHref,
     jsHref: options.jsHref,
     body,
@@ -328,15 +343,26 @@ ${renderFooter()}`;
 export function renderChatDocument(options: {
   readonly cssHref: string;
   readonly chatJsHref: string;
+  readonly cognitionJsHref: string;
   readonly html: string;
 }): string {
   return options.html
-    .replace(/(\/styles\/platform\.css)\?v=[^"']*/g, `$1?v=${encodeURIComponent(options.cssHref.split("?v=")[1] ?? "")}`)
-    .replace(/(\/ui\/platform-chat\.js)\?v=[^"']*/g, `$1?v=${encodeURIComponent(options.chatJsHref.split("?v=")[1] ?? "")}`);
+    .replace(
+      /(\/styles\/platform\.css)\?v=[^"']*/g,
+      `$1?v=${encodeURIComponent(options.cssHref.split('?v=')[1] ?? '')}`
+    )
+    .replace(
+      /(\/ui\/cognition-client\.js)\?v=[^"']*/g,
+      `$1?v=${encodeURIComponent(options.cognitionJsHref.split('?v=')[1] ?? '')}`
+    )
+    .replace(
+      /(\/ui\/platform-chat\.js)\?v=[^"']*/g,
+      `$1?v=${encodeURIComponent(options.chatJsHref.split('?v=')[1] ?? '')}`
+    );
 }
 
 export function platformAssetPaths(): { css: string; js: string; chatJs: string } {
-  return { css: "/styles/platform.css", js: "/ui/platform.js", chatJs: "/ui/platform-chat.js" };
+  return { css: '/styles/platform.css', js: '/ui/platform.js', chatJs: '/ui/platform-chat.js' };
 }
 
 export function platformAssetHrefs(versions: { css: string; js: string; chatJs: string }): {
@@ -345,8 +371,8 @@ export function platformAssetHrefs(versions: { css: string; js: string; chatJs: 
   chatJsHref: string;
 } {
   return {
-    cssHref: assetHref("/styles/platform.css", versions.css),
-    jsHref: assetHref("/ui/platform.js", versions.js),
-    chatJsHref: assetHref("/ui/platform-chat.js", versions.chatJs),
+    cssHref: assetHref('/styles/platform.css', versions.css),
+    jsHref: assetHref('/ui/platform.js', versions.js),
+    chatJsHref: assetHref('/ui/platform-chat.js', versions.chatJs),
   };
 }

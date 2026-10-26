@@ -11,10 +11,10 @@
  *     BookPI y se liquidan una vez al mes con mínimo de $50 USD.
  */
 
-export * from "./types";
-export * from "./revenue";
-export * from "./eligibility";
-export * from "./guides";
-export * from "./withdrawal";
-export * from "./cattleya";
-export * from "./tamv-monetization";
+export * from './types';
+export * from './revenue';
+export * from './eligibility';
+export * from './guides';
+export * from './withdrawal';
+export * from './cattleya';
+export * from './tamv-monetization';

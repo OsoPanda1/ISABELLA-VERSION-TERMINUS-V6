@@ -7,9 +7,9 @@
  *
  * SPECIFIED ≠ IMPLEMENTED ≠ TESTED ≠ PRODUCTION.
  */
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes } from 'node:crypto';
 
-export const TACTICAL_RECORD_KINDS = ["goal", "plan", "decision", "priority"] as const;
+export const TACTICAL_RECORD_KINDS = ['goal', 'plan', 'decision', 'priority'] as const;
 export type TacticalRecordKind = (typeof TACTICAL_RECORD_KINDS)[number];
 
 export interface TacticalRecord {
@@ -44,7 +44,7 @@ export interface TacticalMemorySnapshot {
   readonly evictedHead: string | null;
   readonly integrity: boolean;
   readonly capacity: number;
-  readonly authority: "NONE";
+  readonly authority: 'NONE';
   readonly canonicalMemoryMutation: false;
 }
 
@@ -65,28 +65,30 @@ const MAX_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_TITLE_LENGTH = 160;
 const MAX_ID_LENGTH = 128;
 
-type RecordCore = Omit<TacticalRecord, "hash">;
+type RecordCore = Omit<TacticalRecord, 'hash'>;
 
 function recordHash(core: RecordCore): string {
-  return createHash("sha256")
-    .update(JSON.stringify({
-      id: core.id,
-      kind: core.kind,
-      title: core.title,
-      payload: core.payload,
-      priority: core.priority,
-      createdAt: core.createdAt,
-      expiresAt: core.expiresAt,
-      previousHash: core.previousHash,
-    }))
-    .digest("hex");
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        id: core.id,
+        kind: core.kind,
+        title: core.title,
+        payload: core.payload,
+        priority: core.priority,
+        createdAt: core.createdAt,
+        expiresAt: core.expiresAt,
+        previousHash: core.previousHash,
+      })
+    )
+    .digest('hex');
 }
 
 function clonePayload<T>(payload: T): T {
   try {
     return structuredClone(payload);
   } catch {
-    throw new Error("ETM_PAYLOAD_NOT_CLONEABLE");
+    throw new Error('ETM_PAYLOAD_NOT_CLONEABLE');
   }
 }
 
@@ -96,7 +98,7 @@ function cloneRecord(record: TacticalRecord): TacticalRecord {
 
 function assertPriority(value: number): void {
   if (!Number.isFinite(value) || value < 0 || value > 1) {
-    throw new Error("ETM_INVALID_PRIORITY");
+    throw new Error('ETM_INVALID_PRIORITY');
   }
 }
 
@@ -112,16 +114,19 @@ export class ExecutiveTacticalMemory {
   constructor(options: ExecutiveTacticalMemoryOptions = {}) {
     const capacity = options.capacity ?? DEFAULT_CAPACITY;
     if (!Number.isInteger(capacity) || capacity < 1 || capacity > MAX_CAPACITY) {
-      throw new Error("ETM_INVALID_CAPACITY");
+      throw new Error('ETM_INVALID_CAPACITY');
     }
     const defaultTtlMs = options.defaultTtlMs === undefined ? DEFAULT_TTL_MS : options.defaultTtlMs;
-    if (defaultTtlMs !== null && (!Number.isFinite(defaultTtlMs) || defaultTtlMs <= 0 || defaultTtlMs > MAX_TTL_MS)) {
-      throw new Error("ETM_INVALID_TTL");
+    if (
+      defaultTtlMs !== null &&
+      (!Number.isFinite(defaultTtlMs) || defaultTtlMs <= 0 || defaultTtlMs > MAX_TTL_MS)
+    ) {
+      throw new Error('ETM_INVALID_TTL');
     }
     this.capacity = capacity;
     this.defaultTtlMs = defaultTtlMs;
     this.now = options.now ?? Date.now;
-    this.idFactory = options.idFactory ?? (() => `etm_${randomBytes(12).toString("hex")}`);
+    this.idFactory = options.idFactory ?? (() => `etm_${randomBytes(12).toString('hex')}`);
   }
 
   get size(): number {
@@ -132,12 +137,12 @@ export class ExecutiveTacticalMemory {
     kind: TacticalRecordKind,
     title: string,
     payload: unknown,
-    input: TacticalRecordInput = {},
+    input: TacticalRecordInput = {}
   ): TacticalRecord {
-    if (!TACTICAL_RECORD_KINDS.includes(kind)) throw new Error("ETM_INVALID_KIND");
-    const normalizedTitle = typeof title === "string" ? title.trim() : "";
+    if (!TACTICAL_RECORD_KINDS.includes(kind)) throw new Error('ETM_INVALID_KIND');
+    const normalizedTitle = typeof title === 'string' ? title.trim() : '';
     if (!normalizedTitle || normalizedTitle.length > MAX_TITLE_LENGTH) {
-      throw new Error("ETM_INVALID_TITLE");
+      throw new Error('ETM_INVALID_TITLE');
     }
 
     const priority = input.priority ?? 0.5;
@@ -145,14 +150,14 @@ export class ExecutiveTacticalMemory {
 
     const ttlMs = input.ttlMs === undefined ? this.defaultTtlMs : input.ttlMs;
     if (ttlMs !== null && (!Number.isFinite(ttlMs) || ttlMs <= 0 || ttlMs > MAX_TTL_MS)) {
-      throw new Error("ETM_INVALID_TTL");
+      throw new Error('ETM_INVALID_TTL');
     }
 
     const id = this.idFactory();
-    if (typeof id !== "string" || id.length === 0 || id.length > MAX_ID_LENGTH) {
-      throw new Error("ETM_INVALID_ID");
+    if (typeof id !== 'string' || id.length === 0 || id.length > MAX_ID_LENGTH) {
+      throw new Error('ETM_INVALID_ID');
     }
-    if (this.records.some((record) => record.id === id)) throw new Error("ETM_DUPLICATE_ID");
+    if (this.records.some((record) => record.id === id)) throw new Error('ETM_DUPLICATE_ID');
 
     const createdAt = this.now();
     const core: RecordCore = {
@@ -170,7 +175,7 @@ export class ExecutiveTacticalMemory {
     try {
       hash = recordHash(core);
     } catch {
-      throw new Error("ETM_PAYLOAD_NOT_SERIALIZABLE");
+      throw new Error('ETM_PAYLOAD_NOT_SERIALIZABLE');
     }
     const record: TacticalRecord = { ...core, hash };
 
@@ -194,7 +199,9 @@ export class ExecutiveTacticalMemory {
   list(kind?: TacticalRecordKind): readonly TacticalRecord[] {
     const at = this.now();
     return this.records
-      .filter((record) => !this.isExpired(record, at) && (kind === undefined || record.kind === kind))
+      .filter(
+        (record) => !this.isExpired(record, at) && (kind === undefined || record.kind === kind)
+      )
       .sort((a, b) => b.priority - a.priority || a.createdAt - b.createdAt)
       .map(cloneRecord);
   }
@@ -222,7 +229,12 @@ export class ExecutiveTacticalMemory {
   stats(): TacticalMemoryStats {
     const at = this.now();
     const active = this.records.filter((record) => !this.isExpired(record, at));
-    const byKind: Record<TacticalRecordKind, number> = { goal: 0, plan: 0, decision: 0, priority: 0 };
+    const byKind: Record<TacticalRecordKind, number> = {
+      goal: 0,
+      plan: 0,
+      decision: 0,
+      priority: 0,
+    };
     for (const record of active) byKind[record.kind] += 1;
     return {
       activeRecords: active.length,
@@ -245,7 +257,7 @@ export class ExecutiveTacticalMemory {
       evictedHead: this.evictedHead,
       integrity: this.verifyIntegrity(),
       capacity: this.capacity,
-      authority: "NONE",
+      authority: 'NONE',
       canonicalMemoryMutation: false,
     };
   }

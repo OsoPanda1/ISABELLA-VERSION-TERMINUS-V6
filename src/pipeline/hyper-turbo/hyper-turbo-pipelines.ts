@@ -2,7 +2,7 @@
  * HyperTurbo Pipelines Ω - Hot/Cold Parallel Execution Channels
  * state: engine-generated
  * Part of ISABELLA-Q Ω Cognitive Architecture
- * 
+ *
  * Implements dual-channel pipeline architecture:
  * - Hot Path: Ultra-low latency (<10ms), in-memory, speculative execution
  * - Cold Path: High throughput, durable, batch processing
@@ -11,22 +11,15 @@
  * - Parallel execution with dependency resolution
  */
 
-import { EventEmitter } from "node:events";
-import { randomBytes, createHash } from "node:crypto";
+import { EventEmitter } from 'node:events';
+import { randomBytes, createHash } from 'node:crypto';
 
-export type PipelineStage = 
-  | "ingest" 
-  | "validate" 
-  | "enrich" 
-  | "route" 
-  | "execute" 
-  | "aggregate" 
-  | "persist" 
-  | "notify";
+export type PipelineStage =
+  'ingest' | 'validate' | 'enrich' | 'route' | 'execute' | 'aggregate' | 'persist' | 'notify';
 
-export type PipelinePath = "hot" | "cold" | "auto";
+export type PipelinePath = 'hot' | 'cold' | 'auto';
 
-export type ExecutionMode = "speculative" | "verified" | "batch" | "streaming";
+export type ExecutionMode = 'speculative' | 'verified' | 'batch' | 'streaming';
 
 export interface PipelineConfig {
   readonly id: string;
@@ -63,13 +56,13 @@ export interface ColdPathConfig {
   readonly batchWindowMs: number;
   readonly maxParallelBatches: number;
   readonly checkpointInterval: number;
-  readonly storageBackend: "redis" | "postgres" | "s3" | "local";
+  readonly storageBackend: 'redis' | 'postgres' | 's3' | 'local';
   readonly compression: boolean;
 }
 
 export interface RoutingRule {
   readonly condition: string; // Expression evaluated on request
-  readonly path: "hot" | "cold";
+  readonly path: 'hot' | 'cold';
   readonly priority: number;
 }
 
@@ -141,7 +134,7 @@ export class StageExecutor extends EventEmitter {
   registerHandler(name: string, handler: StageHandler): void {
     this.handlers.set(name, handler);
     this.metrics.set(name, { calls: 0, errors: 0, totalLatency: 0, maxLatency: 0 });
-    this.emit("handler:registered", name);
+    this.emit('handler:registered', name);
   }
 
   async execute(
@@ -162,10 +155,10 @@ export class StageExecutor extends EventEmitter {
     while (attempt <= config.retryPolicy.maxRetries) {
       try {
         const result = await this.executeWithTimeout(handler, input, context, config.timeoutMs);
-        
+
         const latency = Date.now() - startTime;
         this.recordMetrics(handlerName, latency, false);
-        
+
         return {
           success: true,
           data: result,
@@ -175,24 +168,25 @@ export class StageExecutor extends EventEmitter {
       } catch (error) {
         lastError = error as Error;
         attempt++;
-        
+
         if (attempt <= config.retryPolicy.maxRetries) {
           const delay = Math.min(
-            config.retryPolicy.baseDelayMs * Math.pow(config.retryPolicy.backoffMultiplier, attempt - 1),
+            config.retryPolicy.baseDelayMs *
+              Math.pow(config.retryPolicy.backoffMultiplier, attempt - 1),
             config.retryPolicy.maxDelayMs
           );
           await this.sleep(delay);
-          this.emit("retry", { handler: handlerName, attempt, error: String(error) });
+          this.emit('retry', { handler: handlerName, attempt, error: String(error) });
         }
       }
     }
 
     const latency = Date.now() - startTime;
     this.recordMetrics(handlerName, latency, true);
-    
+
     return {
       success: false,
-      error: lastError?.message || "UNKNOWN_ERROR",
+      error: lastError?.message || 'UNKNOWN_ERROR',
       latencyMs: latency,
       checkpoint: null,
     };
@@ -206,8 +200,8 @@ export class StageExecutor extends EventEmitter {
   ): Promise<unknown> {
     return Promise.race([
       handler(input, context),
-      new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error("STAGE_TIMEOUT")), timeoutMs)
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('STAGE_TIMEOUT')), timeoutMs)
       ),
     ]);
   }
@@ -217,7 +211,7 @@ export class StageExecutor extends EventEmitter {
     return {
       stage,
       timestamp: Date.now(),
-      dataHash: createHash("sha256").update(serialized).digest("hex").slice(0, 16),
+      dataHash: createHash('sha256').update(serialized).digest('hex').slice(0, 16),
       size: Buffer.byteLength(serialized),
     };
   }
@@ -243,7 +237,7 @@ export class StageExecutor extends EventEmitter {
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
 
@@ -296,15 +290,15 @@ export class HotPathExecutor extends EventEmitter {
     // Check speculative cache
     const cacheKey = this.getCacheKey(pipelineId, input);
     const speculative = this.speculativeCache.get(cacheKey);
-    
+
     if (speculative && Date.now() - speculative.timestamp < this.config.speculativeWindowMs) {
-      this.emit("speculative:hit", { requestId, pipelineId });
+      this.emit('speculative:hit', { requestId, pipelineId });
       return {
         success: true,
         data: speculative.result as T,
         latencyMs: Date.now() - startTime,
-        path: "hot",
-        stagesCompleted: stages.map(s => s.name),
+        path: 'hot',
+        stagesCompleted: stages.map((s) => s.name),
         checkpoints: [],
         metadata: { speculative: true, verified: false },
       };
@@ -314,41 +308,41 @@ export class HotPathExecutor extends EventEmitter {
     for (const stage of stages) {
       if (Date.now() - startTime > this.config.maxLatencyMs) {
         // Exceeded hot path budget - escalate to cold path
-        this.emit("hot_path:budget_exceeded", { requestId, pipelineId, stage: stage.name });
-        throw new Error("HOT_PATH_BUDGET_EXCEEDED");
+        this.emit('hot_path:budget_exceeded', { requestId, pipelineId, stage: stage.name });
+        throw new Error('HOT_PATH_BUDGET_EXCEEDED');
       }
 
       const result = await this.executor.execute(stage.handler, currentData, context, stage);
-      
+
       if (!result.success) {
         throw new Error(result.error || `STAGE_FAILED: ${stage.name}`);
       }
 
       currentData = result.data;
       completedStages.push(stage.name);
-      
+
       if (result.checkpoint) {
         checkpoints.push(result.checkpoint);
       }
     }
 
     const latency = Date.now() - startTime;
-    
+
     // Verify if speculative execution was used
     const verified = await this.verifyResult(pipelineId, currentData);
-    
+
     if (!verified) {
-      this.emit("speculative:miss", { requestId, pipelineId });
+      this.emit('speculative:miss', { requestId, pipelineId });
       this.speculativeCache.set(cacheKey, { result: currentData, timestamp: Date.now() });
     } else {
-      this.emit("speculative:verified", { requestId, pipelineId });
+      this.emit('speculative:verified', { requestId, pipelineId });
     }
 
     return {
       success: true,
       data: currentData as T,
       latencyMs: latency,
-      path: "hot",
+      path: 'hot',
       stagesCompleted: completedStages,
       checkpoints,
       metadata: { speculative: !verified, verified },
@@ -361,9 +355,9 @@ export class HotPathExecutor extends EventEmitter {
   }
 
   private getCacheKey(pipelineId: string, input: unknown): string {
-    return createHash("sha256")
+    return createHash('sha256')
       .update(pipelineId + JSON.stringify(input))
-      .digest("hex")
+      .digest('hex')
       .slice(0, 32);
   }
 
@@ -417,7 +411,7 @@ export class ColdPathExecutor extends EventEmitter {
 
       // The queue is heterogeneous: each request keeps its own typed resolve(); erase T only at this boundary.
       this.batchQueue.push(request as unknown as BatchedRequest);
-      this.emit("request:queued", { pipelineId, queueLength: this.batchQueue.length });
+      this.emit('request:queued', { pipelineId, queueLength: this.batchQueue.length });
 
       if (!this.processing) {
         this.processBatches();
@@ -431,7 +425,7 @@ export class ColdPathExecutor extends EventEmitter {
     while (this.batchQueue.length > 0) {
       // Form batch
       const batch = this.batchQueue.splice(0, this.config.batchSize);
-      this.emit("batch:started", { size: batch.length });
+      this.emit('batch:started', { size: batch.length });
 
       // Process batch in parallel (up to maxParallelBatches)
       const results = await this.processBatch(batch);
@@ -440,15 +434,15 @@ export class ColdPathExecutor extends EventEmitter {
       for (let i = 0; i < batch.length; i++) {
         const request = batch[i];
         const result = results[i];
-        
+
         if (result.success) {
           request.resolve(result);
         } else {
-          request.reject(new Error(result.error || "BATCH_PROCESSING_FAILED"));
+          request.reject(new Error(result.error || 'BATCH_PROCESSING_FAILED'));
         }
       }
 
-      this.emit("batch:completed", { size: batch.length });
+      this.emit('batch:completed', { size: batch.length });
 
       // Wait for batch window or next batch
       if (this.batchQueue.length > 0) {
@@ -490,13 +484,18 @@ export class ColdPathExecutor extends EventEmitter {
     let finalStageResults: StageResult[] = [];
 
     // Execute stages
-    let batchData = requests.map(r => r.input);
+    let batchData = requests.map((r) => r.input);
 
     for (const stage of stages) {
       // Process entire batch through stage
       const stageResults = await Promise.all(
         batchData.map((data, i) =>
-          this.executor.execute(stage.handler, data, requests[i]?.context ?? requests[0].context, stage)
+          this.executor.execute(
+            stage.handler,
+            data,
+            requests[i]?.context ?? requests[0].context,
+            stage
+          )
         )
       );
       finalStageResults = stageResults;
@@ -505,27 +504,31 @@ export class ColdPathExecutor extends EventEmitter {
       for (let i = 0; i < stageResults.length; i++) {
         if (!stageResults[i].success) {
           // Return error for this request
-          return requests.map((_, idx) => idx === i ? {
-            success: false,
-            error: stageResults[idx].error || `BATCH_STAGE_FAILED: ${stage.name}`,
-            latencyMs: Date.now() - startTime,
-            path: "cold" as PipelinePath,
-            stagesCompleted: completedStages,
-            checkpoints,
-            metadata: {},
-          } : {
-            success: false, 
-            error: `BATCH_STAGE_FAILED: ${stage.name}`, 
-            latencyMs: Date.now() - startTime,
-            path: "cold" as PipelinePath,
-            stagesCompleted: completedStages,
-            checkpoints,
-            metadata: {},
-          });
+          return requests.map((_, idx) =>
+            idx === i
+              ? {
+                  success: false,
+                  error: stageResults[idx].error || `BATCH_STAGE_FAILED: ${stage.name}`,
+                  latencyMs: Date.now() - startTime,
+                  path: 'cold' as PipelinePath,
+                  stagesCompleted: completedStages,
+                  checkpoints,
+                  metadata: {},
+                }
+              : {
+                  success: false,
+                  error: `BATCH_STAGE_FAILED: ${stage.name}`,
+                  latencyMs: Date.now() - startTime,
+                  path: 'cold' as PipelinePath,
+                  stagesCompleted: completedStages,
+                  checkpoints,
+                  metadata: {},
+                }
+          );
         }
       }
 
-      batchData = stageResults.map(r => r.data);
+      batchData = stageResults.map((r) => r.data);
       completedStages.push(stage.name);
 
       // Collect checkpoints
@@ -547,7 +550,7 @@ export class ColdPathExecutor extends EventEmitter {
       success: true,
       data: result.data as T,
       latencyMs: latency,
-      path: "cold" as PipelinePath,
+      path: 'cold' as PipelinePath,
       stagesCompleted: completedStages,
       checkpoints,
       metadata: { batchSize: requests.length },
@@ -555,13 +558,13 @@ export class ColdPathExecutor extends EventEmitter {
   }
 
   private shouldCheckpoint(stage: PipelineStage): boolean {
-    return ["persist", "aggregate"].includes(stage);
+    return ['persist', 'aggregate'].includes(stage);
   }
 
   private async persistCheckpoints(pipelineId: string, checkpoints: Checkpoint[]): Promise<void> {
     // In production, would persist to configured storage backend
     this.checkpoints.set(pipelineId, checkpoints);
-    this.emit("checkpoints:persisted", { pipelineId, count: checkpoints.length });
+    this.emit('checkpoints:persisted', { pipelineId, count: checkpoints.length });
   }
 
   getQueueLength(): number {
@@ -569,7 +572,7 @@ export class ColdPathExecutor extends EventEmitter {
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
 
@@ -609,22 +612,26 @@ export class SmartRouter extends EventEmitter {
     this.pipelines.set(config.id, config);
     // Sort rules by priority
     this.rules = config.routingRules.sort((a, b) => b.priority - a.priority);
-    this.emit("pipeline:registered", config.id);
+    this.emit('pipeline:registered', config.id);
   }
 
-  async execute<T>(pipelineId: string, input: unknown, baseContext: Partial<PipelineContext> = {}): Promise<PipelineResult<T>> {
+  async execute<T>(
+    pipelineId: string,
+    input: unknown,
+    baseContext: Partial<PipelineContext> = {}
+  ): Promise<PipelineResult<T>> {
     const config = this.pipelines.get(pipelineId);
     if (!config) throw new Error(`PIPELINE_NOT_FOUND: ${pipelineId}`);
 
     const context: PipelineContext = {
-      requestId: `req_${randomBytes(12).toString("hex")}`,
-      path: "auto",
-      mode: "streaming",
+      requestId: `req_${randomBytes(12).toString('hex')}`,
+      path: 'auto',
+      mode: 'streaming',
       startTime: Date.now(),
       stageData: new Map(),
       metadata: baseContext.metadata || {},
-      traceId: baseContext.traceId || `trace_${randomBytes(12).toString("hex")}`,
-      spanId: baseContext.spanId || `span_${randomBytes(8).toString("hex")}`,
+      traceId: baseContext.traceId || `trace_${randomBytes(12).toString('hex')}`,
+      spanId: baseContext.spanId || `span_${randomBytes(8).toString('hex')}`,
     };
 
     // Determine path
@@ -633,16 +640,16 @@ export class SmartRouter extends EventEmitter {
 
     // Execute on appropriate path
     try {
-      if (path === "hot") {
+      if (path === 'hot') {
         return await this.hotExecutor.execute(pipelineId, config.stages, input, context);
       } else {
         return await this.coldExecutor.execute(pipelineId, config.stages, input, context);
       }
     } catch (error) {
       // Hot path fallback to cold path
-      if (path === "hot" && (error as Error).message === "HOT_PATH_BUDGET_EXCEEDED") {
-        this.emit("fallback:hot_to_cold", { pipelineId, requestId: context.requestId });
-        context.path = "cold";
+      if (path === 'hot' && (error as Error).message === 'HOT_PATH_BUDGET_EXCEEDED') {
+        this.emit('fallback:hot_to_cold', { pipelineId, requestId: context.requestId });
+        context.path = 'cold';
         return await this.coldExecutor.execute(pipelineId, config.stages, input, context);
       }
       throw error;
@@ -650,7 +657,7 @@ export class SmartRouter extends EventEmitter {
   }
 
   private determinePath(config: PipelineConfig, input: unknown): PipelinePath {
-    if (config.path !== "auto") return config.path;
+    if (config.path !== 'auto') return config.path;
 
     for (const rule of this.rules) {
       if (this.evaluateCondition(rule.condition, input)) {
@@ -659,13 +666,13 @@ export class SmartRouter extends EventEmitter {
     }
 
     // Default: hot for low-latency, cold for batch
-    return "hot";
+    return 'hot';
   }
 
   private evaluateCondition(condition: string, input: unknown): boolean {
     try {
       // Simple condition evaluation - in production use expression evaluator
-      const expr = condition.replace(/\binput\./g, "");
+      const expr = condition.replace(/\binput\./g, '');
       // eslint-disable-next-line no-eval
       return eval(expr);
     } catch {
@@ -707,63 +714,63 @@ export class PipelineOrchestrator extends EventEmitter {
 
   constructor() {
     super();
-    
+
     this.stageExecutor = new StageExecutor();
     this.hotExecutor = new HotPathExecutor(this.stageExecutor, {
       maxLatencyMs: 10,
       maxConcurrent: 1000,
       memoryPoolSize: 512,
       speculativeWindowMs: 100,
-      verificationCallback: "verifyResult",
+      verificationCallback: 'verifyResult',
     });
-    
+
     this.coldExecutor = new ColdPathExecutor(this.stageExecutor, {
       batchSize: 100,
       batchWindowMs: 50,
       maxParallelBatches: 10,
       checkpointInterval: 1000,
-      storageBackend: "redis",
+      storageBackend: 'redis',
       compression: true,
     });
 
     this.router = new SmartRouter(this.hotExecutor, this.coldExecutor, this.stageExecutor);
-    
+
     this.setupDefaultHandlers();
   }
 
   private setupDefaultHandlers(): void {
     // Register common stage handlers
-    this.stageExecutor.registerHandler("validateInput", async (input) => {
+    this.stageExecutor.registerHandler('validateInput', async (input) => {
       // Validation logic
       return input;
     });
 
-    this.stageExecutor.registerHandler("enrichContext", async (input, context) => {
+    this.stageExecutor.registerHandler('enrichContext', async (input, context) => {
       // Enrichment logic
-      return { ...input as object, enriched: true, context: context.metadata };
+      return { ...(input as object), enriched: true, context: context.metadata };
     });
 
-    this.stageExecutor.registerHandler("routeRequest", async (input) => {
+    this.stageExecutor.registerHandler('routeRequest', async (input) => {
       // Routing logic
       return input;
     });
 
-    this.stageExecutor.registerHandler("executeCore", async (input) => {
+    this.stageExecutor.registerHandler('executeCore', async (input) => {
       // Core execution logic
-      return { result: "executed", input };
+      return { result: 'executed', input };
     });
 
-    this.stageExecutor.registerHandler("aggregateResults", async (input) => {
+    this.stageExecutor.registerHandler('aggregateResults', async (input) => {
       // Aggregation logic
       return input;
     });
 
-    this.stageExecutor.registerHandler("persistResult", async (input) => {
+    this.stageExecutor.registerHandler('persistResult', async (input) => {
       // Persistence logic
-      return { ...input as object, persisted: true };
+      return { ...(input as object), persisted: true };
     });
 
-    this.stageExecutor.registerHandler("notifyComplete", async (input) => {
+    this.stageExecutor.registerHandler('notifyComplete', async (input) => {
       // Notification logic
       return input;
     });
@@ -772,10 +779,14 @@ export class PipelineOrchestrator extends EventEmitter {
   registerPipeline(config: PipelineConfig): void {
     this.pipelines.set(config.id, config);
     this.router.registerPipeline(config);
-    this.emit("pipeline:registered", config.id);
+    this.emit('pipeline:registered', config.id);
   }
 
-  async execute<T>(pipelineId: string, input: unknown, context?: Partial<PipelineContext>): Promise<PipelineResult<T>> {
+  async execute<T>(
+    pipelineId: string,
+    input: unknown,
+    context?: Partial<PipelineContext>
+  ): Promise<PipelineResult<T>> {
     return this.router.execute(pipelineId, input, context);
   }
 
@@ -812,37 +823,146 @@ export class PipelineOrchestrator extends EventEmitter {
  */
 export const defaultPipelines: PipelineConfig[] = [
   {
-    id: "inference",
-    name: "Model Inference Pipeline",
-    path: "auto",
+    id: 'inference',
+    name: 'Model Inference Pipeline',
+    path: 'auto',
     stages: [
-      { name: "ingest", handler: "validateInput", parallelism: 1, timeoutMs: 1, retryPolicy: { maxRetries: 0, baseDelayMs: 0, maxDelayMs: 0, backoffMultiplier: 1, retryableErrors: [] }, dependencies: [], checkpoint: false, speculative: true },
-      { name: "validate", handler: "validateInput", parallelism: 1, timeoutMs: 2, retryPolicy: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 5, backoffMultiplier: 2, retryableErrors: ["VALIDATION_ERROR"] }, dependencies: ["ingest"], checkpoint: false, speculative: true },
-      { name: "route", handler: "routeRequest", parallelism: 1, timeoutMs: 1, retryPolicy: { maxRetries: 0, baseDelayMs: 0, maxDelayMs: 0, backoffMultiplier: 1, retryableErrors: [] }, dependencies: ["validate"], checkpoint: false, speculative: true },
-      { name: "execute", handler: "executeCore", parallelism: 4, timeoutMs: 5, retryPolicy: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 10, backoffMultiplier: 2, retryableErrors: ["TIMEOUT", "OOM"] }, dependencies: ["route"], checkpoint: true, speculative: true },
-      { name: "aggregate", handler: "aggregateResults", parallelism: 1, timeoutMs: 1, retryPolicy: { maxRetries: 0, baseDelayMs: 0, maxDelayMs: 0, backoffMultiplier: 1, retryableErrors: [] }, dependencies: ["execute"], checkpoint: false, speculative: false },
-      { name: "persist", handler: "persistResult", parallelism: 1, timeoutMs: 2, retryPolicy: { maxRetries: 2, baseDelayMs: 5, maxDelayMs: 50, backoffMultiplier: 2, retryableErrors: ["STORAGE_ERROR"] }, dependencies: ["aggregate"], checkpoint: true, speculative: false },
-      { name: "notify", handler: "notifyComplete", parallelism: 1, timeoutMs: 1, retryPolicy: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 5, backoffMultiplier: 2, retryableErrors: ["NOTIFICATION_ERROR"] }, dependencies: ["persist"], checkpoint: false, speculative: false },
+      {
+        name: 'ingest',
+        handler: 'validateInput',
+        parallelism: 1,
+        timeoutMs: 1,
+        retryPolicy: {
+          maxRetries: 0,
+          baseDelayMs: 0,
+          maxDelayMs: 0,
+          backoffMultiplier: 1,
+          retryableErrors: [],
+        },
+        dependencies: [],
+        checkpoint: false,
+        speculative: true,
+      },
+      {
+        name: 'validate',
+        handler: 'validateInput',
+        parallelism: 1,
+        timeoutMs: 2,
+        retryPolicy: {
+          maxRetries: 1,
+          baseDelayMs: 1,
+          maxDelayMs: 5,
+          backoffMultiplier: 2,
+          retryableErrors: ['VALIDATION_ERROR'],
+        },
+        dependencies: ['ingest'],
+        checkpoint: false,
+        speculative: true,
+      },
+      {
+        name: 'route',
+        handler: 'routeRequest',
+        parallelism: 1,
+        timeoutMs: 1,
+        retryPolicy: {
+          maxRetries: 0,
+          baseDelayMs: 0,
+          maxDelayMs: 0,
+          backoffMultiplier: 1,
+          retryableErrors: [],
+        },
+        dependencies: ['validate'],
+        checkpoint: false,
+        speculative: true,
+      },
+      {
+        name: 'execute',
+        handler: 'executeCore',
+        parallelism: 4,
+        timeoutMs: 5,
+        retryPolicy: {
+          maxRetries: 1,
+          baseDelayMs: 1,
+          maxDelayMs: 10,
+          backoffMultiplier: 2,
+          retryableErrors: ['TIMEOUT', 'OOM'],
+        },
+        dependencies: ['route'],
+        checkpoint: true,
+        speculative: true,
+      },
+      {
+        name: 'aggregate',
+        handler: 'aggregateResults',
+        parallelism: 1,
+        timeoutMs: 1,
+        retryPolicy: {
+          maxRetries: 0,
+          baseDelayMs: 0,
+          maxDelayMs: 0,
+          backoffMultiplier: 1,
+          retryableErrors: [],
+        },
+        dependencies: ['execute'],
+        checkpoint: false,
+        speculative: false,
+      },
+      {
+        name: 'persist',
+        handler: 'persistResult',
+        parallelism: 1,
+        timeoutMs: 2,
+        retryPolicy: {
+          maxRetries: 2,
+          baseDelayMs: 5,
+          maxDelayMs: 50,
+          backoffMultiplier: 2,
+          retryableErrors: ['STORAGE_ERROR'],
+        },
+        dependencies: ['aggregate'],
+        checkpoint: true,
+        speculative: false,
+      },
+      {
+        name: 'notify',
+        handler: 'notifyComplete',
+        parallelism: 1,
+        timeoutMs: 1,
+        retryPolicy: {
+          maxRetries: 1,
+          baseDelayMs: 1,
+          maxDelayMs: 5,
+          backoffMultiplier: 2,
+          retryableErrors: ['NOTIFICATION_ERROR'],
+        },
+        dependencies: ['persist'],
+        checkpoint: false,
+        speculative: false,
+      },
     ],
     hotPathConfig: {
       maxLatencyMs: 10,
       maxConcurrent: 1000,
       memoryPoolSize: 512,
       speculativeWindowMs: 100,
-      verificationCallback: "verifyInference",
+      verificationCallback: 'verifyInference',
     },
     coldPathConfig: {
       batchSize: 100,
       batchWindowMs: 50,
       maxParallelBatches: 10,
       checkpointInterval: 1000,
-      storageBackend: "redis",
+      storageBackend: 'redis',
       compression: true,
     },
     routingRules: [
-      { condition: "input.priority === 'critical' || input.latencyBudget < 20", path: "hot", priority: 100 },
-      { condition: "input.batchSize > 10", path: "cold", priority: 50 },
-      { condition: "true", path: "hot", priority: 1 },
+      {
+        condition: "input.priority === 'critical' || input.latencyBudget < 20",
+        path: 'hot',
+        priority: 100,
+      },
+      { condition: 'input.batchSize > 10', path: 'cold', priority: 50 },
+      { condition: 'true', path: 'hot', priority: 1 },
     ],
     sla: {
       hotPathP99Ms: 10,
@@ -852,27 +972,100 @@ export const defaultPipelines: PipelineConfig[] = [
     },
   },
   {
-    id: "training",
-    name: "Model Training Pipeline",
-    path: "cold",
+    id: 'training',
+    name: 'Model Training Pipeline',
+    path: 'cold',
     stages: [
-      { name: "ingest", handler: "validateInput", parallelism: 1, timeoutMs: 100, retryPolicy: { maxRetries: 1, baseDelayMs: 10, maxDelayMs: 100, backoffMultiplier: 2, retryableErrors: [] }, dependencies: [], checkpoint: true, speculative: false },
-      { name: "validate", handler: "validateInput", parallelism: 1, timeoutMs: 500, retryPolicy: { maxRetries: 2, baseDelayMs: 10, maxDelayMs: 500, backoffMultiplier: 2, retryableErrors: [] }, dependencies: ["ingest"], checkpoint: true, speculative: false },
-      { name: "enrich", handler: "enrichContext", parallelism: 4, timeoutMs: 5000, retryPolicy: { maxRetries: 1, baseDelayMs: 100, maxDelayMs: 5000, backoffMultiplier: 2, retryableErrors: [] }, dependencies: ["validate"], checkpoint: true, speculative: false },
-      { name: "execute", handler: "executeCore", parallelism: 1, timeoutMs: 3600000, retryPolicy: { maxRetries: 0, baseDelayMs: 0, maxDelayMs: 0, backoffMultiplier: 1, retryableErrors: [] }, dependencies: ["enrich"], checkpoint: true, speculative: false },
-      { name: "persist", handler: "persistResult", parallelism: 1, timeoutMs: 60000, retryPolicy: { maxRetries: 3, baseDelayMs: 1000, maxDelayMs: 60000, backoffMultiplier: 2, retryableErrors: [] }, dependencies: ["execute"], checkpoint: true, speculative: false },
+      {
+        name: 'ingest',
+        handler: 'validateInput',
+        parallelism: 1,
+        timeoutMs: 100,
+        retryPolicy: {
+          maxRetries: 1,
+          baseDelayMs: 10,
+          maxDelayMs: 100,
+          backoffMultiplier: 2,
+          retryableErrors: [],
+        },
+        dependencies: [],
+        checkpoint: true,
+        speculative: false,
+      },
+      {
+        name: 'validate',
+        handler: 'validateInput',
+        parallelism: 1,
+        timeoutMs: 500,
+        retryPolicy: {
+          maxRetries: 2,
+          baseDelayMs: 10,
+          maxDelayMs: 500,
+          backoffMultiplier: 2,
+          retryableErrors: [],
+        },
+        dependencies: ['ingest'],
+        checkpoint: true,
+        speculative: false,
+      },
+      {
+        name: 'enrich',
+        handler: 'enrichContext',
+        parallelism: 4,
+        timeoutMs: 5000,
+        retryPolicy: {
+          maxRetries: 1,
+          baseDelayMs: 100,
+          maxDelayMs: 5000,
+          backoffMultiplier: 2,
+          retryableErrors: [],
+        },
+        dependencies: ['validate'],
+        checkpoint: true,
+        speculative: false,
+      },
+      {
+        name: 'execute',
+        handler: 'executeCore',
+        parallelism: 1,
+        timeoutMs: 3600000,
+        retryPolicy: {
+          maxRetries: 0,
+          baseDelayMs: 0,
+          maxDelayMs: 0,
+          backoffMultiplier: 1,
+          retryableErrors: [],
+        },
+        dependencies: ['enrich'],
+        checkpoint: true,
+        speculative: false,
+      },
+      {
+        name: 'persist',
+        handler: 'persistResult',
+        parallelism: 1,
+        timeoutMs: 60000,
+        retryPolicy: {
+          maxRetries: 3,
+          baseDelayMs: 1000,
+          maxDelayMs: 60000,
+          backoffMultiplier: 2,
+          retryableErrors: [],
+        },
+        dependencies: ['execute'],
+        checkpoint: true,
+        speculative: false,
+      },
     ],
     coldPathConfig: {
       batchSize: 10,
       batchWindowMs: 5000,
       maxParallelBatches: 5,
       checkpointInterval: 60000,
-      storageBackend: "s3",
+      storageBackend: 's3',
       compression: true,
     },
-    routingRules: [
-      { condition: "true", path: "cold", priority: 1 },
-    ],
+    routingRules: [{ condition: 'true', path: 'cold', priority: 1 }],
     sla: {
       hotPathP99Ms: 100,
       coldPathP99Ms: 3600000,
@@ -881,35 +1074,118 @@ export const defaultPipelines: PipelineConfig[] = [
     },
   },
   {
-    id: "rag-query",
-    name: "RAG Query Pipeline",
-    path: "auto",
+    id: 'rag-query',
+    name: 'RAG Query Pipeline',
+    path: 'auto',
     stages: [
-      { name: "ingest", handler: "validateInput", parallelism: 1, timeoutMs: 1, retryPolicy: { maxRetries: 0, baseDelayMs: 0, maxDelayMs: 0, backoffMultiplier: 1, retryableErrors: [] }, dependencies: [], checkpoint: false, speculative: true },
-      { name: "route", handler: "routeRequest", parallelism: 1, timeoutMs: 1, retryPolicy: { maxRetries: 0, baseDelayMs: 0, maxDelayMs: 0, backoffMultiplier: 1, retryableErrors: [] }, dependencies: ["ingest"], checkpoint: false, speculative: true },
-      { name: "execute", handler: "executeCore", parallelism: 8, timeoutMs: 50, retryPolicy: { maxRetries: 1, baseDelayMs: 5, maxDelayMs: 20, backoffMultiplier: 2, retryableErrors: ["TIMEOUT"] }, dependencies: ["route"], checkpoint: true, speculative: true },
-      { name: "aggregate", handler: "aggregateResults", parallelism: 1, timeoutMs: 5, retryPolicy: { maxRetries: 0, baseDelayMs: 0, maxDelayMs: 0, backoffMultiplier: 1, retryableErrors: [] }, dependencies: ["execute"], checkpoint: false, speculative: false },
-      { name: "persist", handler: "persistResult", parallelism: 1, timeoutMs: 10, retryPolicy: { maxRetries: 2, baseDelayMs: 5, maxDelayMs: 50, backoffMultiplier: 2, retryableErrors: [] }, dependencies: ["aggregate"], checkpoint: true, speculative: false },
+      {
+        name: 'ingest',
+        handler: 'validateInput',
+        parallelism: 1,
+        timeoutMs: 1,
+        retryPolicy: {
+          maxRetries: 0,
+          baseDelayMs: 0,
+          maxDelayMs: 0,
+          backoffMultiplier: 1,
+          retryableErrors: [],
+        },
+        dependencies: [],
+        checkpoint: false,
+        speculative: true,
+      },
+      {
+        name: 'route',
+        handler: 'routeRequest',
+        parallelism: 1,
+        timeoutMs: 1,
+        retryPolicy: {
+          maxRetries: 0,
+          baseDelayMs: 0,
+          maxDelayMs: 0,
+          backoffMultiplier: 1,
+          retryableErrors: [],
+        },
+        dependencies: ['ingest'],
+        checkpoint: false,
+        speculative: true,
+      },
+      {
+        name: 'execute',
+        handler: 'executeCore',
+        parallelism: 8,
+        timeoutMs: 50,
+        retryPolicy: {
+          maxRetries: 1,
+          baseDelayMs: 5,
+          maxDelayMs: 20,
+          backoffMultiplier: 2,
+          retryableErrors: ['TIMEOUT'],
+        },
+        dependencies: ['route'],
+        checkpoint: true,
+        speculative: true,
+      },
+      {
+        name: 'aggregate',
+        handler: 'aggregateResults',
+        parallelism: 1,
+        timeoutMs: 5,
+        retryPolicy: {
+          maxRetries: 0,
+          baseDelayMs: 0,
+          maxDelayMs: 0,
+          backoffMultiplier: 1,
+          retryableErrors: [],
+        },
+        dependencies: ['execute'],
+        checkpoint: false,
+        speculative: false,
+      },
+      {
+        name: 'persist',
+        handler: 'persistResult',
+        parallelism: 1,
+        timeoutMs: 10,
+        retryPolicy: {
+          maxRetries: 2,
+          baseDelayMs: 5,
+          maxDelayMs: 50,
+          backoffMultiplier: 2,
+          retryableErrors: [],
+        },
+        dependencies: ['aggregate'],
+        checkpoint: true,
+        speculative: false,
+      },
     ],
     hotPathConfig: {
       maxLatencyMs: 50,
       maxConcurrent: 500,
       memoryPoolSize: 256,
       speculativeWindowMs: 200,
-      verificationCallback: "verifyRAG",
+      verificationCallback: 'verifyRAG',
     },
     coldPathConfig: {
       batchSize: 50,
       batchWindowMs: 100,
       maxParallelBatches: 10,
       checkpointInterval: 5000,
-      storageBackend: "postgres",
+      storageBackend: 'postgres',
       compression: true,
     },
     routingRules: [
-      { condition: "input.complexity === 'simple' && input.latencyBudget < 100", path: "hot", priority: 100 },
-      { condition: "input.complexity === 'complex' || input.requireCitations", path: "cold", priority: 50 },
-      { condition: "true", path: "hot", priority: 1 },
+      {
+        condition: "input.complexity === 'simple' && input.latencyBudget < 100",
+        path: 'hot',
+        priority: 100,
+      },
+      {
+        condition: "input.complexity === 'complex' || input.requireCitations",
+        path: 'cold',
+        priority: 50,
+      },
+      { condition: 'true', path: 'hot', priority: 1 },
     ],
     sla: {
       hotPathP99Ms: 50,

@@ -1471,6 +1471,8 @@ p.is-pending{min-width:260px}
 .tool-btn{border:1px solid var(--ent-line);border-radius:8px;background:rgba(255,255,255,.025);color:var(--ent-muted);font-size:12px;padding:6px 10px;cursor:pointer;transition:all .2s var(--ent-ease)}
 .tool-btn:hover:not(:disabled){color:#eafcff;border-color:var(--ent-line-hi);background:rgba(127,230,255,.07)}.tool-btn.is-on{border-color:var(--ent-ok);color:var(--ent-ok)}.tool-btn:disabled:not(.is-on){opacity:.4}
 .latency-chip{margin-left:auto;font:11px ui-monospace,monospace;color:#6f8195;padding:4px 8px;border:1px solid var(--ent-line);border-radius:999px}
+.omega-chip{font:11px ui-monospace,monospace;letter-spacing:.02em;color:#9ff7ff;padding:4px 9px;border:1px solid rgba(159,247,255,.28);border-radius:999px;background:linear-gradient(135deg,rgba(159,247,255,.08),rgba(201,184,255,.08))}
+.omega-chip.is-blocked{color:#ffb9d8;border-color:rgba(255,185,216,.42);background:rgba(255,185,216,.08)}
 .followups{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .followup{border:1px solid var(--ent-line);border-radius:999px;background:transparent;color:#b9cbdc;font-size:12.5px;padding:7px 13px;cursor:pointer;transition:all .22s var(--ent-ease)}
 .followup:hover{border-color:var(--ent-line-hi);color:#fff;background:linear-gradient(135deg,rgba(127,230,255,.1),rgba(168,155,255,.1));transform:translateY(-1px)}

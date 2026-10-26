@@ -1,4 +1,4 @@
-export type ToolSideEffect = "read" | "write" | "admin";
+export type ToolSideEffect = 'read' | 'write' | 'admin';
 
 export interface AgentToolContext {
   readonly requestId: string;
@@ -33,7 +33,7 @@ export interface AgentToolDescriptor {
   readonly inputSchema: Record<string, unknown>;
 }
 
-export type AgentStepStatus = "OK" | "BLOCKED" | "ERROR";
+export type AgentStepStatus = 'OK' | 'BLOCKED' | 'ERROR';
 
 export interface AgentStep {
   readonly toolId: string;
@@ -46,8 +46,8 @@ export interface AgentStep {
 }
 
 export interface AgentPolicyReport {
-  readonly authority: "none";
-  readonly execution: "local-tools-only";
+  readonly authority: 'none';
+  readonly execution: 'local-tools-only';
   readonly modelUsed: false;
   readonly externalNetworkUsed: false;
   readonly approvalRequired: boolean;
@@ -66,8 +66,8 @@ export interface AgentAuditEvent {
   readonly agentId: string;
   readonly actorId: string;
   readonly tenantId: string;
-  readonly status: "COMPLETED" | "BLOCKED" | "ERROR";
-  readonly riskTier: "LOW";
+  readonly status: 'COMPLETED' | 'BLOCKED' | 'ERROR';
+  readonly riskTier: 'LOW';
   readonly toolIds: readonly string[];
   readonly approvalGranted: boolean;
   readonly latencyMs: number;
@@ -86,7 +86,7 @@ export interface AgentRunResult {
   readonly success: boolean;
   readonly agentId: string;
   readonly answer: string;
-  readonly engine: "local-deterministic";
+  readonly engine: 'local-deterministic';
   readonly requestId: string;
   readonly latencyMs: number;
   readonly steps: readonly AgentStep[];

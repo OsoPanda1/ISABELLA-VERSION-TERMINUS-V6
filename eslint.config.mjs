@@ -59,7 +59,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/ui/platform/**/*.js"],
+    files: ["src/ui/platform/**/*.js", "src/ui/cognition-client.js"],
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",

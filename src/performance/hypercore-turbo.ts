@@ -19,7 +19,7 @@ export interface TurboCacheStats {
   readonly loads: number;
 }
 
-export type TurboCacheOutcome = "fresh" | "stale" | "coalesced" | "miss";
+export type TurboCacheOutcome = 'fresh' | 'stale' | 'coalesced' | 'miss';
 
 export interface TurboCacheResult<T> {
   readonly value: T;
@@ -62,11 +62,13 @@ export class TurboTtlCache<T> {
   };
 
   constructor(options: TurboCacheOptions) {
-    if (!Number.isFinite(options.ttlMs) || options.ttlMs < 1) throw new RangeError("TURBO_TTL_INVALID");
+    if (!Number.isFinite(options.ttlMs) || options.ttlMs < 1)
+      throw new RangeError('TURBO_TTL_INVALID');
     const staleMs = options.staleMs ?? 0;
-    if (!Number.isFinite(staleMs) || staleMs < 0) throw new RangeError("TURBO_STALE_INVALID");
+    if (!Number.isFinite(staleMs) || staleMs < 0) throw new RangeError('TURBO_STALE_INVALID');
     const maxEntries = options.maxEntries ?? 256;
-    if (!Number.isSafeInteger(maxEntries) || maxEntries < 1) throw new RangeError("TURBO_MAX_ENTRIES_INVALID");
+    if (!Number.isSafeInteger(maxEntries) || maxEntries < 1)
+      throw new RangeError('TURBO_MAX_ENTRIES_INVALID');
     this.ttlMs = Math.trunc(options.ttlMs);
     this.staleMs = Math.trunc(staleMs);
     this.maxEntries = maxEntries;
@@ -85,16 +87,16 @@ export class TurboTtlCache<T> {
     this.entries.set(key, entry);
     if (now < entry.expiresAt) {
       this.stats.hits += 1;
-      return { value: entry.value, outcome: "fresh" };
+      return { value: entry.value, outcome: 'fresh' };
     }
     this.stats.staleHits += 1;
-    return { value: entry.value, outcome: "stale" };
+    return { value: entry.value, outcome: 'stale' };
   }
 
   async getOrLoad(key: string, loader: () => Promise<T>): Promise<TurboCacheResult<T>> {
     const cached = this.read(key);
     if (cached) {
-      if (cached.outcome === "stale" && !this.inFlight.has(key)) {
+      if (cached.outcome === 'stale' && !this.inFlight.has(key)) {
         // Refresh in the background. Failures are counted but never surfaced as a
         // fresh value; the stale value remains usable until staleUntil.
         void this.load(key, loader).catch(() => undefined);
@@ -104,10 +106,10 @@ export class TurboTtlCache<T> {
     const existing = this.inFlight.get(key);
     if (existing) {
       this.stats.coalesced += 1;
-      return { value: await existing, outcome: "coalesced" };
+      return { value: await existing, outcome: 'coalesced' };
     }
     const value = await this.load(key, loader);
-    return { value, outcome: "miss" };
+    return { value, outcome: 'miss' };
   }
 
   set(key: string, value: T): void {
@@ -165,7 +167,8 @@ export class TurboLatencyHistogram {
   private dropped = 0;
 
   constructor(private readonly maxSamples = 2_048) {
-    if (!Number.isSafeInteger(maxSamples) || maxSamples < 16) throw new RangeError("TURBO_HISTOGRAM_SIZE_INVALID");
+    if (!Number.isSafeInteger(maxSamples) || maxSamples < 16)
+      throw new RangeError('TURBO_HISTOGRAM_SIZE_INVALID');
   }
 
   record(milliseconds: number): void {
@@ -184,11 +187,23 @@ export class TurboLatencyHistogram {
     if (this.samples.length === 0) return 0;
     const clamped = Math.min(100, Math.max(0, percentile));
     const sorted = [...this.samples].sort((a, b) => a - b);
-    const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((clamped / 100) * sorted.length) - 1));
+    const index = Math.min(
+      sorted.length - 1,
+      Math.max(0, Math.ceil((clamped / 100) * sorted.length) - 1)
+    );
     return sorted[index] ?? 0;
   }
 
-  snapshot(): { count: number; avg: number; p50: number; p90: number; p95: number; p99: number; max: number; dropped: number } {
+  snapshot(): {
+    count: number;
+    avg: number;
+    p50: number;
+    p90: number;
+    p95: number;
+    p99: number;
+    max: number;
+    dropped: number;
+  } {
     return {
       count: this.samples.length,
       avg: this.samples.length === 0 ? 0 : Math.round((this.total / this.samples.length) * 10) / 10,
@@ -204,8 +219,8 @@ export class TurboLatencyHistogram {
 
 export class TurboGateSaturatedError extends Error {
   constructor() {
-    super("TURBO_GATE_SATURATED");
-    this.name = "TurboGateSaturatedError";
+    super('TURBO_GATE_SATURATED');
+    this.name = 'TurboGateSaturatedError';
   }
 }
 
@@ -226,10 +241,12 @@ export class TurboGate {
 
   constructor(
     private readonly maxConcurrent: number,
-    private readonly maxQueue: number,
+    private readonly maxQueue: number
   ) {
-    if (!Number.isSafeInteger(maxConcurrent) || maxConcurrent < 1) throw new RangeError("TURBO_GATE_CONCURRENCY_INVALID");
-    if (!Number.isSafeInteger(maxQueue) || maxQueue < 0) throw new RangeError("TURBO_GATE_QUEUE_INVALID");
+    if (!Number.isSafeInteger(maxConcurrent) || maxConcurrent < 1)
+      throw new RangeError('TURBO_GATE_CONCURRENCY_INVALID');
+    if (!Number.isSafeInteger(maxQueue) || maxQueue < 0)
+      throw new RangeError('TURBO_GATE_QUEUE_INVALID');
   }
 
   async run<T>(task: () => Promise<T>, queueTimeoutMs = 0): Promise<T> {
@@ -257,14 +274,22 @@ export class TurboGate {
     });
   }
 
-  snapshot(): { active: number; queued: number; completed: number; rejected: number; peakActive: number; avgQueueWaitMs: number } {
+  snapshot(): {
+    active: number;
+    queued: number;
+    completed: number;
+    rejected: number;
+    peakActive: number;
+    avgQueueWaitMs: number;
+  } {
     return {
       active: this.active,
       queued: this.queued.length,
       completed: this.completed,
       rejected: this.rejected,
       peakActive: this.peakActive,
-      avgQueueWaitMs: this.completed === 0 ? 0 : Math.round((this.totalQueueWaitMs / this.completed) * 10) / 10,
+      avgQueueWaitMs:
+        this.completed === 0 ? 0 : Math.round((this.totalQueueWaitMs / this.completed) * 10) / 10,
     };
   }
 
@@ -309,11 +334,16 @@ export class TurboMetrics {
     histogram.record(milliseconds);
   }
 
-  snapshot(): { counters: Record<string, number>; latencies: Record<string, ReturnType<TurboLatencyHistogram["snapshot"]>> } {
-    const latencies: Record<string, ReturnType<TurboLatencyHistogram["snapshot"]>> = {};
+  snapshot(): {
+    counters: Record<string, number>;
+    latencies: Record<string, ReturnType<TurboLatencyHistogram['snapshot']>>;
+  } {
+    const latencies: Record<string, ReturnType<TurboLatencyHistogram['snapshot']>> = {};
     for (const [name, histogram] of this.histograms) latencies[name] = histogram.snapshot();
     return {
-      counters: Object.fromEntries([...this.counters.entries()].sort(([a], [b]) => a.localeCompare(b))),
+      counters: Object.fromEntries(
+        [...this.counters.entries()].sort(([a], [b]) => a.localeCompare(b))
+      ),
       latencies,
     };
   }
@@ -325,7 +355,8 @@ export class TurboMetrics {
  * not token-level streaming from an upstream model.
  */
 export function splitStreamChunks(text: string, maxChunkChars = 220): string[] {
-  if (!Number.isSafeInteger(maxChunkChars) || maxChunkChars < 16) throw new RangeError("TURBO_CHUNK_SIZE_INVALID");
+  if (!Number.isSafeInteger(maxChunkChars) || maxChunkChars < 16)
+    throw new RangeError('TURBO_CHUNK_SIZE_INVALID');
   const trimmed = text.trim();
   if (!trimmed) return [];
   const chunks: string[] = [];
@@ -333,13 +364,13 @@ export function splitStreamChunks(text: string, maxChunkChars = 220): string[] {
   while (remaining.length > maxChunkChars) {
     const window = remaining.slice(0, maxChunkChars);
     const boundary = Math.max(
-      window.lastIndexOf("\n"),
-      window.lastIndexOf(". "),
-      window.lastIndexOf("? "),
-      window.lastIndexOf("! "),
-      window.lastIndexOf("; "),
-      window.lastIndexOf(", "),
-      window.lastIndexOf(" "),
+      window.lastIndexOf('\n'),
+      window.lastIndexOf('. '),
+      window.lastIndexOf('? '),
+      window.lastIndexOf('! '),
+      window.lastIndexOf('; '),
+      window.lastIndexOf(', '),
+      window.lastIndexOf(' ')
     );
     const cut = boundary > maxChunkChars * 0.4 ? boundary + 1 : maxChunkChars;
     chunks.push(remaining.slice(0, cut));
@@ -350,11 +381,11 @@ export function splitStreamChunks(text: string, maxChunkChars = 220): string[] {
 }
 
 export interface TurboSnapshot {
-  readonly engine: "hypercore-turbo-v2";
-  readonly scope: "process-local";
+  readonly engine: 'hypercore-turbo-v2';
+  readonly scope: 'process-local';
   readonly generatedAt: string;
-  readonly metrics: ReturnType<TurboMetrics["snapshot"]>;
-  readonly providerGate: ReturnType<TurboGate["snapshot"]>;
+  readonly metrics: ReturnType<TurboMetrics['snapshot']>;
+  readonly providerGate: ReturnType<TurboGate['snapshot']>;
   readonly disclaimers: readonly string[];
 }
 
@@ -363,15 +394,15 @@ export const providerGate = new TurboGate(6, 96);
 
 export function buildTurboSnapshot(): TurboSnapshot {
   return {
-    engine: "hypercore-turbo-v2",
-    scope: "process-local",
+    engine: 'hypercore-turbo-v2',
+    scope: 'process-local',
     generatedAt: new Date().toISOString(),
     metrics: turboMetrics.snapshot(),
     providerGate: providerGate.snapshot(),
     disclaimers: [
-      "Las métricas describen este proceso y su ventana actual; no son un SLA ni una medición de producción.",
-      "La caché es local, acotada y no durable; no constituye memoria verificada ni permiso.",
-      "La entrega progresiva reenvía contenido ya generado; no afirma streaming nativo del proveedor.",
+      'Las métricas describen este proceso y su ventana actual; no son un SLA ni una medición de producción.',
+      'La caché es local, acotada y no durable; no constituye memoria verificada ni permiso.',
+      'La entrega progresiva reenvía contenido ya generado; no afirma streaming nativo del proveedor.',
     ],
   };
 }

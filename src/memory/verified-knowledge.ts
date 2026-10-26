@@ -1,7 +1,7 @@
-import { createHash } from "node:crypto";
-import type { EpistemicState } from "./ikes";
+import { createHash } from 'node:crypto';
+import type { EpistemicState } from './ikes';
 
-export const CONFIDENCE_LEVELS = ["E0", "E1", "E2", "E3", "E4", "E5", "E6"] as const;
+export const CONFIDENCE_LEVELS = ['E0', 'E1', 'E2', 'E3', 'E4', 'E5', 'E6'] as const;
 
 export type ConfidenceLevel = (typeof CONFIDENCE_LEVELS)[number];
 
@@ -55,7 +55,7 @@ function supabaseConfigFromEnv(): SupabaseBackendConfig | null {
   const url = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceRoleKey) return null;
-  return { url: url.replace(/\/+$/, ""), serviceRoleKey };
+  return { url: url.replace(/\/+$/, ''), serviceRoleKey };
 }
 
 export class SupabaseVerifiedKnowledgeBackend implements VerifiedKnowledgeBackend {
@@ -65,14 +65,14 @@ export class SupabaseVerifiedKnowledgeBackend implements VerifiedKnowledgeBacken
     return {
       apikey: this.config.serviceRoleKey,
       Authorization: `Bearer ${this.config.serviceRoleKey}`,
-      "Content-Type": "application/json",
-      Prefer: "return=representation",
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
     };
   }
 
   async save(entry: VerifiedKnowledgeEntry): Promise<void> {
     const response = await fetch(`${this.config.url}/rest/v1/verified_knowledge`, {
-      method: "POST",
+      method: 'POST',
       headers: this.headers,
       body: JSON.stringify({
         id: entry.id,
@@ -90,42 +90,52 @@ export class SupabaseVerifiedKnowledgeBackend implements VerifiedKnowledgeBacken
   async loadAll(): Promise<readonly VerifiedKnowledgeEntry[]> {
     const response = await fetch(
       `${this.config.url}/rest/v1/verified_knowledge?select=*&order=verified_at.desc&limit=5000`,
-      { headers: this.headers },
+      { headers: this.headers }
     );
     if (!response.ok) {
       throw new Error(`VERIFIED_KNOWLEDGE_BACKEND_LOAD_FAILED_${response.status}`);
     }
     const rows = (await response.json()) as readonly Record<string, unknown>[];
     return rows.map((row) => ({
-      id: String(row.id ?? ""),
-      content: String(row.content ?? ""),
-      source: String(row.source ?? ""),
-      verifiedAt: String(row.verified_at ?? ""),
-      confidenceLevel: String(row.confidence_level ?? "E0") as ConfidenceLevel,
+      id: String(row.id ?? ''),
+      content: String(row.content ?? ''),
+      source: String(row.source ?? ''),
+      verifiedAt: String(row.verified_at ?? ''),
+      confidenceLevel: String(row.confidence_level ?? 'E0') as ConfidenceLevel,
     }));
   }
 }
 
 export function createVerifiedKnowledgeBackend(): VerifiedKnowledgeBackend {
   const config = supabaseConfigFromEnv();
-  return config ? new SupabaseVerifiedKnowledgeBackend(config) : new InMemoryVerifiedKnowledgeBackend();
+  return config
+    ? new SupabaseVerifiedKnowledgeBackend(config)
+    : new InMemoryVerifiedKnowledgeBackend();
 }
 
 export function toConfidenceLevel(state: EpistemicState): ConfidenceLevel | null {
   switch (state) {
-    case "E0_UNVERIFIED": return "E0";
-    case "E1_SOURCE_FOUND": return "E1";
-    case "E2_CORROBORATED": return "E2";
-    case "E3_ACADEMICALLY_SUPPORTED": return "E3";
-    case "E4_REPRODUCIBLE": return "E4";
-    case "E5_VALIDATED": return "E5";
-    case "E6_ESTABLISHED": return "E6";
-    default: return null;
+    case 'E0_UNVERIFIED':
+      return 'E0';
+    case 'E1_SOURCE_FOUND':
+      return 'E1';
+    case 'E2_CORROBORATED':
+      return 'E2';
+    case 'E3_ACADEMICALLY_SUPPORTED':
+      return 'E3';
+    case 'E4_REPRODUCIBLE':
+      return 'E4';
+    case 'E5_VALIDATED':
+      return 'E5';
+    case 'E6_ESTABLISHED':
+      return 'E6';
+    default:
+      return null;
   }
 }
 
 function isValidConfidenceLevel(value: unknown): value is ConfidenceLevel {
-  return typeof value === "string" && (CONFIDENCE_LEVELS as readonly string[]).includes(value);
+  return typeof value === 'string' && (CONFIDENCE_LEVELS as readonly string[]).includes(value);
 }
 
 export class VerifiedKnowledgeStore {
@@ -147,14 +157,17 @@ export class VerifiedKnowledgeStore {
   async addVerifiedKnowledge(input: NewVerifiedKnowledge): Promise<VerifiedKnowledgeEntry> {
     const content = input.content.trim();
     const source = input.source.trim();
-    if (!content) throw new Error("VERIFIED_KNOWLEDGE: content required");
-    if (!source) throw new Error("VERIFIED_KNOWLEDGE: source required");
+    if (!content) throw new Error('VERIFIED_KNOWLEDGE: content required');
+    if (!source) throw new Error('VERIFIED_KNOWLEDGE: source required');
     if (!isValidConfidenceLevel(input.confidenceLevel)) {
-      throw new Error("VERIFIED_KNOWLEDGE: confidenceLevel must be E0-E6");
+      throw new Error('VERIFIED_KNOWLEDGE: confidenceLevel must be E0-E6');
     }
-    if (content.length > 100_000) throw new Error("VERIFIED_KNOWLEDGE: content too large");
+    if (content.length > 100_000) throw new Error('VERIFIED_KNOWLEDGE: content too large');
     const entry: VerifiedKnowledgeEntry = Object.freeze({
-      id: `vkn-${createHash("sha256").update(JSON.stringify({ content, source, at: Date.now() })).digest("hex").slice(0, 12)}`,
+      id: `vkn-${createHash('sha256')
+        .update(JSON.stringify({ content, source, at: Date.now() }))
+        .digest('hex')
+        .slice(0, 12)}`,
       content,
       source,
       verifiedAt: new Date().toISOString(),
@@ -174,17 +187,21 @@ export class VerifiedKnowledgeStore {
 
   async searchVerifiedKnowledge(
     query: string,
-    options: VerifiedKnowledgeSearchOptions = {},
+    options: VerifiedKnowledgeSearchOptions = {}
   ): Promise<VerifiedKnowledgeSearchHit[]> {
     const terms = tokenize(query);
     if (terms.length === 0) return [];
     const limit = options.limit ?? 10;
     if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
-      throw new Error("VERIFIED_KNOWLEDGE: limit must be an integer between 1 and 100");
+      throw new Error('VERIFIED_KNOWLEDGE: limit must be an integer between 1 and 100');
     }
-    const minRank = options.minConfidence === undefined ? 0 : CONFIDENCE_LEVELS.indexOf(options.minConfidence);
-    if (options.minConfidence !== undefined && (minRank < 0 || minRank >= CONFIDENCE_LEVELS.length)) {
-      throw new Error("VERIFIED_KNOWLEDGE: minConfidence must be E0-E6");
+    const minRank =
+      options.minConfidence === undefined ? 0 : CONFIDENCE_LEVELS.indexOf(options.minConfidence);
+    if (
+      options.minConfidence !== undefined &&
+      (minRank < 0 || minRank >= CONFIDENCE_LEVELS.length)
+    ) {
+      throw new Error('VERIFIED_KNOWLEDGE: minConfidence must be E0-E6');
     }
     const hits: VerifiedKnowledgeSearchHit[] = [];
     for (const entry of await this.all()) {
@@ -199,7 +216,11 @@ export class VerifiedKnowledgeStore {
       if (matches === 0) continue;
       const coverage = matches / terms.length;
       const density = matches / haystack.length;
-      hits.push({ entry, score: Object.freeze({ value: Number((coverage * 0.75 + density * 0.25).toFixed(4)) }).value });
+      hits.push({
+        entry,
+        score: Object.freeze({ value: Number((coverage * 0.75 + density * 0.25).toFixed(4)) })
+          .value,
+      });
     }
     return hits.sort((a, b) => b.score - a.score).slice(0, limit);
   }
@@ -208,17 +229,20 @@ export class VerifiedKnowledgeStore {
 function tokenize(text: string): string[] {
   return text
     .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
     .split(/[^a-z0-9áéíóúñü]+/i)
     .filter((token) => token.length > 2);
 }
 
-export function formatVerifiedKnowledgeContext(hits: readonly VerifiedKnowledgeSearchHit[]): string {
-  if (hits.length === 0) return "";
+export function formatVerifiedKnowledgeContext(
+  hits: readonly VerifiedKnowledgeSearchHit[]
+): string {
+  if (hits.length === 0) return '';
   const lines = hits.map((hit) => {
-    const excerpt = hit.entry.content.length > 400 ? `${hit.entry.content.slice(0, 400)}…` : hit.entry.content;
+    const excerpt =
+      hit.entry.content.length > 400 ? `${hit.entry.content.slice(0, 400)}…` : hit.entry.content;
     return `[${hit.entry.confidenceLevel} · ${hit.entry.source} · ${hit.entry.verifiedAt}] ${excerpt}`;
   });
-  return `Conocimiento verificado recuperado:\n${lines.join("\n")}`;
+  return `Conocimiento verificado recuperado:\n${lines.join('\n')}`;
 }

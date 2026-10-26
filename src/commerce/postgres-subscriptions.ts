@@ -1,6 +1,6 @@
-import type { Pool } from "pg";
-import type { PlanId, SubscriptionStatus } from "./types";
-import type { SubscriptionPersistence, SubscriptionRecord } from "./subscriptions";
+import type { Pool } from 'pg';
+import type { PlanId, SubscriptionStatus } from './types';
+import type { SubscriptionPersistence, SubscriptionRecord } from './subscriptions';
 
 type SubscriptionRow = {
   workspace_id: string;
@@ -23,7 +23,7 @@ function asIso(value: Date | string | null | undefined): string | undefined {
 function mapRow(row: SubscriptionRow): SubscriptionRecord {
   const createdAt = asIso(row.created_at);
   const updatedAt = asIso(row.updated_at);
-  if (!createdAt || !updatedAt) throw new Error("SUBSCRIPTION_PERSISTENCE_INVALID_TIMESTAMP");
+  if (!createdAt || !updatedAt) throw new Error('SUBSCRIPTION_PERSISTENCE_INVALID_TIMESTAMP');
   return Object.freeze({
     workspaceId: row.workspace_id,
     planCode: row.plan_code,
@@ -48,7 +48,7 @@ export class PostgresSubscriptionPersistence implements SubscriptionPersistence 
     const result = await this.pool.query<SubscriptionRow>(
       `SELECT workspace_id, plan_code, status, provider, external_ref, provider_customer_id, current_period_end, updated_at, created_at
        FROM commerce_subscriptions WHERE workspace_id = $1 LIMIT 1`,
-      [workspaceId],
+      [workspaceId]
     );
     return result.rows[0] ? mapRow(result.rows[0]) : null;
   }
@@ -66,15 +66,24 @@ export class PostgresSubscriptionPersistence implements SubscriptionPersistence 
          provider_customer_id = COALESCE(EXCLUDED.provider_customer_id, commerce_subscriptions.provider_customer_id),
          current_period_end = EXCLUDED.current_period_end,
          updated_at = EXCLUDED.updated_at`,
-      [record.workspaceId, record.planCode, record.status, record.provider, record.externalRef ?? null,
-        record.providerCustomerId ?? null, record.currentPeriodEnd ?? null, record.updatedAt, record.createdAt],
+      [
+        record.workspaceId,
+        record.planCode,
+        record.status,
+        record.provider,
+        record.externalRef ?? null,
+        record.providerCustomerId ?? null,
+        record.currentPeriodEnd ?? null,
+        record.updatedAt,
+        record.createdAt,
+      ]
     );
   }
 
   async list(): Promise<readonly SubscriptionRecord[]> {
     const result = await this.pool.query<SubscriptionRow>(
       `SELECT workspace_id, plan_code, status, provider, external_ref, provider_customer_id, current_period_end, updated_at, created_at
-       FROM commerce_subscriptions ORDER BY updated_at DESC`,
+       FROM commerce_subscriptions ORDER BY updated_at DESC`
     );
     return Object.freeze(result.rows.map(mapRow));
   }

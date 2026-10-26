@@ -52,10 +52,18 @@ const MAX_LOCAL_FILE_CHARS = 12_000;
 const MAX_COMBINED_PROMPT_CHARS = 18_000;
 const DRAFT_STORAGE_KEY = 'isabella.drafts';
 const introLabels = [
-  'SECUENCIA 01 · APERTURA', 'SECUENCIA 02 · EL ORIGEN', 'SECUENCIA 03 · LA CALLE',
-  'SECUENCIA 04 · NUESTRA GENTE', 'SECUENCIA 05 · RESILIENCIA', 'SECUENCIA 06 · IDENTIDAD',
-  'SECUENCIA 07 · EL NÚCLEO', 'SECUENCIA 08 · ARQUITECTURA', 'SECUENCIA 09 · MEMORIA VIVA',
-  'SECUENCIA 10 · PROPÓSITO', 'SECUENCIA 11 · COMPROMISO', 'SECUENCIA 12 · ACCESO'
+  'SECUENCIA 01 · APERTURA',
+  'SECUENCIA 02 · EL ORIGEN',
+  'SECUENCIA 03 · LA CALLE',
+  'SECUENCIA 04 · NUESTRA GENTE',
+  'SECUENCIA 05 · RESILIENCIA',
+  'SECUENCIA 06 · IDENTIDAD',
+  'SECUENCIA 07 · EL NÚCLEO',
+  'SECUENCIA 08 · ARQUITECTURA',
+  'SECUENCIA 09 · MEMORIA VIVA',
+  'SECUENCIA 10 · PROPÓSITO',
+  'SECUENCIA 11 · COMPROMISO',
+  'SECUENCIA 12 · ACCESO',
 ];
 
 const formatIntroTime = (milliseconds) => {
@@ -84,7 +92,8 @@ const introTotalDurationMs = () =>
     : introFallbackTotalMs;
 
 const introElapsedMs = () => {
-  if (introMediaFallbackLocked || !introVideo) return Math.max(0, performance.now() - introStartedAt);
+  if (introMediaFallbackLocked || !introVideo)
+    return Math.max(0, performance.now() - introStartedAt);
   return Math.max(0, introVideo.currentTime * 1000);
 };
 
@@ -113,7 +122,9 @@ const paintIntro = (elapsedMs) => {
     });
     const sceneIndex = idx;
     intro.dataset.scene = String(sceneIndex);
-    if (introSceneLabel) introSceneLabel.textContent = introLabels[idx] || `SECUENCIA ${String(idx + 1).padStart(2, '0')}`;
+    if (introSceneLabel)
+      introSceneLabel.textContent =
+        introLabels[idx] || `SECUENCIA ${String(idx + 1).padStart(2, '0')}`;
   }
   if (introProgressBar) {
     const sceneProgress = ((boundedElapsed / Math.max(1, introTotalMs)) * introScenes.length) % 1;
@@ -172,7 +183,10 @@ const startIntroMedia = async () => {
       intro?.classList.remove('media-stalled');
       return;
     }
-    if (now - introLastVideoProgressAt > 1400 && introVideo.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
+    if (
+      now - introLastVideoProgressAt > 1400 &&
+      introVideo.readyState < HTMLMediaElement.HAVE_FUTURE_DATA
+    ) {
       intro?.classList.add('media-stalled');
     }
   }, 500);
@@ -181,7 +195,9 @@ const startIntroMedia = async () => {
     await playing;
   } catch {
     introVideo.muted = true; // autoplay-with-sound refused: keep the picture running, silent
-    try { await introVideo.play(); } catch {
+    try {
+      await introVideo.play();
+    } catch {
       introMediaFallbackLocked = true;
       introStartedAt = performance.now() - Math.max(0, introVideo.currentTime * 1000);
       intro?.classList.add('media-unavailable', 'media-stalled');
@@ -218,7 +234,8 @@ introVideo?.addEventListener('waiting', () => {
   window.clearTimeout(introWaitTimer);
   // Only surface the fallback if buffering really persists; brief waits must not hide the picture.
   introWaitTimer = window.setTimeout(() => {
-    if (introRunning && introVideo.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) intro?.classList.add('media-stalled');
+    if (introRunning && introVideo.readyState < HTMLMediaElement.HAVE_FUTURE_DATA)
+      intro?.classList.add('media-stalled');
   }, 1200);
 });
 introVideo?.addEventListener('playing', markIntroVideoReady);
@@ -236,7 +253,14 @@ introVideo?.addEventListener('error', () => {
 });
 introVideo?.addEventListener('ended', finishIntro);
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && introRunning && introVideo && introVideo.paused && !introVideo.ended && !introMediaFallbackLocked) {
+  if (
+    !document.hidden &&
+    introRunning &&
+    introVideo &&
+    introVideo.paused &&
+    !introVideo.ended &&
+    !introMediaFallbackLocked
+  ) {
     introVideo.play().catch(() => {});
   }
 });
@@ -262,8 +286,13 @@ if (intro) {
         return;
       }
       if (event.key !== 'Tab' || !immersionGate) return;
-      const focusable = [...immersionGate.querySelectorAll('input:not(:disabled), button:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])')]
-        .filter((node) => !node.hasAttribute('hidden') && node.getAttribute('aria-hidden') !== 'true');
+      const focusable = [
+        ...immersionGate.querySelectorAll(
+          'input:not(:disabled), button:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])'
+        ),
+      ].filter(
+        (node) => !node.hasAttribute('hidden') && node.getAttribute('aria-hidden') !== 'true'
+      );
       if (!focusable.length) {
         event.preventDefault();
         return;
@@ -293,13 +322,18 @@ const closeSideRails = (exceptId = '') => {
     if (rail.id !== exceptId) rail.classList.remove('is-open');
     syncRailMode(rail, rail.id === exceptId && rail.classList.contains('is-open'));
     const launcher = document.querySelector(`[aria-controls="${rail.id}"]`);
-    if (launcher) launcher.setAttribute('aria-expanded', String(rail.id === exceptId && rail.classList.contains('is-open')));
+    if (launcher)
+      launcher.setAttribute(
+        'aria-expanded',
+        String(rail.id === exceptId && rail.classList.contains('is-open'))
+      );
   });
 };
 const syncRailMode = (rail, open) => {
   if (!rail) return;
   rail.setAttribute('aria-hidden', String(!open));
-  if (open) rail.removeAttribute('inert'); else rail.setAttribute('inert', '');
+  if (open) rail.removeAttribute('inert');
+  else rail.setAttribute('inert', '');
 };
 document.querySelectorAll('.rail-launcher').forEach((launcher) => {
   launcher.style.setProperty('display', 'flex', 'important');
@@ -366,21 +400,30 @@ const setRuntimeStatus = (label, state, title) => {
 let sessionId = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
 let abortController = null;
 
-const sanitizeFileName = (value) => String(value || 'archivo').replace(/[^\w.\- ]+/g, '_').slice(0, 80);
+const sanitizeFileName = (value) =>
+  String(value || 'archivo')
+    .replace(/[^\w.\- ]+/g, '_')
+    .slice(0, 80);
 
 const exportConversation = () => {
   const nodes = [...messages.querySelectorAll('.message')];
   if (!nodes.length) return;
-  const transcript = nodes.map((message) => {
-    const speaker = message.classList.contains('user') ? 'Tú' : 'Isabella';
-    const raw = message.querySelector('p')?.dataset.raw || message.querySelector('p')?.textContent?.trim() || '';
-    return `## ${speaker}\n\n${raw}`;
-  }).join('\n\n');
+  const transcript = nodes
+    .map((message) => {
+      const speaker = message.classList.contains('user') ? 'Tú' : 'Isabella';
+      const raw =
+        message.querySelector('p')?.dataset.raw ||
+        message.querySelector('p')?.textContent?.trim() ||
+        '';
+      return `## ${speaker}\n\n${raw}`;
+    })
+    .join('\n\n');
   const header = `# Conversación Isabella\n\n- Sesión: ${sessionId}\n- Exportado: ${new Date().toISOString()}\n- Aviso: transcripción local; no certifica verificación ni ejecución.\n\n`;
   const blob = new Blob([header + transcript + '\n'], { type: 'text/markdown;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.href = url; link.download = `isabella-conversacion-${new Date().toISOString().slice(0, 10)}.md`;
+  link.href = url;
+  link.download = `isabella-conversacion-${new Date().toISOString().slice(0, 10)}.md`;
   document.body.append(link);
   link.click();
   link.remove();
@@ -390,24 +433,36 @@ exportChat?.addEventListener('click', exportConversation);
 byId('contextExport')?.addEventListener('click', exportConversation);
 
 document.addEventListener('click', (event) => {
-  const button = event.target instanceof Element ? event.target.closest('[data-message-action]') : null;
+  const button =
+    event.target instanceof Element ? event.target.closest('[data-message-action]') : null;
   if (!button) return;
   const article = button.closest('.message');
   const paragraph = article?.querySelector('p');
-  const raw = paragraph ? (paragraph.dataset.raw || paragraph.textContent || '') : '';
+  const raw = paragraph ? paragraph.dataset.raw || paragraph.textContent || '' : '';
   if (!raw.trim()) return;
   const action = button.dataset.messageAction;
   const restore = button.textContent;
   if (action === 'copy') {
     if (!navigator.clipboard?.writeText) return;
-    navigator.clipboard.writeText(raw)
-      .then(() => { button.textContent = 'Copiado'; })
-      .catch(() => { button.textContent = 'No disponible'; })
-      .finally(() => window.setTimeout(() => { button.textContent = restore; }, 1_400));
+    navigator.clipboard
+      .writeText(raw)
+      .then(() => {
+        button.textContent = 'Copiado';
+      })
+      .catch(() => {
+        button.textContent = 'No disponible';
+      })
+      .finally(() =>
+        window.setTimeout(() => {
+          button.textContent = restore;
+        }, 1_400)
+      );
   } else if (action === 'save') {
     const saved = saveDraft(paragraph.dataset.raw || paragraph.textContent || '');
     button.textContent = saved ? 'Guardado' : 'Sin texto';
-    window.setTimeout(() => { button.textContent = restore; }, 1_400);
+    window.setTimeout(() => {
+      button.textContent = restore;
+    }, 1_400);
   } else if (action === 'speak') {
     if (currentAudio || window.speechSynthesis?.speaking) stopSpeech();
     else speakMessage(raw);
@@ -437,7 +492,8 @@ const addMessage = (text, role = 'isabella') => {
 };
 
 let attachment = null;
-const attachmentContext = () => attachment ? `\n\nArchivo adjunto: ${attachment.name}\n${attachment.text}` : '';
+const attachmentContext = () =>
+  attachment ? `\n\nArchivo adjunto: ${attachment.name}\n${attachment.text}` : '';
 const paintAttachment = () => {
   if (attachmentChip) attachmentChip.hidden = !attachment;
   if (attachmentName) attachmentName.textContent = attachment ? attachment.name : '';
@@ -452,22 +508,34 @@ const clearAttachment = () => {
 const readFileAsContext = async (file) => {
   if (!file) return;
   if (file.size > MAX_LOCAL_FILE_BYTES) {
-    addMessage(`El archivo supera el límite local de ${Math.round(MAX_LOCAL_FILE_BYTES / 1024)} KB. Adjunta un fragmento más pequeño.`, 'isabella');
+    addMessage(
+      `El archivo supera el límite local de ${Math.round(MAX_LOCAL_FILE_BYTES / 1024)} KB. Adjunta un fragmento más pequeño.`,
+      'isabella'
+    );
     if (localFile) localFile.value = '';
     return;
   }
   try {
     const contents = (await file.text()).trim();
     if (!contents) {
-      addMessage('El archivo no contiene texto legible. Prueba con TXT, MD, CSV, JSON o LOG.', 'isabella');
+      addMessage(
+        'El archivo no contiene texto legible. Prueba con TXT, MD, CSV, JSON o LOG.',
+        'isabella'
+      );
       if (localFile) localFile.value = '';
       return;
     }
-    attachment = { name: sanitizeFileName(file.name), text: contents.slice(0, MAX_LOCAL_FILE_CHARS) };
+    attachment = {
+      name: sanitizeFileName(file.name),
+      text: contents.slice(0, MAX_LOCAL_FILE_CHARS),
+    };
     paintAttachment();
     prompt?.focus();
   } catch {
-    addMessage('No pude leer el archivo en este navegador. Verifica el formato e inténtalo de nuevo.', 'isabella');
+    addMessage(
+      'No pude leer el archivo en este navegador. Verifica el formato e inténtalo de nuevo.',
+      'isabella'
+    );
     if (localFile) localFile.value = '';
   }
 };
@@ -480,7 +548,10 @@ const sendMessage = async (text) => {
     return;
   }
   if (input.length > 18_000) {
-    addMessage(`La solicitud con el archivo adjunto supera el límite de ${MAX_COMBINED_PROMPT_CHARS.toLocaleString('es-MX')} caracteres. Recorta el texto e inténtalo de nuevo.`, 'isabella');
+    addMessage(
+      `La solicitud con el archivo adjunto supera el límite de ${MAX_COMBINED_PROMPT_CHARS.toLocaleString('es-MX')} caracteres. Recorta el texto e inténtalo de nuevo.`,
+      'isabella'
+    );
     return;
   }
   const display = typed || `Archivo adjunto: ${attachment?.name || 'archivo'}`;
@@ -496,65 +567,90 @@ const sendMessage = async (text) => {
   form?.setAttribute('aria-busy', 'true');
   const startedAt = performance.now();
 
-  try {
-    const response = await fetch('/api/v1/cognition/route', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        input,
-        sessionId,
-        modelEngine: 'auto',
-        focusLens: window.IsabellaChatPlus?.getLens?.() || 'general',
-        history: [...messages.querySelectorAll('.message')]
-          .slice(-16)
-          .map((message) => ({
-            role: message.classList.contains('user') ? 'user' : 'assistant',
-            content: message.querySelector('p')?.dataset.raw || message.querySelector('p')?.textContent || ''
-          }))
-          .filter((turn) => turn.content.trim())
-      }),
-      signal: abortController.signal
-    });
-
-    const contentType = response.headers.get('content-type') || '';
-    let payload = null;
-    if (contentType.includes('application/json')) {
-      try { payload = await response.json(); } catch { payload = null; }
-    }
-    if (!response.ok) {
-      const serverError = typeof payload?.error === 'string' ? payload.error : `HTTP ${response.status}`;
-      throw new Error(serverError);
-    }
-
-    const output = typeof payload?.output === 'string'
-      ? payload.output
-      : typeof payload?.generativeNarrative === 'string' ? payload.generativeNarrative : '';
-    if (payload?.success === true && output.trim()) {
-      if (window.IsabellaChatPlus?.renderInto) {
-        window.IsabellaChatPlus.renderInto(assistantPara, output, { animate: true });
-      } else {
-        assistantPara.textContent = output;
-      }
-      const serverTiming = /cognition;dur=([\d.]+)/.exec(response.headers.get('Server-Timing') || '');
-      const latencyMs = Number.isFinite(payload?.latencyMs)
-        ? payload.latencyMs
-        : serverTiming ? Number(serverTiming[1]) : performance.now() - startedAt;
-      if (window.IsabellaChatPlus?.decorate) {
-        window.IsabellaChatPlus.decorate(assistantPara, { engine: payload.responseEngine || payload.engine, latencyMs });
-      }
-      if (window.IsabellaChatPlus?.persist) window.IsabellaChatPlus.persist();
-      refreshWorkspaceContext();
+  let streamed = '';
+  let lastPaint = 0;
+  const paintStream = (force = false) => {
+    if (!streamed) return;
+    const now = performance.now();
+    if (!force && now - lastPaint < 70) return;
+    lastPaint = now;
+    if (window.IsabellaChatPlus?.renderInto) {
+      window.IsabellaChatPlus.renderInto(assistantPara, streamed, { animate: false });
     } else {
-      throw new Error(typeof payload?.error === 'string' ? payload.error : 'Respuesta inválida del servidor');
+      assistantPara.textContent = streamed;
     }
+  };
+
+  try {
+    const cognition = window.IsabellaCognition;
+    if (!cognition?.generate) throw new Error('COGNITION_CLIENT_UNAVAILABLE');
+    const result = await cognition.generate({
+      input,
+      sessionId,
+      modelEngine: 'auto',
+      focusLens: window.IsabellaChatPlus?.getLens?.() || 'general',
+      history: [...messages.querySelectorAll('.message')]
+        .slice(-16)
+        .map((message) => ({
+          role: message.classList.contains('user') ? 'user' : 'assistant',
+          content:
+            message.querySelector('p')?.dataset.raw ||
+            message.querySelector('p')?.textContent ||
+            '',
+        }))
+        .filter((turn) => turn.content.trim()),
+      signal: abortController.signal,
+      onEvent: (event) => {
+        if (event.type === 'chunk') {
+          streamed += event.text;
+          paintStream();
+        }
+      },
+    });
+    if (!streamed && result.text) streamed = result.text;
+    paintStream(true);
+    if (window.IsabellaChatPlus?.decorate) {
+      window.IsabellaChatPlus.decorate(assistantPara, {
+        engine: result.engine,
+        latencyMs: Number.isFinite(result.latencyMs)
+          ? result.latencyMs
+          : performance.now() - startedAt,
+        omega: result.omega,
+        trace: result.trace,
+        blocked: result.blocked,
+        cacheHit: result.cacheHit,
+        streamMode: result.streamMode,
+      });
+    }
+    if (window.IsabellaChatPlus?.persist) window.IsabellaChatPlus.persist();
+    refreshWorkspaceContext();
   } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error de red';
     if (err?.name === 'AbortError') {
-      window.IsabellaChatPlus?.renderInto?.(assistantPara, 'Generación detenida por la persona usuaria. El contexto de la sesión se conserva.', { animate: false });
+      const partial = streamed.trim();
+      window.IsabellaChatPlus?.renderInto?.(
+        assistantPara,
+        partial
+          ? `${partial}\n\n*Generación detenida por la persona usuaria. El texto parcial se conserva.*`
+          : 'Generación detenida por la persona usuaria. El contexto de la sesión se conserva.',
+        { animate: false }
+      );
       return;
     }
-    const message = err instanceof Error ? err.message : 'Error de red';
+    if (streamed.trim()) {
+      window.IsabellaChatPlus?.renderInto?.(
+        assistantPara,
+        `${streamed}\n\n---\n*La entrega se interrumpió: ${message}. El texto recibido se conserva; puedes regenerar la respuesta.*`,
+        { animate: false }
+      );
+      return;
+    }
     if (window.IsabellaChatPlus?.renderInto) {
-      window.IsabellaChatPlus.renderInto(assistantPara, `No pude completar la respuesta: ${message}. Puedes reintentarlo sin perder el contexto de esta sesión.`, { animate: false });
+      window.IsabellaChatPlus.renderInto(
+        assistantPara,
+        `No pude completar la respuesta: ${message}. Puedes reintentarlo sin perder el contexto de esta sesión.`,
+        { animate: false }
+      );
     } else {
       assistantPara.textContent = `Error: ${message}`;
     }
@@ -566,7 +662,12 @@ const sendMessage = async (text) => {
 };
 
 prompt?.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent?.isComposing && event.keyCode !== 229) {
+  if (
+    event.key === 'Enter' &&
+    !event.shiftKey &&
+    !event.nativeEvent?.isComposing &&
+    event.keyCode !== 229
+  ) {
     event.preventDefault();
     form?.requestSubmit();
   }
@@ -581,7 +682,8 @@ form?.addEventListener('submit', (e) => {
   sendMessage(text);
 });
 
-const WELCOME_TEXT = 'Estoy aquí. Puedes escribirme o activar tu micrófono para hablar de forma natural.';
+const WELCOME_TEXT =
+  'Estoy aquí. Puedes escribirme o activar tu micrófono para hablar de forma natural.';
 
 const resetConversation = ({ keepFocus } = {}) => {
   messages.querySelectorAll('.message, .empty-state').forEach((node) => node.remove());
@@ -599,19 +701,28 @@ const readDrafts = () => {
   try {
     const parsed = JSON.parse(localStorage.getItem(DRAFT_STORAGE_KEY) || '[]');
     return Array.isArray(parsed)
-      ? parsed.filter((item) => item && typeof item.code === 'string' && item.code.trim()).slice(0, 20)
+      ? parsed
+          .filter((item) => item && typeof item.code === 'string' && item.code.trim())
+          .slice(0, 20)
       : [];
   } catch {
     return [];
   }
 };
 const writeDrafts = (list) => {
-  try { localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(list.slice(0, 20))); } catch { /* quota or privacy mode */ }
+  try {
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(list.slice(0, 20)));
+  } catch {
+    /* quota or privacy mode */
+  }
 };
 const formatStamp = (ts) => {
   const date = new Date(Number(ts) || Date.now());
-  return date.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) + ' · ' +
-    date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+  return (
+    date.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) +
+    ' · ' +
+    date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+  );
 };
 const renderDrafts = () => {
   if (!draftShelf) return;
@@ -620,7 +731,8 @@ const renderDrafts = () => {
   if (!drafts.length) {
     const empty = document.createElement('p');
     empty.className = 'empty-shelf';
-    empty.textContent = 'Tus respuestas guardadas aparecerán aquí. Usa «Guardar» debajo de una respuesta para conservarla.';
+    empty.textContent =
+      'Tus respuestas guardadas aparecerán aquí. Usa «Guardar» debajo de una respuesta para conservarla.';
     draftShelf.append(empty);
     return;
   }
@@ -640,14 +752,25 @@ const renderDrafts = () => {
     const use = document.createElement('button');
     use.type = 'button';
     use.textContent = 'Usar';
-    use.addEventListener('click', () => { closePanel(); prompt.value = draft.code; prompt.dispatchEvent(new Event('input')); prompt.focus(); });
+    use.addEventListener('click', () => {
+      closePanel();
+      prompt.value = draft.code;
+      prompt.dispatchEvent(new Event('input'));
+      prompt.focus();
+    });
     const copy = document.createElement('button');
     copy.type = 'button';
     copy.textContent = 'Copiar';
     copy.addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText(draft.code); copy.textContent = 'Copiado'; }
-      catch { copy.textContent = 'No disponible'; }
-      window.setTimeout(() => { copy.textContent = 'Copiar'; }, 1400);
+      try {
+        await navigator.clipboard.writeText(draft.code);
+        copy.textContent = 'Copiado';
+      } catch {
+        copy.textContent = 'No disponible';
+      }
+      window.setTimeout(() => {
+        copy.textContent = 'Copiar';
+      }, 1400);
     });
     const remove = document.createElement('button');
     remove.type = 'button';
@@ -702,7 +825,8 @@ const refreshWorkspaceContext = () => {
   const turns = messages.querySelectorAll('.message').length;
   const userTurns = messages.querySelectorAll('.message.user').length;
   const short = sessionId.slice(0, 8).toUpperCase();
-  if (sessionBadge) sessionBadge.textContent = `SESIÓN ${short} · ${turns} ${turns === 1 ? 'MENSAJE' : 'MENSAJES'}`;
+  if (sessionBadge)
+    sessionBadge.textContent = `SESIÓN ${short} · ${turns} ${turns === 1 ? 'MENSAJE' : 'MENSAJES'}`;
   if (inspectorSession) inspectorSession.textContent = short;
   document.body.classList.toggle('has-conversation', userTurns > 0);
 };
@@ -711,30 +835,56 @@ refreshWorkspaceContext();
 /* ------------------------------------------------------------ TTS / Speech */
 let currentAudio = null;
 const stopSpeech = () => {
-  if (currentAudio) { try { currentAudio.pause(); } catch { /* noop */ } currentAudio = null; }
-  try { window.speechSynthesis?.cancel(); } catch { /* noop */ }
+  if (currentAudio) {
+    try {
+      currentAudio.pause();
+    } catch {
+      /* noop */
+    }
+    currentAudio = null;
+  }
+  try {
+    window.speechSynthesis?.cancel();
+  } catch {
+    /* noop */
+  }
 };
 const speakMessage = async (text) => {
-  const clean = String(text || '').trim().slice(0, 4_000);
+  const clean = String(text || '')
+    .trim()
+    .slice(0, 4_000);
   if (!clean) return;
   stopSpeech();
-  const payloadFor = (audio) => audio?.dataUrl || audio?.audio || (typeof audio?.audioBase64 === 'string' && audio.audioBase64.startsWith('data:') ? audio.audioBase64 : '');
+  const payloadFor = (audio) =>
+    audio?.dataUrl ||
+    audio?.audio ||
+    (typeof audio?.audioBase64 === 'string' && audio.audioBase64.startsWith('data:')
+      ? audio.audioBase64
+      : '');
   try {
     let response = await fetch('/api/v1/tts/synthesize', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: clean, sessionId, format: 'mp3', voice: 'troy' })
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: clean, sessionId, format: 'mp3', voice: 'troy' }),
     });
     if (!response.ok) {
       response = await fetch('/api/v1/cognition/speech', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: clean, sessionId, format: 'mp3', voice: 'troy' })
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: clean, sessionId, format: 'mp3', voice: 'troy' }),
       });
     }
     if (response.ok) {
       const audioUrl = payloadFor(await response.json());
       if (/^data:audio\/(?:mpeg|mp3|wav);base64,/.test(audioUrl)) {
         currentAudio = new Audio(audioUrl);
-        currentAudio.addEventListener('ended', () => { currentAudio = null; }, { once: true });
+        currentAudio.addEventListener(
+          'ended',
+          () => {
+            currentAudio = null;
+          },
+          { once: true }
+        );
         await currentAudio.play();
         return;
       }
@@ -754,7 +904,7 @@ const speakMessage = async (text) => {
 const lastAssistantRaw = () => {
   const paragraphs = [...messages.querySelectorAll('.message.isabella p')];
   const last = paragraphs.at(-1);
-  return last ? (last.dataset.raw || last.textContent || '') : '';
+  return last ? last.dataset.raw || last.textContent || '' : '';
 };
 const playLastAssistantMessage = () => {
   const raw = lastAssistantRaw();
@@ -763,15 +913,27 @@ const playLastAssistantMessage = () => {
 const copyLastAssistant = async () => {
   const raw = lastAssistantRaw();
   if (!raw.trim() || !navigator.clipboard?.writeText) return;
-  try { await navigator.clipboard.writeText(raw); } catch { /* clipboard unavailable */ }
+  try {
+    await navigator.clipboard.writeText(raw);
+  } catch {
+    /* clipboard unavailable */
+  }
 };
 
 const VOICE_KEY = 'isabella.voice.v1';
 const readVoicePreference = () => {
-  try { return localStorage.getItem(VOICE_KEY) === '1'; } catch { return false; }
+  try {
+    return localStorage.getItem(VOICE_KEY) === '1';
+  } catch {
+    return false;
+  }
 };
 const writeVoicePreference = (on) => {
-  try { localStorage.setItem(VOICE_KEY, on ? '1' : '0'); } catch { /* private mode */ }
+  try {
+    localStorage.setItem(VOICE_KEY, on ? '1' : '0');
+  } catch {
+    /* private mode */
+  }
 };
 let voiceEnabled = readVoicePreference();
 const paintVoice = () => {
@@ -826,7 +988,10 @@ if (RecognitionCtor) {
   recognition.addEventListener('error', (event) => {
     setListening(false);
     if (event?.error === 'not-allowed' || event?.error === 'service-not-allowed') {
-      addMessage('El navegador bloqueó el micrófono. Habilita el permiso de voz para este sitio y vuelve a intentarlo.', 'isabella');
+      addMessage(
+        'El navegador bloqueó el micrófono. Habilita el permiso de voz para este sitio y vuelve a intentarlo.',
+        'isabella'
+      );
     }
   });
   if (inspectorVoice) inspectorVoice.textContent = 'WEB STT + TTS';
@@ -840,11 +1005,18 @@ if (RecognitionCtor) {
 }
 const toggleMic = () => {
   if (!recognition) {
-    addMessage('Este navegador no expone reconocimiento de voz. Puedes escribir o adjuntar un archivo de texto.', 'isabella');
+    addMessage(
+      'Este navegador no expone reconocimiento de voz. Puedes escribir o adjuntar un archivo de texto.',
+      'isabella'
+    );
     return;
   }
   if (listening) {
-    try { recognition.stop(); } catch { /* already stopped */ }
+    try {
+      recognition.stop();
+    } catch {
+      /* already stopped */
+    }
     setListening(false);
     return;
   }
@@ -864,13 +1036,18 @@ document.querySelectorAll('.mode[data-mode]').forEach((button) => {
       item.setAttribute('aria-pressed', String(item === button));
     });
     if (isVoice) toggleMic();
-    else { closePanel(true); prompt?.focus(); }
+    else {
+      closePanel(true);
+      prompt?.focus();
+    }
   });
 });
 
 /* ------------------------------------------------------------- attachments */
 attachText?.addEventListener('click', () => localFile?.click());
-localFile?.addEventListener('change', () => { void readFileAsContext(localFile.files?.[0]); });
+localFile?.addEventListener('change', () => {
+  void readFileAsContext(localFile.files?.[0]);
+});
 removeAttachment?.addEventListener('click', clearAttachment);
 paintAttachment();
 
@@ -900,7 +1077,9 @@ const closeInspector = () => {
 };
 contextInspector?.addEventListener('click', openInspector);
 closeSystemInspector?.addEventListener('click', closeInspector);
-systemInspector?.addEventListener('click', (event) => { if (event.target === systemInspector) closeInspector(); });
+systemInspector?.addEventListener('click', (event) => {
+  if (event.target === systemInspector) closeInspector();
+});
 
 /* ------------------------------------------------------------------ panels */
 const PANEL_SELECTOR = '.studio-panel, .access-section, .workspace-pane';
@@ -926,7 +1105,8 @@ function ensurePanelChrome(section) {
 function openPanel(id) {
   const section = byId(id);
   if (!section || !section.matches?.(PANEL_SELECTOR)) return false;
-  if (document.body.classList.contains('panel-open') && document.body.dataset.panel === id) return true;
+  if (document.body.classList.contains('panel-open') && document.body.dataset.panel === id)
+    return true;
   const active = document.activeElement;
   if (active instanceof HTMLElement && !active.closest('.panel-visible')) lastPanelTrigger = active;
   if (document.body.classList.contains('panel-open')) closePanel(true);
@@ -965,13 +1145,22 @@ paletteEmpty.hidden = true;
 paletteEmpty.textContent = 'Sin resultados. Prueba con otra palabra.';
 commandList?.append(paletteEmpty);
 
-const normalizeSearch = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-const visibleCommands = () => [...(commandList?.querySelectorAll('button[data-command]') || [])].filter((button) => !button.hidden);
+const normalizeSearch = (value) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+const visibleCommands = () =>
+  [...(commandList?.querySelectorAll('button[data-command]') || [])].filter(
+    (button) => !button.hidden
+  );
 const filterCommands = () => {
   if (!commandList) return;
   const query = normalizeSearch(commandSearch?.value);
   commandList.querySelectorAll('button[data-command]').forEach((button) => {
-    const haystack = normalizeSearch(`${button.textContent || ''} ${button.dataset.keywords || ''} ${button.dataset.command || ''}`);
+    const haystack = normalizeSearch(
+      `${button.textContent || ''} ${button.dataset.keywords || ''} ${button.dataset.command || ''}`
+    );
     button.hidden = Boolean(query) && !haystack.includes(query);
   });
   const visible = visibleCommands();
@@ -984,7 +1173,11 @@ const openPalette = () => {
   } else {
     commandPalette.setAttribute('open', '');
   }
-  if (commandSearch) { commandSearch.value = ''; filterCommands(); commandSearch.focus(); }
+  if (commandSearch) {
+    commandSearch.value = '';
+    filterCommands();
+    commandSearch.focus();
+  }
 };
 const closePalette = () => {
   if (typeof commandPalette?.close === 'function') commandPalette.close();
@@ -1064,9 +1257,12 @@ const movePaletteFocus = (direction) => {
   const buttons = visibleCommands();
   if (!buttons.length) return;
   const current = buttons.indexOf(document.activeElement);
-  const index = current === -1
-    ? (direction > 0 ? 0 : buttons.length - 1)
-    : (current + direction + buttons.length) % buttons.length;
+  const index =
+    current === -1
+      ? direction > 0
+        ? 0
+        : buttons.length - 1
+      : (current + direction + buttons.length) % buttons.length;
   buttons[index].focus();
 };
 document.addEventListener('keydown', (event) => {
@@ -1079,7 +1275,8 @@ commandLauncher?.addEventListener('click', openPalette);
 byId('closeCommandPalette')?.addEventListener('click', closePalette);
 commandSearch?.addEventListener('input', filterCommands);
 commandList?.addEventListener('click', (event) => {
-  const button = event.target instanceof Element ? event.target.closest('button[data-command]') : null;
+  const button =
+    event.target instanceof Element ? event.target.closest('button[data-command]') : null;
   if (button) runCommand(button.dataset.command);
 });
 commandList?.addEventListener('keydown', (event) => {
@@ -1097,30 +1294,62 @@ commandSearch?.addEventListener('keydown', (event) => {
 commandPalette?.addEventListener('keydown', (event) => {
   if (event.key !== 'Enter') return;
   const buttons = visibleCommands();
-  const active = document.activeElement instanceof HTMLElement && document.activeElement.matches('button[data-command]')
-    ? document.activeElement
-    : buttons[0];
+  const active =
+    document.activeElement instanceof HTMLElement &&
+    document.activeElement.matches('button[data-command]')
+      ? document.activeElement
+      : buttons[0];
   if (active) {
     event.preventDefault();
     runCommand(active.dataset.command);
   }
 });
-commandPalette?.addEventListener('click', (event) => { if (event.target === commandPalette) closePalette(); });
+commandPalette?.addEventListener('click', (event) => {
+  if (event.target === commandPalette) closePalette();
+});
 
 /* ----------------------------------------------------- section / rail links */
 const runAction = (action) => {
   switch (action) {
-    case 'new-chat': resetConversation(); closeSideRails(); break;
-    case 'export': exportConversation(); closeSideRails(); break;
-    case 'history': closeSideRails(); window.IsabellaChatPlus?.openHistory?.(); break;
-    case 'close-rails': closeSideRails(); break;
-    case 'mic': toggleMic(); break;
-    case 'shortcuts': closeSideRails(); window.IsabellaChatPlus?.openShortcuts?.(); break;
-    case 'inspector': closeSideRails(); openInspector(); break;
-    case 'focus-prompt': closeSideRails(); closePanel(true); prompt?.focus(); break;
-    case 'copy-last': void copyLastAssistant(); break;
-    case 'read-last': playLastAssistantMessage(); break;
-    default: break;
+    case 'new-chat':
+      resetConversation();
+      closeSideRails();
+      break;
+    case 'export':
+      exportConversation();
+      closeSideRails();
+      break;
+    case 'history':
+      closeSideRails();
+      window.IsabellaChatPlus?.openHistory?.();
+      break;
+    case 'close-rails':
+      closeSideRails();
+      break;
+    case 'mic':
+      toggleMic();
+      break;
+    case 'shortcuts':
+      closeSideRails();
+      window.IsabellaChatPlus?.openShortcuts?.();
+      break;
+    case 'inspector':
+      closeSideRails();
+      openInspector();
+      break;
+    case 'focus-prompt':
+      closeSideRails();
+      closePanel(true);
+      prompt?.focus();
+      break;
+    case 'copy-last':
+      void copyLastAssistant();
+      break;
+    case 'read-last':
+      playLastAssistantMessage();
+      break;
+    default:
+      break;
   }
 };
 const applyStarter = (value) => {
@@ -1173,8 +1402,11 @@ document.addEventListener('keydown', (event) => {
   if (event.key !== 'Tab') return;
   const panel = document.querySelector('.panel-visible');
   if (!panel) return;
-  const focusable = [...panel.querySelectorAll('a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])')]
-    .filter((node) => node instanceof HTMLElement && node.offsetParent !== null);
+  const focusable = [
+    ...panel.querySelectorAll(
+      'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+    ),
+  ].filter((node) => node instanceof HTMLElement && node.offsetParent !== null);
   if (!focusable.length) {
     event.preventDefault();
     panel.focus({ preventScroll: true });
@@ -1207,7 +1439,7 @@ const mountMeshCanvas = (host, canvas, options = {}) => {
     y: Math.random(),
     vx: (Math.random() - 0.5) * drift,
     vy: (Math.random() - 0.5) * drift,
-    r: Math.random() * 1.4 + 0.7
+    r: Math.random() * 1.4 + 0.7,
   }));
   let width = 0;
   let height = 0;
@@ -1260,7 +1492,10 @@ const mountMeshCanvas = (host, canvas, options = {}) => {
   const start = () => {
     if (running) return;
     resize();
-    if (reduceMotion) { paint(); return; }
+    if (reduceMotion) {
+      paint();
+      return;
+    }
     running = true;
     const loop = () => {
       if (!running) return;
@@ -1274,16 +1509,31 @@ const mountMeshCanvas = (host, canvas, options = {}) => {
     window.cancelAnimationFrame(frame);
   };
   if (typeof ResizeObserver === 'function') {
-    new ResizeObserver(() => { resize(); if (!running) paint(); }).observe(host);
+    new ResizeObserver(() => {
+      resize();
+      if (!running) paint();
+    }).observe(host);
   } else {
-    window.addEventListener('resize', () => { resize(); if (!running) paint(); });
+    window.addEventListener('resize', () => {
+      resize();
+      if (!running) paint();
+    });
   }
   if (typeof IntersectionObserver === 'function') {
-    new IntersectionObserver((entries) => {
-      entries.forEach((entry) => { if (entry.isIntersecting) start(); else stop(); });
-    }, { threshold: 0 }).observe(host);
+    new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) start();
+          else stop();
+        });
+      },
+      { threshold: 0 }
+    ).observe(host);
   }
-  document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); else start(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stop();
+    else start();
+  });
   start();
 };
 
@@ -1299,7 +1549,7 @@ const mountAmbientMesh = () => {
     nodeCount: compact ? 14 : 24,
     linkDistance: 150,
     lineAlpha: 0.13,
-    nodeAlpha: 0.48
+    nodeAlpha: 0.48,
   });
   const hero = document.querySelector('.hero.hero-product');
   const heroCanvas = byId('quantumMesh');
@@ -1309,24 +1559,27 @@ const mountAmbientMesh = () => {
       linkDistance: 172,
       lineAlpha: 0.1,
       nodeAlpha: 0.4,
-      drift: 0.0002
+      drift: 0.0002,
     });
   }
 };
 mountAmbientMesh();
 
 /* ---------------------------------------------- initial UI + public bridge */
-const navObserver = new IntersectionObserver((entries) => {
-  entries.forEach((entry) => {
-    if (!entry.isIntersecting) return;
-    document.querySelectorAll('.nav-links a').forEach((link) => {
-      const active = link.getAttribute('href') === `#${entry.target.id}`;
-      link.classList.toggle('is-active', active);
-      if (active) link.setAttribute('aria-current', 'page');
-      else link.removeAttribute('aria-current');
+const navObserver = new IntersectionObserver(
+  (entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      document.querySelectorAll('.nav-links a').forEach((link) => {
+        const active = link.getAttribute('href') === `#${entry.target.id}`;
+        link.classList.toggle('is-active', active);
+        if (active) link.setAttribute('aria-current', 'page');
+        else link.removeAttribute('aria-current');
+      });
     });
-  });
-}, { rootMargin: '-20% 0px -70% 0px' });
+  },
+  { rootMargin: '-20% 0px -70% 0px' }
+);
 document.querySelectorAll('section[id]').forEach((section) => navObserver.observe(section));
 document.querySelectorAll('.nav-links a[href^="#"]').forEach((link) => {
   link.dataset.focusPrompt = link.hasAttribute('data-focus-prompt') ? 'true' : 'false';
@@ -1365,5 +1618,5 @@ window.IsabellaApp = Object.freeze({
   refreshWorkspaceContext,
   getAttachmentName: () => (attachment ? attachment.name : null),
   getVoiceEnabled: () => voiceEnabled,
-  copyLastAssistant
+  copyLastAssistant,
 });

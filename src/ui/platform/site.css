@@ -2777,6 +2777,18 @@ body.chat-app {
   color: var(--muted);
 }
 
+.msg-badge.msg-omega {
+  color: var(--mint);
+  border-color: rgba(154, 247, 211, 0.32);
+  background: rgba(154, 247, 211, 0.06);
+}
+
+.msg-badge.msg-omega.is-blocked {
+  color: var(--danger);
+  border-color: rgba(255, 120, 150, 0.4);
+  background: rgba(255, 120, 150, 0.06);
+}
+
 .msg-actions {
   display: flex;
   gap: 4px;

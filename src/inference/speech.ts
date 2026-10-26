@@ -7,9 +7,9 @@
  * fallback and is owned by the client, not by this module.
  */
 
-export const SPEECH_CONTRACT_VERSION = "1.0.0";
+export const SPEECH_CONTRACT_VERSION = '1.0.0';
 
-export type SpeechProvider = "groq";
+export type SpeechProvider = 'groq';
 
 export interface SpeechReadiness {
   textToSpeech: boolean;
@@ -37,40 +37,41 @@ interface GroqSpeechConfig {
   sttModel: string;
 }
 
-const DEFAULT_GROQ_BASE = "https://api.groq.com/openai/v1";
+const DEFAULT_GROQ_BASE = 'https://api.groq.com/openai/v1';
 // Do not silently select an English-only model for Spanish-language output.
 // Operators must explicitly configure a model suitable for their target language.
-const DEFAULT_TTS_MODEL = "";
-const DEFAULT_TTS_VOICE = "troy";
-const DEFAULT_STT_MODEL = "whisper-large-v3";
+const DEFAULT_TTS_MODEL = '';
+const DEFAULT_TTS_VOICE = 'troy';
+const DEFAULT_STT_MODEL = 'whisper-large-v3';
 
 // Caché LRU de síntesis para reducir latencia en textos repetidos.
 const TTS_CACHE_MAX = 64;
 const ttsCache = new Map<string, SynthesizedSpeech>();
-const ALLOWED_AUDIO_MIME = /^audio\/(mpeg|mp3|mp4|m4a|x-m4a|wav|x-wav|wave|webm|ogg|oga|flac|aac)$/i;
+const ALLOWED_AUDIO_MIME =
+  /^audio\/(mpeg|mp3|mp4|m4a|x-m4a|wav|x-wav|wave|webm|ogg|oga|flac|aac)$/i;
 const AUDIO_EXTENSION: Record<string, string> = {
-  "audio/mpeg": "mp3",
-  "audio/mp3": "mp3",
-  "audio/mp4": "m4a",
-  "audio/m4a": "m4a",
-  "audio/x-m4a": "m4a",
-  "audio/wav": "wav",
-  "audio/x-wav": "wav",
-  "audio/wave": "wav",
-  "audio/webm": "webm",
-  "audio/ogg": "ogg",
-  "audio/oga": "ogg",
-  "audio/flac": "flac",
-  "audio/aac": "aac",
+  'audio/mpeg': 'mp3',
+  'audio/mp3': 'mp3',
+  'audio/mp4': 'm4a',
+  'audio/m4a': 'm4a',
+  'audio/x-m4a': 'm4a',
+  'audio/wav': 'wav',
+  'audio/x-wav': 'wav',
+  'audio/wave': 'wav',
+  'audio/webm': 'webm',
+  'audio/ogg': 'ogg',
+  'audio/oga': 'ogg',
+  'audio/flac': 'flac',
+  'audio/aac': 'aac',
 };
 
 /** Provider multipart uploads require a filename with a recognized audio extension. */
 function audioFileName(mimeType: string): string {
-  return `audio.${AUDIO_EXTENSION[mimeType.toLowerCase()] ?? "wav"}`;
+  return `audio.${AUDIO_EXTENSION[mimeType.toLowerCase()] ?? 'wav'}`;
 }
 
 function nonEmpty(value: unknown): string | null {
-  if (typeof value !== "string") return null;
+  if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
@@ -80,7 +81,7 @@ function groqSpeechConfig(env: Record<string, string | undefined>): GroqSpeechCo
   if (!key) return null;
   return {
     key,
-    baseUrl: (nonEmpty(env.GROQ_BASE_URL) ?? DEFAULT_GROQ_BASE).replace(/\/+$/, ""),
+    baseUrl: (nonEmpty(env.GROQ_BASE_URL) ?? DEFAULT_GROQ_BASE).replace(/\/+$/, ''),
     ttsModel: nonEmpty(env.GROQ_TTS_MODEL) ?? DEFAULT_TTS_MODEL,
     ttsVoice: nonEmpty(env.GROQ_TTS_VOICE) ?? DEFAULT_TTS_VOICE,
     sttModel: nonEmpty(env.GROQ_STT_MODEL) ?? DEFAULT_STT_MODEL,
@@ -92,7 +93,7 @@ export function describeSpeechReadiness(env: Record<string, string | undefined>)
   return {
     textToSpeech: config !== null && config.ttsModel.length > 0,
     speechToText: config !== null,
-    providers: config ? ["groq"] : [],
+    providers: config ? ['groq'] : [],
   };
 }
 
@@ -102,20 +103,20 @@ export function describeSpeechReadiness(env: Record<string, string | undefined>)
  */
 export async function synthesizeSpeech(
   env: Record<string, string | undefined>,
-  input: { text: string; voice?: string; format?: "wav" | "mp3"; timeoutMs?: number },
+  input: { text: string; voice?: string; format?: 'wav' | 'mp3'; timeoutMs?: number }
 ): Promise<SynthesizedSpeech | null> {
   const config = groqSpeechConfig(env);
   if (!config || !config.ttsModel) return null;
   const text = nonEmpty(input.text)?.slice(0, 2_000);
   if (!text) return null;
-  const format = input.format === "mp3" ? "mp3" : "wav";
+  const format = input.format === 'mp3' ? 'mp3' : 'wav';
   const cacheKey = `${config.ttsModel}|${nonEmpty(input.voice) ?? config.ttsVoice}|${format}|${text}`;
   const cached = ttsCache.get(cacheKey);
   if (cached !== undefined) return cached;
   try {
     const response = await fetch(`${config.baseUrl}/audio/speech`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${config.key}`, "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { Authorization: `Bearer ${config.key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: config.ttsModel,
         input: text,
@@ -126,11 +127,11 @@ export async function synthesizeSpeech(
     });
     if (!response.ok) throw new Error(`groq speech HTTP ${response.status}`);
     const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.byteLength === 0) throw new Error("groq speech returned empty audio");
+    if (buffer.byteLength === 0) throw new Error('groq speech returned empty audio');
     const result: SynthesizedSpeech = {
-      provider: "groq",
-      mimeType: format === "mp3" ? "audio/mpeg" : "audio/wav",
-      dataUrl: `data:${format === "mp3" ? "audio/mpeg" : "audio/wav"};base64,${buffer.toString("base64")}`,
+      provider: 'groq',
+      mimeType: format === 'mp3' ? 'audio/mpeg' : 'audio/wav',
+      dataUrl: `data:${format === 'mp3' ? 'audio/mpeg' : 'audio/wav'};base64,${buffer.toString('base64')}`,
       bytes: buffer.byteLength,
     };
     ttsCache.set(cacheKey, result);
@@ -141,7 +142,7 @@ export async function synthesizeSpeech(
     return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.warn("[Isabella] speech synthesis unavailable", { message: message.slice(0, 180) });
+    console.warn('[Isabella] speech synthesis unavailable', { message: message.slice(0, 180) });
     return null;
   }
 }
@@ -152,7 +153,7 @@ export async function synthesizeSpeech(
  */
 export async function transcribeAudio(
   env: Record<string, string | undefined>,
-  input: { base64: string; mimeType: string; language?: string; timeoutMs?: number },
+  input: { base64: string; mimeType: string; language?: string; timeoutMs?: number }
 ): Promise<Transcription | null> {
   const config = groqSpeechConfig(env);
   if (!config) return null;
@@ -161,28 +162,28 @@ export async function transcribeAudio(
   const base64 = nonEmpty(input.base64);
   if (!base64 || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) return null;
   try {
-    const bytes = Buffer.from(base64, "base64");
+    const bytes = Buffer.from(base64, 'base64');
     if (bytes.byteLength === 0) return null;
     const form = new FormData();
-    form.append("model", config.sttModel);
+    form.append('model', config.sttModel);
     const language = nonEmpty(input.language);
-    if (language) form.append("language", language);
-    form.append("response_format", "json");
-    form.append("file", new Blob([bytes], { type: mimeType }), audioFileName(mimeType));
+    if (language) form.append('language', language);
+    form.append('response_format', 'json');
+    form.append('file', new Blob([bytes], { type: mimeType }), audioFileName(mimeType));
     const response = await fetch(`${config.baseUrl}/audio/transcriptions`, {
-      method: "POST",
+      method: 'POST',
       headers: { Authorization: `Bearer ${config.key}` },
       body: form,
       signal: AbortSignal.timeout(input.timeoutMs ?? 30_000),
     });
     if (!response.ok) throw new Error(`groq transcription HTTP ${response.status}`);
-    const payload = await response.json() as { text?: unknown };
+    const payload = (await response.json()) as { text?: unknown };
     const text = nonEmpty(payload.text);
     if (!text) return null;
-    return { provider: "groq", text };
+    return { provider: 'groq', text };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.warn("[Isabella] speech transcription unavailable", { message: message.slice(0, 180) });
+    console.warn('[Isabella] speech transcription unavailable', { message: message.slice(0, 180) });
     return null;
   }
 }

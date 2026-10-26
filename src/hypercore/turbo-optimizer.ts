@@ -75,7 +75,10 @@ class LatencyWindow {
   percentile(p: number): number {
     if (this.samples.length === 0) return 0;
     const sorted = [...this.samples].sort((a, b) => a - b);
-    const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
+    const index = Math.min(
+      sorted.length - 1,
+      Math.max(0, Math.ceil((p / 100) * sorted.length) - 1)
+    );
     return sorted[index] ?? 0;
   }
 
@@ -103,12 +106,13 @@ export class HyperCoreTurboOptimizer {
     private readonly ttlMs = 60_000,
     private readonly maxEntries = 512,
     private readonly maxMetadataSamples = 256,
-    private readonly warmupOperations = 25,
+    private readonly warmupOperations = 25
   ) {
-    if (!Number.isFinite(ttlMs) || ttlMs < 1) throw new Error("TURBO_TTL_INVALID");
-    if (!Number.isSafeInteger(maxEntries) || maxEntries < 1) throw new Error("TURBO_MAX_ENTRIES_INVALID");
+    if (!Number.isFinite(ttlMs) || ttlMs < 1) throw new Error('TURBO_TTL_INVALID');
+    if (!Number.isSafeInteger(maxEntries) || maxEntries < 1)
+      throw new Error('TURBO_MAX_ENTRIES_INVALID');
     if (!Number.isSafeInteger(maxMetadataSamples) || maxMetadataSamples < 1) {
-      throw new Error("TURBO_MAX_METADATA_INVALID");
+      throw new Error('TURBO_MAX_METADATA_INVALID');
     }
     this.latency = new LatencyWindow(Math.max(16, maxEntries));
   }
@@ -134,9 +138,13 @@ export class HyperCoreTurboOptimizer {
       op: ctx.op,
       key,
       payloadSize:
-        typeof ctx.payloadSize === "number" && Number.isFinite(ctx.payloadSize) ? ctx.payloadSize : null,
+        typeof ctx.payloadSize === 'number' && Number.isFinite(ctx.payloadSize)
+          ? ctx.payloadSize
+          : null,
       timestamp:
-        typeof ctx.timestamp === "number" && Number.isFinite(ctx.timestamp) ? ctx.timestamp : Date.now(),
+        typeof ctx.timestamp === 'number' && Number.isFinite(ctx.timestamp)
+          ? ctx.timestamp
+          : Date.now(),
       metadata: ctx.metadata ? Object.freeze({ ...ctx.metadata }) : null,
     });
     this.metadata.push(sample);
@@ -149,7 +157,7 @@ export class HyperCoreTurboOptimizer {
    */
   resolve<T>(key: string, factory: () => T, ctx?: TurboExecutionContext): T {
     const normalizedKey = key.trim();
-    if (!normalizedKey) throw new Error("TURBO_KEY_REQUIRED");
+    if (!normalizedKey) throw new Error('TURBO_KEY_REQUIRED');
     const now = Date.now();
     const cached = this.cache.get(normalizedKey);
 
@@ -227,7 +235,7 @@ export class HyperCoreTurboOptimizer {
 export const createHyperCoreTurboOptimizer = (
   ttlMs?: number,
   maxEntries?: number,
-  maxMetadataSamples?: number,
+  maxMetadataSamples?: number
 ) =>
   maxMetadataSamples === undefined
     ? new HyperCoreTurboOptimizer(ttlMs, maxEntries)

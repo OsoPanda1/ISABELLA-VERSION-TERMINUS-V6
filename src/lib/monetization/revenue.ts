@@ -1,4 +1,4 @@
-import { PLATFORM_FEE_BASIS_POINTS, type RevenueSplit } from "./types";
+import { PLATFORM_FEE_BASIS_POINTS, type RevenueSplit } from './types';
 
 /**
  * COST-FIRST SOVEREIGN MONETIZATION MODEL (antes "Zero-Loss")
@@ -23,13 +23,13 @@ export function splitZeroLossRevenue(input: ZeroLossRevenueInput): RevenueSplit 
   const { grossPaidCents, infrastructureCostCents, refundReserveRatio, communityShareRatio } =
     input;
 
-  if (grossPaidCents < 0) throw new Error("grossPaidCents cannot be negative");
-  if (infrastructureCostCents < 0) throw new Error("infrastructureCostCents cannot be negative");
+  if (grossPaidCents < 0) throw new Error('grossPaidCents cannot be negative');
+  if (infrastructureCostCents < 0) throw new Error('infrastructureCostCents cannot be negative');
   if (!Number.isFinite(refundReserveRatio) || refundReserveRatio < 0 || refundReserveRatio > 1) {
-    throw new Error("refundReserveRatio must be within 0..1");
+    throw new Error('refundReserveRatio must be within 0..1');
   }
   if (!Number.isFinite(communityShareRatio) || communityShareRatio < 0 || communityShareRatio > 1) {
-    throw new Error("communityShareRatio must be within 0..1");
+    throw new Error('communityShareRatio must be within 0..1');
   }
 
   // 1. DEDUCT PLATFORM COSTS FIRST (Zero-Loss Guarantee)
@@ -70,7 +70,11 @@ export function splitZeroLossRevenue(input: ZeroLossRevenueInput): RevenueSplit 
   // those cents are added to the platform fee (the party that owns the pool),
   // never dropped and never invented.
   const distributed =
-    infrastructureCostCents + platformFeeCents + communityShareCents + refundReserveCents + netUserAmountCents;
+    infrastructureCostCents +
+    platformFeeCents +
+    communityShareCents +
+    refundReserveCents +
+    netUserAmountCents;
   const residual = grossPaidCents - distributed;
 
   return {

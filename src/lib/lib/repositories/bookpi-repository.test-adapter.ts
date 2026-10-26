@@ -9,6 +9,6 @@
  * canónica es `createBookpiPostgresRepository()` (src/lib/repositories/bookpi-postgres-repository.ts).
  */
 
-export * from "../bookpi/types";
-export * from "./bookpi-dev-repository";
-export { createBookpiDevRepository as createBookpiRepository } from "./bookpi-dev-repository";
+export * from '../bookpi/types';
+export * from './bookpi-dev-repository';
+export { createBookpiDevRepository as createBookpiRepository } from './bookpi-dev-repository';

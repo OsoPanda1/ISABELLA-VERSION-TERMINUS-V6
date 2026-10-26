@@ -2,7 +2,7 @@
  * Hybrid Cryptography Suite - FIPS 203 + FIPS 204 + Classical
  * Quantum-Ready Hybrid Cryptography for ISABELLA-Q Ω
  * state: engine-generated
- * 
+ *
  * Combines:
  * - ML-KEM (Kyber) + X25519 for Key Encapsulation / Key Agreement
  * - ML-DSA (Dilithium) + Ed25519 for Digital Signatures
@@ -10,39 +10,49 @@
  * - SHA3-512 for Hashing
  */
 
-import { 
-  createHash, 
-  createCipheriv, 
-  createDecipheriv, 
-  randomBytes, 
+import {
+  createHash,
+  createCipheriv,
+  createDecipheriv,
+  randomBytes,
   timingSafeEqual,
   generateKeyPairSync,
   KeyObject,
-} from "node:crypto";
-import { 
-  mlKemKeyGen, mlKemEncaps, mlKemDecaps, 
-  hybridKeyEncaps, hybridKeyDecaps,
-  type MLKEMKeyPair, type MLKEMParameterSet,
+} from 'node:crypto';
+import {
+  mlKemKeyGen,
+  mlKemEncaps,
+  mlKemDecaps,
+  hybridKeyEncaps,
+  hybridKeyDecaps,
+  type MLKEMKeyPair,
+  type MLKEMParameterSet,
   type HybridKEMResult,
-} from "./ml-kem";
-import { 
-  mlDsaKeyGen, mlDsaSign, mlDsaVerify, 
-  hybridSign, hybridVerify, generateHybridKeyPair,
-  type MLDSKeyPair, type MLDSParameterSet,
-  type HybridDSResult, type HybridKeyPair,
-} from "./ml-dsa";
+} from './ml-kem';
+import {
+  mlDsaKeyGen,
+  mlDsaSign,
+  mlDsaVerify,
+  hybridSign,
+  hybridVerify,
+  generateHybridKeyPair,
+  type MLDSKeyPair,
+  type MLDSParameterSet,
+  type HybridDSResult,
+  type HybridKeyPair,
+} from './ml-dsa';
 
-type AeadAlgorithm = "AES-256-GCM" | "ChaCha20-Poly1305";
+type AeadAlgorithm = 'AES-256-GCM' | 'ChaCha20-Poly1305';
 
 /** Typed AEAD constructors (a tag length of 16 bytes is mandatory for ChaCha20-Poly1305). */
 const aeadEncryptor = (alg: AeadAlgorithm, key: Uint8Array, nonce: Uint8Array) =>
-  alg === "AES-256-GCM"
-    ? createCipheriv("aes-256-gcm", key, nonce, { authTagLength: 16 })
-    : createCipheriv("chacha20-poly1305", key, nonce, { authTagLength: 16 });
+  alg === 'AES-256-GCM'
+    ? createCipheriv('aes-256-gcm', key, nonce, { authTagLength: 16 })
+    : createCipheriv('chacha20-poly1305', key, nonce, { authTagLength: 16 });
 const aeadDecryptor = (alg: AeadAlgorithm, key: Uint8Array, nonce: Uint8Array) =>
-  alg === "AES-256-GCM"
-    ? createDecipheriv("aes-256-gcm", key, nonce, { authTagLength: 16 })
-    : createDecipheriv("chacha20-poly1305", key, nonce, { authTagLength: 16 });
+  alg === 'AES-256-GCM'
+    ? createDecipheriv('aes-256-gcm', key, nonce, { authTagLength: 16 })
+    : createDecipheriv('chacha20-poly1305', key, nonce, { authTagLength: 16 });
 
 export type HybridKeyExchangeResult = {
   readonly sharedSecret: Uint8Array;
@@ -68,7 +78,7 @@ export interface EncryptedMessage {
   readonly ciphertext: Uint8Array;
   readonly nonce: Uint8Array;
   readonly tag: Uint8Array;
-  readonly algorithm: "AES-256-GCM" | "ChaCha20-Poly1305";
+  readonly algorithm: 'AES-256-GCM' | 'ChaCha20-Poly1305';
   readonly associatedData?: Uint8Array;
 }
 
@@ -86,12 +96,12 @@ export interface SealedMessage {
 export class HybridCryptoEngine {
   private mlkemParameterSet: MLKEMParameterSet;
   private mlDsaParameterSet: MLDSParameterSet;
-  private symmetricAlgorithm: "AES-256-GCM" | "ChaCha20-Poly1305";
+  private symmetricAlgorithm: 'AES-256-GCM' | 'ChaCha20-Poly1305';
 
   constructor(
-    mlkemParameterSet: MLKEMParameterSet = "ML-KEM-768",
-    mlDsaParameterSet: MLDSParameterSet = "ML-DSA-65",
-    symmetricAlgorithm: "AES-256-GCM" | "ChaCha20-Poly1305" = "AES-256-GCM"
+    mlkemParameterSet: MLKEMParameterSet = 'ML-KEM-768',
+    mlDsaParameterSet: MLDSParameterSet = 'ML-DSA-65',
+    symmetricAlgorithm: 'AES-256-GCM' | 'ChaCha20-Poly1305' = 'AES-256-GCM'
   ) {
     this.mlkemParameterSet = mlkemParameterSet;
     this.mlDsaParameterSet = mlDsaParameterSet;
@@ -105,7 +115,7 @@ export class HybridCryptoEngine {
     const keyPair = generateHybridKeyPair(this.mlDsaParameterSet);
     const mlkemKeyPair = mlKemKeyGen(this.mlkemParameterSet);
     const now = Date.now();
-    
+
     return {
       keyPair,
       mlkemKeyPair,
@@ -124,9 +134,9 @@ export class HybridCryptoEngine {
     senderIdentity: HybridIdentity
   ): Promise<HybridKeyExchangeResult> {
     // Generate ephemeral X25519 key pair for this exchange
-    const x25519KeyPair = generateKeyPairSync("x25519");
+    const x25519KeyPair = generateKeyPairSync('x25519');
     const senderX25519PublicKey = senderIdentity.mlkemKeyPair.publicKey; // Using ML-KEM public key as identity
-    
+
     // Perform hybrid key encapsulation
     const hybridResult = hybridKeyEncaps(
       recipientMlkemPublicKey,
@@ -226,7 +236,7 @@ export class HybridCryptoEngine {
     );
 
     if (!signatureValid) {
-      throw new Error("SIGNATURE_VERIFICATION_FAILED");
+      throw new Error('SIGNATURE_VERIFICATION_FAILED');
     }
 
     // Decrypt
@@ -244,20 +254,17 @@ export class HybridCryptoEngine {
     // Derive encryption key from shared secret
     const encryptionKey = this.deriveEncryptionKey(key);
     const nonce = randomBytes(12); // 96-bit nonce for GCM
-    
+
     // authTagLength is mandatory for ChaCha20-Poly1305 and pins a 128-bit tag for AES-GCM.
     const cipher = aeadEncryptor(this.symmetricAlgorithm, encryptionKey, nonce);
     if (associatedData) {
       cipher.setAAD(associatedData);
     }
-    
-    const ciphertext = Buffer.concat([
-      cipher.update(plaintext),
-      cipher.final(),
-    ]);
-    
+
+    const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+
     const tag = cipher.getAuthTag();
-    
+
     return {
       ciphertext,
       nonce,
@@ -270,43 +277,34 @@ export class HybridCryptoEngine {
   /**
    * Symmetric decryption
    */
-  private symmetricDecrypt(
-    encrypted: EncryptedMessage,
-    key: Uint8Array
-  ): Uint8Array {
+  private symmetricDecrypt(encrypted: EncryptedMessage, key: Uint8Array): Uint8Array {
     const decryptionKey = this.deriveEncryptionKey(key);
-    
+
     const decipher = aeadDecryptor(encrypted.algorithm, decryptionKey, encrypted.nonce);
-    
+
     if (encrypted.associatedData) {
       decipher.setAAD(encrypted.associatedData);
     }
-    
+
     decipher.setAuthTag(encrypted.tag);
-    
-    return Buffer.concat([
-      decipher.update(encrypted.ciphertext),
-      decipher.final(),
-    ]);
+
+    return Buffer.concat([decipher.update(encrypted.ciphertext), decipher.final()]);
   }
 
   /**
    * Derive encryption key from shared secret using HKDF
    */
   private deriveEncryptionKey(sharedSecret: Uint8Array): Uint8Array {
-    const hash = createHash("sha3-512");
+    const hash = createHash('sha3-512');
     hash.update(sharedSecret);
-    hash.update(Buffer.from("ISABELLA-Q-OMEGA-ENCRYPTION"));
+    hash.update(Buffer.from('ISABELLA-Q-OMEGA-ENCRYPTION'));
     return hash.digest().slice(0, 32); // 256-bit key
   }
 
   /**
    * Sign a message with hybrid signature
    */
-  sign(
-    senderIdentity: HybridIdentity,
-    message: Uint8Array
-  ): HybridSignatureResult {
+  sign(senderIdentity: HybridIdentity, message: Uint8Array): HybridSignatureResult {
     return hybridSign(
       senderIdentity.keyPair.mlDsa.privateKey,
       senderIdentity.keyPair.ed25519.privateKey,
@@ -339,7 +337,7 @@ export class HybridCryptoEngine {
    * Hash function using SHA3-512
    */
   hash(data: Uint8Array): Uint8Array {
-    const hash = createHash("sha3-512");
+    const hash = createHash('sha3-512');
     hash.update(data);
     return hash.digest();
   }
@@ -347,14 +345,9 @@ export class HybridCryptoEngine {
   /**
    * Key Derivation Function using HKDF-SHA3-512
    */
-  hkdf(
-    ikm: Uint8Array,
-    salt: Uint8Array,
-    info: Uint8Array,
-    length: number
-  ): Uint8Array {
+  hkdf(ikm: Uint8Array, salt: Uint8Array, info: Uint8Array, length: number): Uint8Array {
     // HKDF-Extract
-    const hash = createHash("sha3-512");
+    const hash = createHash('sha3-512');
     hash.update(salt);
     hash.update(ikm);
     const prk = hash.digest();
@@ -366,12 +359,12 @@ export class HybridCryptoEngine {
 
     let offset = 0;
     while (offset < length) {
-      const hash = createHash("sha3-512");
+      const hash = createHash('sha3-512');
       hash.update(t);
       hash.update(info);
       hash.update(Buffer.from([counter]));
       t = hash.digest();
-      
+
       const toCopy = Math.min(t.length, length - offset);
       t.copy(output, offset, 0, toCopy);
       offset += toCopy;
@@ -404,11 +397,7 @@ export class HybridCryptoEngine {
 /**
  * Default engine instance with recommended parameters
  */
-export const defaultHybridCrypto = new HybridCryptoEngine(
-  "ML-KEM-768",
-  "ML-DSA-65",
-  "AES-256-GCM"
-);
+export const defaultHybridCrypto = new HybridCryptoEngine('ML-KEM-768', 'ML-DSA-65', 'AES-256-GCM');
 
 /**
  * Key rotation utilities
@@ -429,12 +418,12 @@ export class KeyRotationManager {
   async rotateKeys(): Promise<HybridIdentity> {
     this.previousIdentities.push(this.currentIdentity);
     this.currentIdentity = this.engine.generateIdentity();
-    
+
     // Keep only last 5 identities
     if (this.previousIdentities.length > 5) {
       this.previousIdentities.shift();
     }
-    
+
     return this.currentIdentity;
   }
 
@@ -450,16 +439,16 @@ export class KeyRotationManager {
    */
   getIdentityForVerification(keyId: string): HybridIdentity | undefined {
     // In production, would match by key ID/fingerprint
-    if (keyId === "current") return this.currentIdentity;
-    return this.previousIdentities.find(id => 
-      this.getKeyFingerprint(id.keyPair.mlDsa.publicKey) === keyId
+    if (keyId === 'current') return this.currentIdentity;
+    return this.previousIdentities.find(
+      (id) => this.getKeyFingerprint(id.keyPair.mlDsa.publicKey) === keyId
     );
   }
 
   private getKeyFingerprint(publicKey: Uint8Array): string {
-    const hash = createHash("sha3-256");
+    const hash = createHash('sha3-256');
     hash.update(publicKey);
-    return hash.digest().toString("hex").slice(0, 16);
+    return hash.digest().toString('hex').slice(0, 16);
   }
 }
 
@@ -483,7 +472,7 @@ export function createSelfSignedCertificate(
 ): CertificateData {
   const now = new Date();
   const validTo = new Date(now.getTime() + validDays * 24 * 60 * 60 * 1000);
-  
+
   // In production, would create actual X.509 certificate
   // This is a placeholder structure
   return {
@@ -492,7 +481,7 @@ export function createSelfSignedCertificate(
     validFrom: now,
     validTo,
     publicKey: identity.keyPair.mlDsa.publicKey,
-    signatureAlgorithm: "ML-DSA-65",
+    signatureAlgorithm: 'ML-DSA-65',
     signature: new Uint8Array(0), // Would be actual signature
   };
 }
@@ -506,7 +495,5 @@ export function verifyCertificate(cert: CertificateData, trustAnchors: Certifica
 
   // Check signature against trust anchors
   // In production, would verify X.509 chain
-  return trustAnchors.some(anchor => 
-    timingSafeEqual(anchor.publicKey, cert.publicKey)
-  );
+  return trustAnchors.some((anchor) => timingSafeEqual(anchor.publicKey, cert.publicKey));
 }
