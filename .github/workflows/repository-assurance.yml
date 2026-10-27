@@ -39,9 +39,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # The assurance script creates artifacts/assurance at runtime; only source inputs belong here.
           REQUIRED_PATHS=(
             "scripts/repository-assurance.mjs"
-            "artifacts/assurance"
           )
           for p in "${REQUIRED_PATHS[@]}"; do
             if [ ! -e "$p" ]; then
