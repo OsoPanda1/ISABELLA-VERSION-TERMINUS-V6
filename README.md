@@ -9,6 +9,8 @@
 
 > **CAPABILITY ≠ AUTHORITY ≠ EXECUTION ≠ EVIDENCE ≠ LEARNING ≠ PRODUCTION**
 >
+> **SPECIFIED ≠ IMPLEMENTED ≠ TESTED**
+>
 > Que una capacidad exista en el código o que un despliegue finalice no prueba por sí solo que esté operativa, sea durable, segura o esté certificada para producción.
 
 ## 1. Qué es
@@ -155,7 +157,11 @@ curl -sS https://TU-DOMINIO/api/v1/cognition/route \
 
 Revisa código HTTP, esquema de respuesta, motor reportado, latencia, errores, logs y consumo del proveedor. Una respuesta determinista local no debe contarse como inferencia de un LLM.
 
-## 9. Checklist de liberación
+## 9. Gates pendientes para liberar
+
+Los gates de liberación son obligatorios: CI verde en el SHA exacto, pruebas E2E de runtime/proveedor, persistencia durable, seguridad y rollback comprobado. La presencia de especificaciones no sustituye su implementación ni sus pruebas.
+
+## 10. Checklist de liberación
 
 ### Bloqueos previos a staging
 
@@ -186,7 +192,7 @@ Revisa código HTTP, esquema de respuesta, motor reportado, latencia, errores, l
 
 **No publicar como producción certificada** si algún gate obligatorio falla, si el proveedor real no responde de extremo a extremo, si los datos críticos son efímeros o si no existe rollback comprobado. Si solo se valida el runtime básico, etiquetar el entorno como preview o beta técnica.
 
-## 10. Limitaciones explícitas
+## 11. Limitaciones explícitas
 
 - El agente local es determinista; no sustituye un modelo neuronal.
 - Los proveedores gratuitos o sin clave pueden cambiar, limitar solicitudes, fallar o tener condiciones de privacidad distintas.
@@ -196,7 +202,7 @@ Revisa código HTTP, esquema de respuesta, motor reportado, latencia, errores, l
 - Las funciones comerciales no equivalen a pagos reales de extremo a extremo.
 - Las afirmaciones de producción requieren pruebas observables del commit y entorno exactos.
 
-## 11. Seguridad y gobernanza
+## 12. Seguridad y gobernanza
 
 - Nunca publiques tokens, claves privadas, cadenas de conexión ni secretos de Stripe.
 - Usa variables de entorno o el almacén de secretos del proveedor.
@@ -204,7 +210,7 @@ Revisa código HTTP, esquema de respuesta, motor reportado, latencia, errores, l
 - Mantén aprobación humana para efectos externos sensibles.
 - Revisa [SECURITY.md](SECURITY.md) y [AGENTS.md](AGENTS.md) antes de aprobar cambios de gobernanza.
 
-## 12. Registro del proyecto
+## 13. Registro del proyecto
 
 - **Proyecto:** Isabella Villaseñor AI · Genesis TINA V6.
 - **Ecosistema:** TAMV Online Network.
