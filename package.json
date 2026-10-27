@@ -42,7 +42,8 @@
     "check:env": "node scripts/check-env-example.mjs",
     "check:sops": "node scripts/check-sops-placeholders.mjs",
     "status:generate": "node scripts/generate-status.mjs",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "deploy:readiness": "tsx scripts/deploy-readiness.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.20.1",
