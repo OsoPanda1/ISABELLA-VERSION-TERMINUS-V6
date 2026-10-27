@@ -43,7 +43,6 @@ COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/scripts ./scripts
 COPY --from=build /app/config ./config
 COPY --from=build /app/src/ui ./src/ui
-COPY --from=build /app/src/styles ./src/styles
 COPY --from=build /app/src/assets ./src/assets
 
 # Create required directories
@@ -54,7 +53,7 @@ USER 10001
 
 # Health check for hardened runtime endpoints
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -fsS http://localhost:8080/healthz || exit 1
+    CMD curl -fsS http://localhost:8080/api/v1/health || exit 1
 
 # Environment
 ENV NODE_ENV=production \
@@ -68,4 +67,4 @@ EXPOSE 8080
 # Entry point with dumb-init for proper signal handling
 ENTRYPOINT ["dumb-init", "--"]
 # Bundled production entrypoint.
-CMD ["dist/server.js"]
+CMD ["node", "dist/server.js"]

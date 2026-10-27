@@ -28,7 +28,13 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+      # initdb.d runs top-level *.sql in name order: schema first, then every versioned migration.
+      - ./scripts/schema.sql:/docker-entrypoint-initdb.d/00-schema.sql:ro
+      - ./infra/db/migrations/001_create_bookpi_events.sql:/docker-entrypoint-initdb.d/10-001_create_bookpi_events.sql:ro
+      - ./infra/db/migrations/002_bookpi_canonical_immutability.sql:/docker-entrypoint-initdb.d/10-002_bookpi_canonical_immutability.sql:ro
+      - ./infra/db/migrations/003_commerce_tenant_isolation_rls.sql:/docker-entrypoint-initdb.d/10-003_commerce_tenant_isolation_rls.sql:ro
+      - ./infra/db/migrations/004_commerce_webhook_idempotency.sql:/docker-entrypoint-initdb.d/10-004_commerce_webhook_idempotency.sql:ro
+      - ./infra/db/migrations/005_commerce_persistent_subscriptions.sql:/docker-entrypoint-initdb.d/10-005_commerce_persistent_subscriptions.sql:ro
     secrets:
       - db_password
     healthcheck:

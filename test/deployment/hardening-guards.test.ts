@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const read = (p: string): string => readFileSync(p, "utf8");
@@ -42,5 +42,36 @@ describe("operational hardening guards", () => {
     const standalone = new Set(["src/lib", "src/authz-runtime", "src/hypercore-runtime", "src/components", "src/hooks", "src/core"]);
     const uncovered = ts.exclude.filter((e) => e.startsWith("src/") && !standalone.has(e) && !layers.include.includes(e));
     expect(uncovered).toEqual([]);
+  });
+});
+
+describe("database migrations are deployable", () => {
+  const migDir = "infra/db/migrations";
+  const files = readdirSync(migDir).filter((f) => f.endsWith(".sql")).sort();
+
+  it("the table the runtime reads/writes (commerce_subscriptions) is created by a versioned migration", () => {
+    const all = files.map((f) => read(`${migDir}/${f}`)).join("\n");
+    expect(all).toMatch(/CREATE TABLE IF NOT EXISTS commerce_subscriptions/);
+  });
+
+  it("the in-source commerce migration cannot drift from the deployed copy", () => {
+    expect(read(`${migDir}/005_commerce_persistent_subscriptions.sql`)).toBe(read("src/commerce/migrations/002_persistent_subscriptions.sql"));
+  });
+
+  it("migration versions are unique and contiguous", () => {
+    const versions = files.map((f) => Number(f.split("_")[0]));
+    expect(new Set(versions).size).toBe(versions.length);
+    expect(versions).toEqual(versions.map((_, i) => i + 1));
+  });
+
+  it("docker-compose applies schema.sql and every versioned migration on first boot", () => {
+    const compose = read("docker-compose.yml");
+    for (const f of files) expect(compose, f).toContain(`${migDir}/${f}:/docker-entrypoint-initdb.d/10-${f}`);
+  });
+
+  it("scripts/migrate.sh points at a directory that exists", () => {
+    const sh = read("scripts/migrate.sh");
+    expect(sh).toContain("infra/db/migrations");
+    expect(sh).not.toMatch(/MIGRATIONS_DIR="\$\{PROJECT_DIR\}\/migrations"/);
   });
 });

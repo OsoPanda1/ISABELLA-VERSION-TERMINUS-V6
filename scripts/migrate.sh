@@ -12,7 +12,9 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MIGRATIONS_DIR="${PROJECT_DIR}/migrations"
+# The versioned SQL lives in infra/db/migrations (BookPI ledger, commerce RLS/idempotency). The old
+# ${PROJECT_DIR}/migrations directory never existed, so no migration beyond schema.sql was ever applied.
+MIGRATIONS_DIR="${MIGRATIONS_DIR:-${PROJECT_DIR}/infra/db/migrations}"
 SCHEMA_FILE="${PROJECT_DIR}/scripts/schema.sql"
 ENV_FILE="${PROJECT_DIR}/.env"
 
@@ -133,7 +135,11 @@ cmd_migrate() {
         run_migration "000" "initial_schema" "$SCHEMA_FILE" || return 1
     fi
 
-    # Additional migrations from migrations directory
+    # Additional migrations from migrations directory (fail closed: a missing directory is a deploy error)
+    if [[ ! -d "$MIGRATIONS_DIR" ]]; then
+        log_error "Migrations directory not found: $MIGRATIONS_DIR"
+        return 1
+    fi
     if [[ -d "$MIGRATIONS_DIR" ]]; then
         for file in "$MIGRATIONS_DIR"/*.sql; do
             [[ -f "$file" ]] || continue

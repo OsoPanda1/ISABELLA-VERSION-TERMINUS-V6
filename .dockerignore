@@ -12,10 +12,9 @@ coverage
 .git
 .github
 
-# Directorios no necesarios en la imagen
+# Directorios no necesarios en la imagen (`scripts/` SÍ es necesario: `build:dist` ejecuta ui-smoke y runtime-smoke)
 docs
 test
-scripts
 services
 infra
 k8s
