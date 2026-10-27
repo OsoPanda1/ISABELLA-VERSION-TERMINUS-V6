@@ -1160,6 +1160,35 @@ body.panel-open { overflow: hidden; }
 }
 .panel-close:hover { border-color: var(--crystal-line-strong); color: var(--crystal-cyan); }
 
+/* Focused chat: preserve readable message content and remove decorative duplicates. */
+#chat .message,
+#chat .message .message-body,
+#chat .message p,
+#chat .message .md-body,
+#chat .message .md-body * {
+  opacity: 1 !important;
+  visibility: visible !important;
+  color: #dfeaf3 !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+#chat .message.user p,
+#chat .message.user .md-body,
+#chat .message.user .md-body * { color: #ffedf4 !important; }
+#chat .messages { contain: layout paint; isolation: isolate; }
+.side-rail,
+.rail-launcher,
+.workspace-context-bar,
+.workspace-modebar,
+.hero-product,
+.prompt-starters,
+.command-launcher,
+#soundToggle,
+.nav-links a:not([data-nav-target="chat"]),
+#chat .modes { display: none !important; }
+.topbar { min-height: 58px; }
+#chat { margin-top: 20px; }
+#chat .console-actions { margin-left: auto; }
+
 .panel-visible > div > .eyebrow,
 .panel-visible > .eyebrow,
 .panel-visible .pane-label { color: var(--crystal-cyan); }
@@ -1720,6 +1749,71 @@ body.chat-focus #chat .scroll-bottom { bottom: 140px; }
 
 @media (hover: none) {
   .message:hover, .panel-visible .protocol-grid article:hover, .plan-card:hover { transform: none; }
+}
+
+.official-logo {
+  width: 48px;
+  height: 30px;
+  object-fit: cover;
+  object-position: center;
+  border: 1px solid var(--crystal-line-strong);
+  border-radius: 7px;
+  opacity: .9;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .26);
+}
+
+.tamv-global-footer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 1240px;
+  margin: 20px auto 0;
+  padding: 28px 0 36px;
+  border-top: 1px solid var(--crystal-line);
+  color: var(--crystal-muted);
+}
+
+.tamv-global-footer img {
+  width: 58px;
+  height: 46px;
+  object-fit: cover;
+  object-position: center;
+  border: 1px solid var(--crystal-line-strong);
+  border-radius: 9px;
+  opacity: .9;
+}
+
+.tamv-global-footer div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tamv-global-footer strong {
+  font-family: var(--mono, monospace);
+  font-size: 10px;
+  letter-spacing: .16em;
+  color: var(--crystal-text);
+}
+
+.tamv-global-footer span {
+  font-family: var(--serif, Georgia, serif);
+  font-size: 16px;
+  color: var(--crystal-text);
+}
+
+.tamv-global-footer small {
+  font-family: var(--mono, monospace);
+  font-size: 9px;
+  letter-spacing: .08em;
+  color: var(--crystal-muted);
+}
+
+@media (max-width: 700px) {
+  .official-logo { display: none; }
+  .tamv-global-footer { margin-inline: 18px; padding-bottom: 28px; }
+  .tamv-global-footer span { font-size: 14px; }
+  .tamv-global-footer small { line-height: 1.4; }
 }
 
 @media (prefers-reduced-motion: reduce) {
