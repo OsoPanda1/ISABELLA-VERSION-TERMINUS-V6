@@ -176,6 +176,9 @@ services:
       ISABELLA_KEYLESS_FREE_PROVIDER: pollinations
       KEYLESS_FREE_PROVIDER_TIMEOUT_MS: "30000"
       CHAT_CHAIN_BUDGET_MS: "45000"
+      # Explicit operator opt-in for the keyless neural voice fallback (spoken text leaves the node).
+      ISABELLA_KEYLESS_TTS: google
+      ISABELLA_KEYLESS_TTS_MAX_CHARS: "1200"
       # Never commit the connection string: define DATABASE_URL in the untracked .env (see .env.example).
       DATABASE_URL: ${DATABASE_URL:?define DATABASE_URL in .env, e.g. postgresql://isabella_admin:<password from secrets/db_password.txt>@postgres:5432/isabella_db}
       OLLAMA_BASE_URL: http://ollama:11434

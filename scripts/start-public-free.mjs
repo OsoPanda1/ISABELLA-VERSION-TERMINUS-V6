@@ -14,11 +14,17 @@ const useSource = process.argv.includes('--src');
 process.env.ISABELLA_KEYLESS_FREE_PROVIDER ??= 'pollinations';
 process.env.KEYLESS_FREE_PROVIDER_TIMEOUT_MS ??= '30000';
 process.env.CHAT_CHAIN_BUDGET_MS ??= '45000';
+process.env.ISABELLA_KEYLESS_TTS ??= 'google';
+process.env.ISABELLA_KEYLESS_TTS_MAX_CHARS ??= '1200';
 
 console.warn(
   '[Isabella] Free external inference ENABLED for this process: prompts and bounded history may be sent to ' +
     (process.env.KEYLESS_FREE_PROVIDER_URL || 'https://text.pollinations.ai') +
     '. Responses are disclosed as "keyless-free". Set ISABELLA_KEYLESS_FREE_PROVIDER=off to disable.'
+);
+console.warn(
+  '[Isabella] Keyless neural voice ENABLED: spoken replies may be sent to the configured TTS provider. ' +
+    'Set ISABELLA_KEYLESS_TTS=off to disable.'
 );
 
 await import(useSource ? '../src/server.ts' : '../dist/server.js');

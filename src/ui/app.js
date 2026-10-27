@@ -852,7 +852,7 @@ const stopSpeech = () => {
 const speakMessage = async (text) => {
   const clean = String(text || '')
     .trim()
-    .slice(0, 4_000);
+    .slice(0, 1_200);
   if (!clean) return;
   stopSpeech();
   const payloadFor = (audio) =>
@@ -861,16 +861,27 @@ const speakMessage = async (text) => {
     (typeof audio?.audioBase64 === 'string' && audio.audioBase64.startsWith('data:')
       ? audio.audioBase64
       : '');
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(sessionId ? { 'X-Session-Id': sessionId } : {}),
+  };
   try {
-    let response = await fetch('/api/v1/tts/synthesize', {
+    let response = await fetch('/api/v1/voice/speak', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ text: clean, sessionId, format: 'mp3' }),
     });
     if (!response.ok) {
+      response = await fetch('/api/v1/tts/synthesize', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ text: clean, sessionId, format: 'mp3' }),
+      });
+    }
+    if (!response.ok) {
       response = await fetch('/api/v1/cognition/speech', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ text: clean, sessionId, format: 'mp3' }),
       });
     }
@@ -1188,6 +1199,15 @@ const closePalette = () => {
   if (typeof commandPalette?.close === 'function') commandPalette.close();
   else commandPalette?.removeAttribute('open');
 };
+const focusNexus = (tab) => {
+  closePanel(true);
+  closeSideRails();
+  window.IsabellaNexus?.activate?.(tab);
+  byId('nexus')?.scrollIntoView({
+    behavior: reduceMotion ? 'auto' : 'smooth',
+    block: 'start',
+  });
+};
 const runCommand = (command) => {
   closePalette();
   switch (command) {
@@ -1220,6 +1240,15 @@ const runCommand = (command) => {
       break;
     case 'go-governance':
       openPanel('governance');
+      break;
+    case 'go-nexus':
+      focusNexus('workbench');
+      break;
+    case 'go-nexus-keys':
+      focusNexus('keys');
+      break;
+    case 'go-nexus-connectors':
+      focusNexus('connectors');
       break;
     case 'go-platform-chat':
       window.location.assign('/chat');

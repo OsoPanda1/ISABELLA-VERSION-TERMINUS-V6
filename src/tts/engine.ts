@@ -10,6 +10,7 @@ import { ISABELLA_VOICE_PROFILE, resolveCanonicalVoice } from '../inference/voic
 import { MemoryVoiceCore } from './memory';
 import { TtsGovernor, digestJson, sealTtsEvidence } from './governance';
 import { NativeFsimAdapter, nativeConfigFromEnv } from './native-adapter';
+import { synthesizeKeylessSpeech } from './keyless';
 import { normalizeEsMx } from './normalize';
 import { planProsody } from './prosody';
 import { CognitiveRouter, routeFeatures, type RouteDecision } from './router';
@@ -152,7 +153,11 @@ export class GenesisTtsEngine {
     };
   }
 
-  async synthesize(req: SpeechRequest, timeoutMs = 20_000): Promise<SynthesisResult> {
+  async synthesize(
+    req: SpeechRequest,
+    timeoutMs = 20_000,
+    options: { keylessOnly?: boolean } = {}
+  ): Promise<SynthesisResult> {
     const started = Date.now();
     const gov = this.governor.validate({
       nonce: req.nonce,
@@ -173,6 +178,7 @@ export class GenesisTtsEngine {
         backend = 'browser-speech';
         break;
       }
+      if (options.keylessOnly && r.id !== 'server-tts') continue;
       attempted.push(r.id);
       if (r.id === 'native-fsim' && this.native) {
         const out = await this.native.synthesize(
@@ -193,10 +199,15 @@ export class GenesisTtsEngine {
           break;
         }
       } else if (r.id === 'server-tts') {
-        const out = await this.serverTts(this.deps.env, {
-          text: planned.normalizedText,
-          timeoutMs,
-        });
+        const out = options.keylessOnly
+          ? await synthesizeKeylessSpeech(this.deps.env, {
+              text: planned.normalizedText,
+              timeoutMs,
+            })
+          : await this.serverTts(this.deps.env, {
+              text: planned.normalizedText,
+              timeoutMs,
+            });
         if (out) {
           audio = { mimeType: out.mimeType, dataUrl: out.dataUrl, bytes: out.bytes };
           backend = 'server-tts';
@@ -254,6 +265,7 @@ export class GenesisTtsEngine {
         'incremental-sentence-chunker',
         'sse-speech-plan-stream',
         'barge-in-latch',
+        'keyless-neural-fallback',
       ],
       backends: {
         'native-fsim': this.native
@@ -265,7 +277,11 @@ export class GenesisTtsEngine {
                 telemetry,
               }
           : { state: 'not_configured' },
-        'server-tts': { state: speech.textToSpeech ? 'configured' : 'not_configured' },
+        'server-tts': {
+          state: speech.textToSpeech ? 'configured' : 'not_configured',
+          providers: speech.providers,
+          speechToText: speech.speechToText,
+        },
         'browser-speech': { state: 'client' },
       },
       audioServerSide: Boolean(probe?.reachable) || speech.textToSpeech,

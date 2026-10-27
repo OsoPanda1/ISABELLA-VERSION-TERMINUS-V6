@@ -52,6 +52,10 @@ import { bookPiSecret } from './security/secrets';
 import { config } from './lib/lib/config';
 import { verifyBearerToken } from './security/api-token';
 import { FixedWindowRateLimiter } from './security/rate-limit';
+import { createDefaultApiKeyStore } from './security/isabella-api-keys';
+import { createOptionalApiKeyAuthenticator, registerApiKeyRoutes } from './routes/api-keys';
+import { createDefaultFederationRegistry } from './federation/connectors';
+import { registerFederationRoutes } from './routes/federation';
 import { hashSourceContent } from './memory/ikes';
 import { createSupabaseIkesPersistence } from './memory/ikes-supabase';
 import { bookPiLedger, createRuntimeBookPiStorage } from './bookpi';
@@ -262,6 +266,7 @@ if (process.env.STRICT_PREFLIGHT === '1') {
 }
 
 const connectorRawBodies = new WeakMap<object, string>();
+const federationRawBodies = new WeakMap<object, string>();
 
 app.use((req, res, next) => {
   const startedAt = process.hrtime.bigint();
@@ -292,8 +297,11 @@ app.use(
     verify: (req, _res, buf) => {
       // Preserve raw bytes only for the signed webhook route; duplicating every
       // request body adds avoidable allocations and GC pressure on the hot path.
-      if ((req.url ?? '').split('?')[0] === '/api/v1/connectors/ingest') {
+      const pathname = (req.url ?? '').split('?')[0];
+      if (pathname === '/api/v1/connectors/ingest') {
         connectorRawBodies.set(req, buf.toString('utf8'));
+      } else if (pathname?.startsWith('/api/v1/federation/webhooks/')) {
+        federationRawBodies.set(req, buf.toString('utf8'));
       }
     },
   })
@@ -307,28 +315,36 @@ const uiPath = path.join(process.cwd(), 'src', 'ui');
 let htmlAsset: StaticAsset | null = null;
 let cssAsset: StaticAsset | null = null;
 let commandCenterCssAsset: StaticAsset | null = null;
+let nexusCssAsset: StaticAsset | null = null;
 let jsAsset: StaticAsset | null = null;
 let chatPlusAsset: StaticAsset | null = null;
 let cognitionClientAsset: StaticAsset | null = null;
+let nexusJsAsset: StaticAsset | null = null;
 try {
   const rawHtml = fs.readFileSync(path.join(uiPath, 'index.html'), 'utf-8');
   const cinematicCss = fs.readFileSync(path.join(uiPath, 'cinematic.css'), 'utf-8');
   const commandCenterCss = fs.readFileSync(path.join(uiPath, 'command-center.css'), 'utf-8');
+  const nexusCss = fs.readFileSync(path.join(uiPath, 'nexus.css'), 'utf-8');
   const cinematicJs = fs.readFileSync(path.join(uiPath, 'app.js'), 'utf-8');
   const chatPlusJs = fs.readFileSync(path.join(uiPath, 'chat-plus.js'), 'utf-8');
   const cognitionClientJs = fs.readFileSync(path.join(uiPath, 'cognition-client.js'), 'utf-8');
+  const nexusJs = fs.readFileSync(path.join(uiPath, 'nexus.js'), 'utf-8');
   const versioned = rawHtml
     .replace(/(\/styles\/cinematic\.css)\?v=[^"']*/, `$1?v=${contentHash(cinematicCss)}`)
     .replace(/(\/styles\/command-center\.css)\?v=[^"']*/, `$1?v=${contentHash(commandCenterCss)}`)
+    .replace(/(\/styles\/nexus\.css)\?v=[^"']*/, `$1?v=${contentHash(nexusCss)}`)
     .replace(/(\/ui\/cognition-client\.js)\?v=[^"']*/, `$1?v=${contentHash(cognitionClientJs)}`)
     .replace(/(\/ui\/app\.js)\?v=[^"']*/, `$1?v=${contentHash(cinematicJs)}`)
-    .replace(/(\/ui\/chat-plus\.js)\?v=[^"']*/, `$1?v=${contentHash(chatPlusJs)}`);
+    .replace(/(\/ui\/chat-plus\.js)\?v=[^"']*/, `$1?v=${contentHash(chatPlusJs)}`)
+    .replace(/(\/ui\/nexus\.js)\?v=[^"']*/, `$1?v=${contentHash(nexusJs)}`);
   htmlAsset = buildAsset(versioned, 'text/html; charset=utf-8');
   cssAsset = buildAsset(cinematicCss, 'text/css; charset=utf-8');
   commandCenterCssAsset = buildAsset(commandCenterCss, 'text/css; charset=utf-8');
+  nexusCssAsset = buildAsset(nexusCss, 'text/css; charset=utf-8');
   jsAsset = buildAsset(cinematicJs, 'text/javascript; charset=utf-8');
   chatPlusAsset = buildAsset(chatPlusJs, 'text/javascript; charset=utf-8');
   cognitionClientAsset = buildAsset(cognitionClientJs, 'text/javascript; charset=utf-8');
+  nexusJsAsset = buildAsset(nexusJs, 'text/javascript; charset=utf-8');
 } catch {
   console.warn('[Genesis] Cinematic UI assets are unavailable at startup.');
 }
@@ -359,6 +375,13 @@ app.get('/styles/command-center.css', (req, res) => {
   }
   serveAsset(req, res, commandCenterCssAsset, IMMUTABLE_CACHE);
 });
+app.get('/styles/nexus.css', (req, res) => {
+  if (nexusCssAsset === null) {
+    res.status(404).type('css').send('/* Nexus CSS unavailable */');
+    return;
+  }
+  serveAsset(req, res, nexusCssAsset, IMMUTABLE_CACHE);
+});
 app.get('/ui/app.js', (req, res) => {
   if (jsAsset === null) {
     res.status(404).type('js').send('// Cinematic JavaScript unavailable');
@@ -379,6 +402,13 @@ app.get('/ui/cognition-client.js', (req, res) => {
     return;
   }
   serveAsset(req, res, cognitionClientAsset, IMMUTABLE_CACHE);
+});
+app.get('/ui/nexus.js', (req, res) => {
+  if (nexusJsAsset === null) {
+    res.status(404).type('js').send('// Nexus client unavailable');
+    return;
+  }
+  serveAsset(req, res, nexusJsAsset, IMMUTABLE_CACHE);
 });
 // Intro media: the original is 1080p60 with its index (moov) at the END of the file, so playback cannot start
 // until the tail is fetched. The "web" rendition is 540p30 with +faststart (index first) for instant start.
@@ -608,14 +638,34 @@ async function generateKeylessFreeNarrative(
   if (budget?.expired()) return null;
   const config = resolveKeylessFreeProvider(process.env);
   if (!config || Date.now() < keylessFreeCooldownUntil) return null;
+  const messages = buildKeylessFreeMessages(systemPrompt, input, history);
   try {
+    // Preferred contract: OpenAI-compatible JSON. It is faster and exposes the
+    // assistant message without the provider's reasoning trace.
+    const openAiUrl = config.endpoint.endsWith('/openai')
+      ? config.endpoint
+      : `${config.endpoint}/openai`;
+    try {
+      const jsonResponse = await fetch(openAiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ model: config.model, messages, stream: false }),
+        signal: budget
+          ? budget.signal(keylessFreeTimeoutMs)
+          : AbortSignal.timeout(keylessFreeTimeoutMs),
+      });
+      if (jsonResponse.ok) {
+        const text = extractAssistantText((await jsonResponse.json()) as unknown);
+        if (text) return text;
+      }
+    } catch {
+      /* fall through to the plain-text contract */
+    }
+    if (budget?.expired()) return null;
     const response = await fetch(`${config.endpoint}/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', accept: 'text/plain' },
-      body: JSON.stringify({
-        model: config.model,
-        messages: buildKeylessFreeMessages(systemPrompt, input, history),
-      }),
+      body: JSON.stringify({ model: config.model, messages }),
       signal: budget
         ? budget.signal(keylessFreeTimeoutMs)
         : AbortSignal.timeout(keylessFreeTimeoutMs),
@@ -1024,6 +1074,14 @@ function authorizeProviderRoute(req: Request, res: Response): boolean {
 
 const publicCognitionLimiter = new FixedWindowRateLimiter(30, 60_000);
 const publicModelLimiter = new FixedWindowRateLimiter(8, 60_000);
+const publicVoiceLimiter = new FixedWindowRateLimiter(20, 60_000);
+const apiKeyCognitionLimiter = new FixedWindowRateLimiter(120, 60_000);
+const apiKeyStore = createDefaultApiKeyStore(process.env);
+const federationRegistry = createDefaultFederationRegistry(process.env);
+const federationLimiter = new FixedWindowRateLimiter(30, 60_000);
+// Programmatic clients may present a scoped key; anonymous traffic keeps the
+// stricter public quota. An invalid key never silently downgrades to public.
+app.use('/api/v1/cognition', createOptionalApiKeyAuthenticator(apiKeyStore));
 const publicProposalLimiter = new FixedWindowRateLimiter(10, 60_000);
 const publicScanLimiter = new FixedWindowRateLimiter(30, 60_000);
 const publicEconomyLimiter = new FixedWindowRateLimiter(20, 60_000);
@@ -2058,7 +2116,18 @@ app.post('/api/v1/cognition/route', async (req, res) => {
     if (!generativeNarrative && decision.admitted && !omegaBlocked && modelEngine !== 'sovereign') {
       // Only requests that can reach an external provider consume the stricter model
       // quota; deterministic local answers stay available under the cognition bucket.
-      if (!enforceRateLimit(req, res, publicModelLimiter, 'public-model')) return;
+      // A valid scoped API key gets its own per-key quota; anonymous traffic keeps
+      // the public IP quota. Public request bodies never grant this authority.
+      const apiKeyRecord = res.locals.isabellaApiKey as
+        { id: string; scopes: readonly string[] } | undefined;
+      if (apiKeyRecord) {
+        if (!apiKeyRecord.scopes.includes('cognition:write')) {
+          res.status(403).json({ success: false, error: 'API_KEY_SCOPE_REQUIRED' });
+          return;
+        }
+        if (!enforceRateLimit(req, res, apiKeyCognitionLimiter, `api-key:${apiKeyRecord.id}`))
+          return;
+      } else if (!enforceRateLimit(req, res, publicModelLimiter, 'public-model')) return;
       // Free/open inference is the default. Paid or billing-enabled providers are never
       // silently selected by Auto/Open Science; they require an explicit operator opt-in.
       if (modelEngine === 'auto') {
@@ -5100,6 +5169,52 @@ registerTurboPlannerRoutes({
   authorizeAdmin: (req, res) => authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN'),
 });
 
+// ── Native program registry & API keys (state: engine-generated) ─ issuance,
+// rotation and revocation are operator-gated; only digests are persisted.
+registerApiKeyRoutes({
+  app,
+  store: apiKeyStore,
+  enforceRateLimit,
+  rateLimiter: publicCognitionLimiter,
+  authorizeAdmin: (req, res) => authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN'),
+  recordEvidence: (event) => {
+    bookPiLedger.append({
+      id: `evt-${randomUUID()}`,
+      timestamp: new Date().toISOString(),
+      type: 'API_KEY_LIFECYCLE',
+      methodId: `A.SECURITY.API_KEY.${event.action.toUpperCase()}.v1.0.0`,
+      principal: `tenant:${event.tenantId}`,
+      riskTier: 'MEDIUM',
+      status: 'ADMITTED',
+    });
+    console.info('[Isabella] API key lifecycle', event);
+  },
+});
+
+// ── Native federation (state: engine-generated) ─ signed webhook ingress,
+// normalized inbox, API catalog and model-runtime readiness. Ingress is evidence,
+// never authority: it cannot execute tools or grant permissions.
+registerFederationRoutes({
+  app,
+  registry: federationRegistry,
+  enforceRateLimit,
+  rateLimiter: federationLimiter,
+  authorizeAdmin: (req, res) => authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN'),
+  readRawBody: (req) => federationRawBodies.get(req),
+  recordEvidence: (event) => {
+    bookPiLedger.append({
+      id: `evt-${randomUUID()}`,
+      timestamp: new Date().toISOString(),
+      type: 'FEDERATION_EVENT',
+      methodId: `A.FEDERATION.${event.action.toUpperCase().replace('.', '_')}.v1.0.0`,
+      principal: `connector:${event.connectorId}`,
+      riskTier: 'LOW',
+      status: 'ADMITTED',
+    });
+    console.info('[Isabella] Federation event', event);
+  },
+});
+
 // ── Génesis TTS MX-Prime (state: engine-generated) ─ normalización es-MX, prosodia cultural, router de
 // backends reales (servicio neuronal del operador / TTS por clave / voz del navegador), memoria de
 // pronunciación, anti-replay y sello de evidencia. Hablar NO autoriza ni ejecuta nada.
@@ -5109,6 +5224,7 @@ registerTtsRoutes({
   engine: ttsEngine,
   enforceRateLimit,
   rateLimiter: publicCognitionLimiter,
+  publicVoiceLimiter,
   authorizeAdmin: (req, res) => authorizeProviderRoute(req, res),
   recordEvidence: (event) => {
     bookPiLedger.append({

@@ -8,10 +8,11 @@
  */
 
 import { resolveCanonicalVoice } from './voice-profile';
+import { keylessTtsConfigFromEnv, synthesizeKeylessSpeech } from '../tts/keyless';
 
 export const SPEECH_CONTRACT_VERSION = '1.0.0';
 
-export type SpeechProvider = 'groq';
+export type SpeechProvider = 'groq' | 'google-translate';
 
 export interface SpeechReadiness {
   textToSpeech: boolean;
@@ -93,62 +94,81 @@ function groqSpeechConfig(env: Record<string, string | undefined>): GroqSpeechCo
 
 export function describeSpeechReadiness(env: Record<string, string | undefined>): SpeechReadiness {
   const config = groqSpeechConfig(env);
+  const keyless = keylessTtsConfigFromEnv(env);
+  const providers: SpeechProvider[] = [];
+  if (config) providers.push('groq');
+  if (keyless) providers.push('google-translate');
   return {
-    textToSpeech: config !== null && config.ttsModel.length > 0,
+    textToSpeech: (config !== null && config.ttsModel.length > 0) || keyless !== null,
     speechToText: config !== null,
-    providers: config ? ['groq'] : [],
+    providers,
   };
 }
 
 /**
- * Text-to-speech via Groq's OpenAI-compatible audio endpoint (Orpheus). Returns
- * null when no provider is configured or the provider rejects the request.
+ * Text-to-speech via Groq's OpenAI-compatible audio endpoint (Orpheus), with an
+ * operator-gated keyless neural fallback. Returns null when no provider is
+ * configured or every configured provider rejects the request.
  */
 export async function synthesizeSpeech(
   env: Record<string, string | undefined>,
   input: { text: string; format?: 'wav' | 'mp3'; timeoutMs?: number }
 ): Promise<SynthesizedSpeech | null> {
-  const config = groqSpeechConfig(env);
-  if (!config || !config.ttsModel) return null;
   const text = nonEmpty(input.text)?.slice(0, 2_000);
   if (!text) return null;
+  const config = groqSpeechConfig(env);
   const format = input.format === 'mp3' ? 'mp3' : 'wav';
-  const cacheKey = `${config.ttsModel}|${config.ttsVoice}|${format}|${text}`;
-  const cached = ttsCache.get(cacheKey);
-  if (cached !== undefined) return cached;
-  try {
-    const response = await fetch(`${config.baseUrl}/audio/speech`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${config.key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: config.ttsModel,
-        input: text,
+  if (config && config.ttsModel) {
+    const cacheKey = `${config.ttsModel}|${config.ttsVoice}|${format}|${text}`;
+    const cached = ttsCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+    try {
+      const response = await fetch(`${config.baseUrl}/audio/speech`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${config.key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: config.ttsModel,
+          input: text,
+          voice: config.ttsVoice,
+          response_format: format,
+        }),
+        signal: AbortSignal.timeout(input.timeoutMs ?? 30_000),
+      });
+      if (!response.ok) throw new Error(`groq speech HTTP ${response.status}`);
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (buffer.byteLength === 0) throw new Error('groq speech returned empty audio');
+      const result: SynthesizedSpeech = {
+        provider: 'groq',
+        mimeType: format === 'mp3' ? 'audio/mpeg' : 'audio/wav',
+        dataUrl: `data:${format === 'mp3' ? 'audio/mpeg' : 'audio/wav'};base64,${buffer.toString('base64')}`,
+        bytes: buffer.byteLength,
         voice: config.ttsVoice,
-        response_format: format,
-      }),
-      signal: AbortSignal.timeout(input.timeoutMs ?? 30_000),
-    });
-    if (!response.ok) throw new Error(`groq speech HTTP ${response.status}`);
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.byteLength === 0) throw new Error('groq speech returned empty audio');
-    const result: SynthesizedSpeech = {
-      provider: 'groq',
-      mimeType: format === 'mp3' ? 'audio/mpeg' : 'audio/wav',
-      dataUrl: `data:${format === 'mp3' ? 'audio/mpeg' : 'audio/wav'};base64,${buffer.toString('base64')}`,
-      bytes: buffer.byteLength,
-      voice: config.ttsVoice,
-    };
-    ttsCache.set(cacheKey, result);
-    if (ttsCache.size > TTS_CACHE_MAX) {
-      const oldest = ttsCache.keys().next().value;
-      if (oldest !== undefined) ttsCache.delete(oldest);
+      };
+      ttsCache.set(cacheKey, result);
+      if (ttsCache.size > TTS_CACHE_MAX) {
+        const oldest = ttsCache.keys().next().value;
+        if (oldest !== undefined) ttsCache.delete(oldest);
+      }
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn('[Isabella] primary speech synthesis unavailable', {
+        message: message.slice(0, 180),
+      });
     }
-    return result;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn('[Isabella] speech synthesis unavailable', { message: message.slice(0, 180) });
-    return null;
   }
+  const keyless = await synthesizeKeylessSpeech(env, {
+    text,
+    timeoutMs: input.timeoutMs,
+  });
+  if (!keyless) return null;
+  return {
+    provider: keyless.provider,
+    mimeType: keyless.mimeType,
+    dataUrl: keyless.dataUrl,
+    bytes: keyless.bytes,
+    voice: keyless.voice,
+  };
 }
 
 /**

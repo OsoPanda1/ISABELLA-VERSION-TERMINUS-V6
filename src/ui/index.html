@@ -14,6 +14,7 @@
   <link rel="preload" as="image" href="/assets/video/IntroVideoIsabella-poster.jpg" fetchpriority="high" />
   <link rel="stylesheet" href="/styles/cinematic.css?v=future-human-1" />
   <link rel="stylesheet" href="/styles/command-center.css?v=2026-10-19" />
+  <link rel="stylesheet" href="/styles/nexus.css?v=nexus-1" />
 </head>
 <body>
   <a class="skip-link" href="#chat">Saltar a la conversación</a>
@@ -91,6 +92,7 @@
         <a href="#plans" data-nav-target="plans">Planes</a>
         <a href="#skills" data-nav-target="skills">Skills</a>
         <a href="#governance" data-nav-target="governance">Governance</a>
+        <a href="#nexus" data-nav-target="nexus">Nexus</a>
         <a href="/platform" class="nav-platform-link">Plataforma <span aria-hidden="true">↗</span></a>
       </div>
       <div class="topbar-actions">
@@ -103,38 +105,54 @@
       </div>
       <button id="navToggle" class="nav-toggle" type="button" aria-expanded="false" aria-controls="primaryLinks" aria-label="Abrir navegación">Menú <span aria-hidden="true">⌄</span></button>
     </nav>
-    <button class="rail-launcher rail-launcher-left rail-launcher-context" type="button" aria-expanded="false" aria-controls="leftRail">◀ <span>CONTEXTO</span></button>
-    <div id="leftRail" class="side-rail rail-left rail-context" aria-label="Navegación lateral izquierda de contexto">
-      <div class="rail-heading">CONTEXTO <span>01—03</span></div>
-      <details class="rail-panel" open><summary><span class="rail-index">01</span> SESIÓN</summary><nav><a href="#chat">Conversación</a><a href="#studio">Memoria local</a></nav></details>
-      <details class="rail-panel"><summary><span class="rail-index">02</span> CREACIÓN</summary><nav><a href="#design">Diseño</a><a href="#chat">Redacción</a></nav></details>
-      <details class="rail-panel"><summary><span class="rail-index">03</span> GOBERNANZA</summary><nav><a href="#governance">Evidencia</a><a href="#control">Control humano</a></nav></details>
+    <button class="rail-launcher rail-launcher-left rail-launcher-context" type="button" aria-expanded="false" aria-controls="leftRail" title="Contexto de la sesión (Alt+1)">◀ <span>CONTEXTO</span><i aria-hidden="true">01</i></button>
+    <div id="leftRail" class="side-rail rail-left rail-context" data-rail="context" aria-label="Navegación lateral izquierda de contexto" aria-hidden="true" inert>
+      <canvas class="rail-matrix" data-rail-matrix aria-hidden="true"></canvas>
+      <span class="rail-aurora" aria-hidden="true"></span>
+      <div class="rail-top"><div class="rail-heading">CONTEXTO <span>01—03</span></div><button class="rail-collapse" type="button" data-rail-close="leftRail" aria-label="Cerrar contexto">×</button></div>
+      <div class="rail-stack">
+        <details class="rail-panel" open><summary><span class="rail-index">01</span> SESIÓN</summary><nav><a href="#chat">Conversación</a><a href="#studio">Memoria local</a></nav></details>
+        <details class="rail-panel"><summary><span class="rail-index">02</span> CREACIÓN</summary><nav><a href="#design">Diseño</a><a href="#chat">Redacción</a></nav></details>
+        <details class="rail-panel"><summary><span class="rail-index">03</span> GOBERNANZA</summary><nav><a href="#governance">Evidencia</a><a href="#control">Control humano</a></nav></details>
+      </div>
     </div>
-    <button class="rail-launcher rail-launcher-left rail-launcher-history" type="button" aria-expanded="false" aria-controls="leftRailHistory">◀ <span>HISTORIAL</span></button>
-    <div id="leftRailHistory" class="side-rail rail-left rail-history" aria-label="Navegación lateral izquierda del historial">
-      <div class="rail-heading">HISTORIAL <span>04—06</span></div>
-      <details class="rail-panel" open><summary><span class="rail-index">04</span> CONVERSACIONES</summary><nav><a href="#chat">Última sesión</a><a href="#chat" data-action="history">Buscar historial</a></nav></details>
-      <details class="rail-panel"><summary><span class="rail-index">05</span> FAVORITOS</summary><nav><a href="#studio">Guardados</a><a href="#studio">Colecciones</a></nav></details>
-      <details class="rail-panel"><summary><span class="rail-index">06</span> SESIÓN</summary><nav><a href="#chat" data-action="new-chat">Nueva sesión</a><a href="#top" data-action="close-rails">Cerrar contexto</a></nav></details>
+    <button class="rail-launcher rail-launcher-left rail-launcher-history" type="button" aria-expanded="false" aria-controls="leftRailHistory" title="Historial y Nexus (Alt+2)">◀ <span>HISTORIAL</span><i aria-hidden="true">02</i></button>
+    <div id="leftRailHistory" class="side-rail rail-left rail-history" data-rail="history" aria-label="Navegación lateral izquierda del historial" aria-hidden="true" inert>
+      <canvas class="rail-matrix" data-rail-matrix aria-hidden="true"></canvas>
+      <span class="rail-aurora" aria-hidden="true"></span>
+      <div class="rail-top"><div class="rail-heading">HISTORIAL <span>04—06</span></div><button class="rail-collapse" type="button" data-rail-close="leftRailHistory" aria-label="Cerrar historial">×</button></div>
+      <div class="rail-stack">
+        <details class="rail-panel" open><summary><span class="rail-index">04</span> CONVERSACIONES</summary><nav><a href="#chat">Última sesión</a><a href="#chat" data-action="history">Buscar historial</a></nav></details>
+        <details class="rail-panel"><summary><span class="rail-index">05</span> FAVORITOS</summary><nav><a href="#studio">Guardados</a><a href="#studio">Colecciones</a></nav></details>
+        <details class="rail-panel"><summary><span class="rail-index">06</span> NEXUS</summary><nav><a href="#nexus" data-nexus-focus="workbench">Consola</a><a href="#nexus" data-nexus-focus="keys">API keys</a></nav></details>
+      </div>
     </div>
-    <button class="rail-launcher rail-launcher-right rail-launcher-runtime" type="button" aria-expanded="false" aria-controls="rightRail"> <span>RUNTIME</span> ▶</button>
-    <div id="rightRail" class="side-rail rail-right rail-runtime" aria-label="Navegación lateral derecha de runtime">
-      <div class="rail-heading">RUNTIME <span>07—09</span></div>
-      <details class="rail-panel" open><summary><span class="rail-index">07</span> ESTADO</summary><nav><a href="#chat" data-action="inspector">Nodo activo</a><a href="#control">Métricas</a></nav></details>
-      <details class="rail-panel"><summary><span class="rail-index">08</span> HERRAMIENTAS</summary><nav><a href="#tools">Tools</a><a href="#skills">Skills</a></nav></details>
-      <details class="rail-panel"><summary><span class="rail-index">09</span> CAPACIDADES</summary><nav><a href="#chat">Texto</a><a href="#chat" data-action="mic">Voz nativa</a></nav></details>
+    <button class="rail-launcher rail-launcher-right rail-launcher-runtime" type="button" aria-expanded="false" aria-controls="rightRail" title="Runtime del nodo (Alt+3)"> <span>RUNTIME</span> ▶<i aria-hidden="true">03</i></button>
+    <div id="rightRail" class="side-rail rail-right rail-runtime" data-rail="runtime" aria-label="Navegación lateral derecha de runtime" aria-hidden="true" inert>
+      <canvas class="rail-matrix" data-rail-matrix aria-hidden="true"></canvas>
+      <span class="rail-aurora" aria-hidden="true"></span>
+      <div class="rail-top"><div class="rail-heading">RUNTIME <span>07—09</span></div><button class="rail-collapse" type="button" data-rail-close="rightRail" aria-label="Cerrar runtime">×</button></div>
+      <div class="rail-stack">
+        <details class="rail-panel" open><summary><span class="rail-index">07</span> ESTADO</summary><nav><a href="#chat" data-action="inspector">Nodo activo</a><a href="#nexus" data-nexus-focus="runtime">Modelos</a></nav></details>
+        <details class="rail-panel"><summary><span class="rail-index">08</span> HERRAMIENTAS</summary><nav><a href="#tools">Tools</a><a href="#skills">Skills</a></nav></details>
+        <details class="rail-panel"><summary><span class="rail-index">09</span> CAPACIDADES</summary><nav><a href="#chat">Texto</a><a href="#chat" data-action="mic">Voz nativa</a><a href="#nexus" data-nexus-focus="spatial">Espacial</a></nav></details>
+      </div>
     </div>
-    <button class="rail-launcher rail-launcher-right rail-launcher-system" type="button" aria-expanded="false" aria-controls="rightRailSystem"><span>SISTEMA</span> ▶</button>
-    <div id="rightRailSystem" class="side-rail rail-right rail-system" aria-label="Navegación lateral derecha del sistema">
-      <div class="rail-heading">SISTEMA <span>10—12</span></div>
-      <details class="rail-panel" open><summary><span class="rail-index">10</span> MODELO</summary><nav><a href="#control">Motor activo</a><a href="#chat" data-action="focus-prompt">Cambiar lente</a></nav></details>
-      <details class="rail-panel"><summary><span class="rail-index">11</span> EXPORTAR</summary><nav><a href="#chat" data-action="export">Exportar .md</a><a href="#studio">Artefactos</a></nav></details>
-      <details class="rail-panel"><summary><span class="rail-index">12</span> AYUDA</summary><nav><a href="#governance">Principios</a><a href="#chat" data-action="shortcuts">Atajos</a></nav></details>
+    <button class="rail-launcher rail-launcher-right rail-launcher-system" type="button" aria-expanded="false" aria-controls="rightRailSystem" title="Sistema y enlaces (Alt+4)"><span>SISTEMA</span> ▶<i aria-hidden="true">04</i></button>
+    <div id="rightRailSystem" class="side-rail rail-right rail-system" data-rail="system" aria-label="Navegación lateral derecha del sistema" aria-hidden="true" inert>
+      <canvas class="rail-matrix" data-rail-matrix aria-hidden="true"></canvas>
+      <span class="rail-aurora" aria-hidden="true"></span>
+      <div class="rail-top"><div class="rail-heading">SISTEMA <span>10—12</span></div><button class="rail-collapse" type="button" data-rail-close="rightRailSystem" aria-label="Cerrar sistema">×</button></div>
+      <div class="rail-stack">
+        <details class="rail-panel" open><summary><span class="rail-index">10</span> MODELO</summary><nav><a href="#control">Motor activo</a><a href="#nexus" data-nexus-focus="catalog">Catálogo API</a></nav></details>
+        <details class="rail-panel"><summary><span class="rail-index">11</span> EXPORTAR</summary><nav><a href="#chat" data-action="export">Exportar .md</a><a href="#studio">Artefactos</a></nav></details>
+        <details class="rail-panel"><summary><span class="rail-index">12</span> AYUDA</summary><nav><a href="#governance">Principios</a><a href="#chat" data-action="shortcuts">Atajos</a></nav></details>
+      </div>
     </div>
     <div class="workspace-context-bar" role="region" aria-label="Estado del espacio de trabajo">
       <div class="context-identity"><span class="context-dot"></span><span>WORKSPACE</span><strong>GENESIS V6</strong><span class="context-divider">/</span><span id="sessionBadge">SESSION · ACTIVE</span></div>
       <div class="context-capabilities" aria-label="Capacidades de esta sesión">
-        <span class="capability-pill is-active">TEXT</span><span class="capability-pill">LOCAL FILES</span><span id="voiceCapability" class="capability-pill">VOICE</span>
+        <span class="capability-pill is-active">TEXT</span><span class="capability-pill">LOCAL FILES</span><span id="voiceCapability" class="capability-pill">VOICE</span><span id="nexusCapability" class="capability-pill">NEXUS</span>
       </div>
       <div class="context-actions">
         <button id="contextInspector" class="context-button" type="button" aria-haspopup="dialog" aria-controls="systemInspector">Inspeccionar sesión</button>
@@ -179,6 +197,139 @@
       <div class="pane-label">CONTROL SURFACE <span>REPLEGADO</span></div>
       <h2 id="control-title">Panel de control</h2><p>Estado, gobernanza, herramientas y evidencia de la sesión activa.</p>
     </section>
+    <section id="nexus" class="nexus" aria-labelledby="nexus-title">
+      <div class="nexus-head">
+        <div class="nexus-copy">
+          <p class="eyebrow">NEXUS · FEDERATION CONSOLE</p>
+          <h2 id="nexus-title">Una consola <em>para lo real.</em></h2>
+          <p class="nexus-lede">Prueba endpoints, registra conectores firmados, emite claves de programa y observa la disponibilidad real de modelos. Todo lo que ves aquí se ejecuta contra este nodo; nada se presenta como certificado.</p>
+        </div>
+        <div class="nexus-pulse" aria-hidden="true">
+          <canvas id="nexusMatrix"></canvas>
+          <span class="nexus-pulse-ring"></span>
+          <span class="nexus-pulse-ring nexus-pulse-ring-b"></span>
+          <span class="nexus-pulse-core">NX</span>
+          <small>NODO CERO</small>
+        </div>
+      </div>
+      <div class="nexus-status" role="status" aria-live="polite">
+        <span class="nexus-chip" id="nexusNodeState"><i aria-hidden="true"></i>NODO · VERIFICANDO</span>
+        <span class="nexus-chip" id="nexusSigningState"><i aria-hidden="true"></i>WEBHOOK · —</span>
+        <span class="nexus-chip" id="nexusModelState"><i aria-hidden="true"></i>MODELOS · —</span>
+        <span class="nexus-chip" id="nexusSpatialState"><i aria-hidden="true"></i>ESPACIAL · —</span>
+        <a class="nexus-chip nexus-chip-link" href="/api/v1/federation/catalog" target="_blank" rel="noopener">OPENAPI <span aria-hidden="true">↗</span></a>
+      </div>
+      <div class="nexus-tabs" role="tablist" aria-label="Consola Nexus">
+        <button class="nexus-tab is-active" type="button" role="tab" id="nexusTabWorkbench" aria-controls="nexusPanelWorkbench" aria-selected="true" tabindex="0">WORKBENCH</button>
+        <button class="nexus-tab" type="button" role="tab" id="nexusTabConnectors" aria-controls="nexusPanelConnectors" aria-selected="false" tabindex="-1">CONECTORES</button>
+        <button class="nexus-tab" type="button" role="tab" id="nexusTabKeys" aria-controls="nexusPanelKeys" aria-selected="false" tabindex="-1">CLAVES</button>
+        <button class="nexus-tab" type="button" role="tab" id="nexusTabCatalog" aria-controls="nexusPanelCatalog" aria-selected="false" tabindex="-1">CATÁLOGO</button>
+        <button class="nexus-tab" type="button" role="tab" id="nexusTabRuntime" aria-controls="nexusPanelRuntime" aria-selected="false" tabindex="-1">RUNTIME</button>
+        <button class="nexus-tab" type="button" role="tab" id="nexusTabSpatial" aria-controls="nexusPanelSpatial" aria-selected="false" tabindex="-1">ESPACIAL</button>
+      </div>
+      <div class="nexus-auth">
+        <label for="nexusAdminToken">TOKEN DE OPERADOR</label>
+        <input id="nexusAdminToken" type="password" autocomplete="off" spellcheck="false" placeholder="Token administrativo (solo esta pestaña)" aria-describedby="nexusAdminTokenNote" />
+        <span id="nexusAdminTokenNote">Se conserva en sessionStorage y se borra al cerrar la pestaña. Nunca se muestra en la interfaz ni se registra.</span>
+      </div>
+      <div class="nexus-panels">
+        <div id="nexusPanelWorkbench" class="nexus-panel is-active" role="tabpanel" aria-labelledby="nexusTabWorkbench" tabindex="0">
+          <div class="nexus-workbench">
+            <form id="nexusRequestForm" class="nexus-request" novalidate>
+              <p class="nexus-label">PETICIÓN DIRECTA <span>SOLO RUTAS /api/v1/*</span></p>
+              <div class="nexus-request-line">
+                <label class="sr-only" for="nexusMethod">Método HTTP</label>
+                <select id="nexusMethod"><option>GET</option><option>POST</option><option>DELETE</option></select>
+                <label class="sr-only" for="nexusPath">Ruta del endpoint</label>
+                <input id="nexusPath" value="/api/v1/federation/node" spellcheck="false" autocomplete="off" />
+                <button class="nexus-action" type="submit" id="nexusSend">EJECUTAR <span aria-hidden="true">↗</span></button>
+              </div>
+              <div class="nexus-fields">
+                <label for="nexusApiKey">API KEY <small>opcional</small><input id="nexusApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="isa_live_…" /></label>
+                <label for="nexusBody">BODY JSON<textarea id="nexusBody" rows="5" spellcheck="false" placeholder='{"input":"Hola Isabella"}'></textarea></label>
+              </div>
+            </form>
+            <div class="nexus-response" aria-live="polite">
+              <header><strong id="nexusResponseStatus">LISTO</strong><span id="nexusResponseMeta">Sin ejecutar</span><button id="nexusCopyResponse" type="button">COPIAR</button></header>
+              <pre id="nexusResponseBody" tabindex="0">Elige una ruta y ejecútala. La respuesta aparecerá aquí con su estado y latencia real.</pre>
+            </div>
+          </div>
+        </div>
+        <div id="nexusPanelConnectors" class="nexus-panel" role="tabpanel" aria-labelledby="nexusTabConnectors" tabindex="0" hidden>
+          <div class="nexus-grid-2">
+            <form id="nexusConnectorForm" class="nexus-card-form" novalidate>
+              <p class="nexus-label">REGISTRAR CONECTOR <span>OPERADOR</span></p>
+              <label for="nexusConnectorName">NOMBRE<input id="nexusConnectorName" maxlength="80" autocomplete="off" placeholder="WhatsApp principal" /></label>
+              <label for="nexusConnectorKind">TIPO<select id="nexusConnectorKind"><option value="whatsapp">WhatsApp</option><option value="openwa">OpenWA</option><option value="evolution">Evolution API</option><option value="webhook">Webhook genérico</option></select></label>
+              <label for="nexusConnectorTarget">TARGET URL <small>opcional, https</small><input id="nexusConnectorTarget" autocomplete="off" placeholder="https://…" /></label>
+              <button class="nexus-action" type="submit">REGISTRAR <span aria-hidden="true">↗</span></button>
+            </form>
+            <div class="nexus-list-card">
+              <header><strong>CONECTORES</strong><button id="nexusRefreshConnectors" type="button" aria-label="Actualizar conectores">↻</button></header>
+              <div id="nexusConnectorList" class="nexus-list"><p class="nexus-empty">Introduce el token de operador y actualiza.</p></div>
+              <header><strong>INBOX FIRMADO</strong><button id="nexusRefreshInbox" type="button" aria-label="Actualizar inbox">↻</button></header>
+              <div id="nexusInboxList" class="nexus-list"><p class="nexus-empty">Los mensajes verificados aparecerán aquí; el ingreso no ejecuta acciones.</p></div>
+            </div>
+          </div>
+        </div>
+        <div id="nexusPanelKeys" class="nexus-panel" role="tabpanel" aria-labelledby="nexusTabKeys" tabindex="0" hidden>
+          <div class="nexus-grid-2">
+            <form id="nexusKeyForm" class="nexus-card-form" novalidate>
+              <p class="nexus-label">EMITIR API KEY <span>OPERADOR</span></p>
+              <label for="nexusProgramName">PROGRAMA<input id="nexusProgramName" maxlength="80" autocomplete="off" placeholder="Mi integración" /></label>
+              <label for="nexusProgramId">ID <small>opcional</small><input id="nexusProgramId" maxlength="64" autocomplete="off" placeholder="mi-integracion" /></label>
+              <fieldset class="nexus-scopes"><legend>SCOPES</legend><label><input class="nexus-scope" type="checkbox" value="cognition:read" checked /> cognition:read</label><label><input class="nexus-scope" type="checkbox" value="cognition:write" checked /> cognition:write</label><label><input class="nexus-scope" type="checkbox" value="memory:write" /> memory:write</label><label><input class="nexus-scope" type="checkbox" value="admin:keys" /> admin:keys</label></fieldset>
+              <label for="nexusKeyExpiry">EXPIRA <small>opcional</small><input id="nexusKeyExpiry" type="datetime-local" /></label>
+              <button class="nexus-action" type="submit">EMITIR CLAVE <span aria-hidden="true">↗</span></button>
+            </form>
+            <div class="nexus-list-card">
+              <div id="nexusIssuedKey" class="nexus-issued" hidden>
+                <p><strong>CLAVE EMITIDA</strong><span>Se muestra una sola vez.</span></p>
+                <code id="nexusIssuedSecret"></code>
+                <button id="nexusCopyIssuedKey" type="button">COPIAR CLAVE</button>
+              </div>
+              <header><strong>CLAVES ACTIVAS</strong><button id="nexusRefreshKeys" type="button" aria-label="Actualizar claves">↻</button></header>
+              <div id="nexusKeyList" class="nexus-list"><p class="nexus-empty">Solo se muestran prefijos y metadatos; los secretos no se recuperan.</p></div>
+            </div>
+          </div>
+        </div>
+        <div id="nexusPanelCatalog" class="nexus-panel" role="tabpanel" aria-labelledby="nexusTabCatalog" tabindex="0" hidden>
+          <div class="nexus-list-card nexus-catalog-card">
+            <header><strong>CATÁLOGO OPENAPI 3.1</strong><button id="nexusRefreshCatalog" type="button" aria-label="Actualizar catálogo">↻</button></header>
+            <div id="nexusCatalogList" class="nexus-list"><p class="nexus-empty">Cargando catálogo del nodo…</p></div>
+          </div>
+        </div>
+        <div id="nexusPanelRuntime" class="nexus-panel" role="tabpanel" aria-labelledby="nexusTabRuntime" tabindex="0" hidden>
+          <div class="nexus-list-card nexus-runtime-card">
+            <header><strong>MODELOS Y VOZ</strong><button id="nexusRefreshRuntime" type="button" aria-label="Actualizar runtime">↻</button></header>
+            <div id="nexusRuntimeList" class="nexus-runtime-grid"><p class="nexus-empty">Consultando readiness local…</p></div>
+            <p class="nexus-foot" id="nexusSpeechReadiness">La voz y los modelos se describen desde la configuración local; describir no ejecuta.</p>
+            <div class="nexus-voice-probe" role="group" aria-label="Verificación de voz del nodo">
+              <button id="nexusVoiceProbe" class="nexus-action" type="button">PROBAR VOZ <span aria-hidden="true">▶</span></button>
+              <span id="nexusVoiceStatus" class="nexus-badge" role="status" aria-live="polite">SIN PROBAR</span>
+            </div>
+          </div>
+        </div>
+        <div id="nexusPanelSpatial" class="nexus-panel" role="tabpanel" aria-labelledby="nexusTabSpatial" tabindex="0" hidden>
+          <div class="nexus-spatial">
+            <div>
+              <p class="nexus-label">CAPACIDAD ESPACIAL <span>WEBXR / PROFUNDIDAD</span></p>
+              <p>Nexus detecta si este navegador puede abrir sesiones inmersivas. El modo profundidad es una capa visual con parallax; no se declara un renderizador XR completo.</p>
+              <div class="nexus-spatial-badges">
+                <span id="nexusXrVr" class="nexus-badge">VR · —</span>
+                <span id="nexusXrAr" class="nexus-badge">AR · —</span>
+                <span id="nexusXrInline" class="nexus-badge">INLINE · —</span>
+                <span id="nexusXrDevice" class="nexus-badge">DEVICE · —</span>
+              </div>
+              <button id="nexusSpatialMode" class="nexus-action" type="button" aria-pressed="false">ACTIVAR PROFUNDIDAD</button>
+              <p class="nexus-foot" id="nexusSpatialNote">La detección depende de navigator.xr y de permisos del navegador.</p>
+            </div>
+            <div class="nexus-spatial-visual" aria-hidden="true"><span></span><span></span><span></span><b>NX</b></div>
+          </div>
+        </div>
+      </div>
+      <p class="nexus-contract">CAPACIDAD ≠ AUTORIDAD ≠ EJECUCIÓN ≠ EVIDENCIA · Las claves y tokens se usan en esta pestaña; no se incrustan en la interfaz ni se publican.</p>
+    </section>
     <section id="studio" class="studio-panel" aria-labelledby="studio-title">
       <div class="studio-head"><div><p class="eyebrow">ESPACIO PERSONAL · ALMACENAMIENTO LOCAL</p><h2 id="studio-title">Studio <em>de trabajo.</em></h2><p class="studio-description">Guarda respuestas que quieras reutilizar. Los borradores se conservan en este navegador; no se sincronizan con una cuenta ni con otros dispositivos.</p></div><button id="clearDrafts" class="subtle-action" type="button">Vaciar guardados</button></div>
       <div id="draftShelf" class="draft-shelf" aria-live="polite"><p class="empty-shelf">Tus respuestas guardadas aparecerán aquí. Usa «Guardar» debajo de una respuesta para conservarla.</p></div>
@@ -195,6 +346,8 @@
       <div class="inspector-cell"><span>STORAGE</span><strong>LOCAL</strong><small>Studio y borradores permanecen en este navegador</small></div>
       <div class="inspector-cell"><span>VOICE</span><strong id="inspectorVoice">BROWSER</strong><small>SpeechSynthesis / reconocimiento nativo si está disponible</small></div>
       <div class="inspector-cell"><span>ATTACHMENT</span><strong id="inspectorAttachment">NONE</strong><small>TXT · MD · CSV · JSON · LOG, con límites explícitos</small></div>
+      <div class="inspector-cell"><span>FEDERATION</span><strong id="inspectorFederation">—</strong><small>Conectores firmados e inbox; el ingreso no ejecuta</small></div>
+      <div class="inspector-cell"><span>API KEYS</span><strong id="inspectorApiKeys">—</strong><small>Emisión con token de operador; solo se persisten digests</small></div>
     </div>
     <p class="inspector-foot">Este panel muestra estado operativo de la interfaz. No certifica proveedores externos ni autoridad de ejecución.</p>
   </dialog>
@@ -215,6 +368,9 @@
       <button type="button" data-command="go-governance" data-keywords="gobernanza consentimiento permisos límites"><span class="command-icon">◈</span><span><strong>Gobernanza</strong><small>Permisos, límites y escalamiento humano</small></span></button>
       <button type="button" data-command="go-platform-chat" data-keywords="chat dedicado plataforma conversación superficie"><span class="command-icon">↗</span><span><strong>Abrir chat dedicado</strong><small>Superficie multipágina con historial local y entrega progresiva</small></span><kbd>/chat</kbd></button>
       <button type="button" data-command="go-platform" data-keywords="plataforma panorama nodo estado skills tools marketplace"><span class="command-icon">◫</span><span><strong>Explorar la plataforma</strong><small>Panorama, estado, skills, tools e integraciones</small></span></button>
+      <button type="button" data-command="go-nexus" data-keywords="nexus consola api workbench endpoints federación federation"><span class="command-icon">⌁</span><span><strong>Abrir Nexus</strong><small>Ejecutar endpoints, conectores, claves y runtime real</small></span><kbd>N</kbd></button>
+      <button type="button" data-command="go-nexus-keys" data-keywords="api key programa credencial emitir rotar revocar"><span class="command-icon">⚿</span><span><strong>Emitir API key</strong><small>Registrar un programa y mostrar el secreto una sola vez</small></span></button>
+      <button type="button" data-command="go-nexus-connectors" data-keywords="conectores whatsapp evolution openwa webhook inbox"><span class="command-icon">⌘</span><span><strong>Abrir conectores</strong><small>Webhooks firmados e inbox normalizado</small></span></button>
       <button type="button" data-command="go-library" data-keywords="biblioteca archivos locales guardados"><span class="command-icon">▤</span><span><strong>Biblioteca local</strong><small>Archivos de texto guardados solo en este navegador</small></span></button>
       <button type="button" data-command="go-profile" data-keywords="perfil insignias galería historial cuenta local"><span class="command-icon">◎</span><span><strong>Perfil e insignias</strong><small>Historial, galería y reconocimiento local</small></span></button>
       <button type="button" data-command="go-developers" data-keywords="api desarrolladores documentación endpoints sse"><span class="command-icon">⌘</span><span><strong>API para desarrolladores</strong><small>Endpoints, SSE, límites y contratos públicos</small></span></button>
@@ -230,6 +386,7 @@
   <script src="/ui/cognition-client.js?v=enterprise-3" defer></script>
   <script src="/ui/app.js?v=enterprise-3" defer></script>
   <script src="/ui/chat-plus.js?v=enterprise-3" defer></script>
+  <script src="/ui/nexus.js?v=nexus-1" defer></script>
   <script>
     window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
   </script>

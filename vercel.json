@@ -5,7 +5,11 @@
   "env": {
     "ISABELLA_KEYLESS_FREE_PROVIDER": "pollinations",
     "KEYLESS_FREE_PROVIDER_TIMEOUT_MS": "30000",
-    "CHAT_CHAIN_BUDGET_MS": "45000"
+    "CHAT_CHAIN_BUDGET_MS": "45000",
+    "ISABELLA_KEYLESS_TTS": "google",
+    "ISABELLA_KEYLESS_TTS_MAX_CHARS": "1200",
+    "ISABELLA_API_KEY_STORE": "memory",
+    "ISABELLA_FEDERATION_STORE": "memory"
   },
   "functions": {
     "api/index.js": {

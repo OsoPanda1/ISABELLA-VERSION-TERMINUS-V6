@@ -17,6 +17,7 @@ import type { FixedWindowRateLimiter } from '../security/rate-limit';
 
 export const TTS_ROUTES_VERSION = '1.0.0';
 const MAX_PLAN_CHARS = 4_000;
+const MAX_PUBLIC_SPEECH_CHARS = 1_200;
 
 export interface TtsRouteDeps {
   readonly app: Application;
@@ -28,6 +29,8 @@ export interface TtsRouteDeps {
     bucket: string
   ) => boolean;
   readonly rateLimiter: FixedWindowRateLimiter;
+  /** Dedicated quota for the credential-free public voice surface. */
+  readonly publicVoiceLimiter?: FixedWindowRateLimiter;
   /** Gate for backend-calling synthesis (provider gate). */
   readonly authorizeAdmin: (req: Request, res: Response) => boolean;
   /** Evidence sink (BookPI). Must never throw into the request path. */
@@ -86,12 +89,13 @@ function actorOf(req: Request): string {
 
 function parse(
   body: unknown,
-  actorId: string
+  actorId: string,
+  maxChars = MAX_PLAN_CHARS
 ): { ok: true; value: SpeechRequest } | { ok: false; error: string } {
   const b = (body ?? {}) as Record<string, unknown>;
   const text = typeof b.text === 'string' ? b.text : '';
   if (!text.trim()) return { ok: false, error: 'text es requerido' };
-  if (text.length > MAX_PLAN_CHARS) return { ok: false, error: 'TTS_TEXT_SIZE_LIMIT_EXCEEDED' };
+  if (text.length > maxChars) return { ok: false, error: 'TTS_TEXT_SIZE_LIMIT_EXCEEDED' };
   const mode =
     typeof b.mode === 'string' && (VOICE_MODES as readonly string[]).includes(b.mode)
       ? (b.mode as VoiceMode)
@@ -263,6 +267,57 @@ export function registerTtsRoutes(deps: TtsRouteDeps): void {
     }
     res.json({
       success: true,
+      authorizationPerformed: false,
+      executionPerformed: false,
+      ...result,
+    });
+  });
+
+  /**
+   * Credential-free voice surface for the browser. It NEVER reaches a paid
+   * provider: keylessOnly forces the operator-gated neural fallback and returns
+   * a client plan when that fallback is unavailable. Quota is per-IP and the
+   * text ceiling is lower than the authenticated route.
+   */
+  app.post('/api/v1/voice/speak', async (req, res) => {
+    if (
+      !deps.enforceRateLimit(req, res, deps.publicVoiceLimiter ?? deps.rateLimiter, 'public-voice')
+    )
+      return;
+    const actor = actorOf(req);
+    const parsed = parse(req.body, actor, MAX_PUBLIC_SPEECH_CHARS);
+    if (!parsed.ok) {
+      res
+        .status(parsed.error === 'TTS_TEXT_SIZE_LIMIT_EXCEEDED' ? 413 : 400)
+        .json({ success: false, error: parsed.error });
+      return;
+    }
+    const result = await engine.synthesize(parsed.value, 20_000, { keylessOnly: true });
+    if (result.status === 'denied') {
+      res
+        .status(
+          result.reason === 'NONCE_REPLAY_DETECTED'
+            ? 409
+            : result.reason === 'TEXT_TOO_LONG'
+              ? 413
+              : 400
+        )
+        .json({ success: false, error: result.reason, traceId: result.traceId });
+      return;
+    }
+    try {
+      deps.recordEvidence({
+        traceId: result.traceId,
+        backend: result.backend,
+        evidenceHash: result.evidenceHash,
+        actor,
+      });
+    } catch {
+      /* evidence sink must not break speech */
+    }
+    res.json({
+      success: true,
+      publicCapability: true,
       authorizationPerformed: false,
       executionPerformed: false,
       ...result,
