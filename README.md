@@ -5,7 +5,7 @@
 **Rama auditada:** `main`  
 **Commit auditado:** `9add636bdba1a84525df8812eaad915df93fc139`  
 **Estado:** **PREPRODUCCIÓN — despliegue registrado, liberación productiva no certificada**  
-**Avance de producción:** **61% (estimación conservadora de referencia; no equivale a aprobación de release).** Debe recalcularse con evidencia reproducible después de cerrar los gates de CI, runtime, persistencia y proveedor real.
+**Avance global de implementación: no publicado como porcentaje único.** La madurez se reporta por gates verificables (CI, runtime, persistencia, proveedor de IA, seguridad, pagos) con evidencia humana reproducida; hoy no existe un denominador de requisitos ponderados y reproducible que justifique una cifra agregada. Se retira la estimación de referencia previa por carecer de dicho denominador y no debe reinroducirse hasta recalcularse con evidencia.
 
 > **CAPABILITY ≠ AUTHORITY ≠ EXECUTION ≠ EVIDENCE ≠ LEARNING ≠ PRODUCTION**
 >

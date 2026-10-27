@@ -96,8 +96,11 @@ add("RA-022", "BLOCKER",
   "Startup does not seed IKES with the audited placeholder source IDs/hashes.",
   ["src/server.ts"]);
 add("RA-023", "BLOCKER",
-  !!server && /\(req\.url \?\? ['"]['"]\)\.split\(['"]\?['"]\)\[0\] === ['"]\/api\/v1\/connectors\/ingest['"]/.test(server),
-  "Raw webhook bodies are retained only for the signed connector-ingestion route.",
+  !!server &&
+  /\(req\.url \?\? ['"]['"]\)\.split\(['"]\?['"]\)\[0\]/.test(server) &&
+  /pathname === ['"]\/api\/v1\/connectors\/ingest['"]/.test(server) &&
+  /pathname\??\.startsWith\(['"]\/api\/v1\/federation\/webhooks\/['"]\)/.test(server),
+  "Raw webhook bodies are retained only for the signed connector-ingestion and federation webhook routes (never globally).",
   ["src/server.ts"]);
 add("RA-024", "WARN",
   !!server && /coordinates: null/.test(server) && /coordinatesStatus: ['"]UNVERIFIED['"]/.test(server),
