@@ -113,6 +113,7 @@
   "GET /ui/cognition-client.js",
   "GET /ui/platform-chat.js",
   "GET /ui/platform.js",
+  "GET /ui/platform/logo-isav6.jpeg",
   "GET /v1/models",
   "POST /api/v1/agents/run",
   "POST /api/v1/audio-overview/generate",
