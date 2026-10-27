@@ -2,7 +2,8 @@ import { z } from 'zod';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  // 8080 is the contract shared by the Dockerfile, docker-compose and k8s manifests.
+  PORT: z.coerce.number().int().min(1).max(65535).default(8080),
   HOST: z.string().default('0.0.0.0'),
   DATABASE_URL: z.string().min(1).optional(),
   REDIS_URL: z.string().min(1).optional(),
@@ -13,7 +14,7 @@ const envSchema = z.object({
   GAMEOVER_PASSPORT_PATH: z.string().min(1).optional(),
   STRICT_PREFLIGHT: z.string().optional(),
   APP_PUBLIC_URL: z.string().url().optional(),
-  ALLOWED_ORIGINS: z.string().default('http://localhost:3000'),
+  ALLOWED_ORIGINS: z.string().default('http://localhost:8080'),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

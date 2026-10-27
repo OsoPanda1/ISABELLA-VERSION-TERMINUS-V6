@@ -8,6 +8,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { envFlag } from '../lib/env-flags';
 
 export const CONNECTOR_KINDS = ['whatsapp', 'openwa', 'evolution', 'webhook'] as const;
 export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
@@ -292,7 +293,7 @@ export function createDefaultFederationRegistry(
   env: Readonly<Record<string, string | undefined>> = process.env
 ): FederationRegistry {
   const mode = (env.ISABELLA_FEDERATION_STORE ?? '').trim().toLowerCase();
-  if (mode === 'memory' || (!mode && env.VERCEL)) return new FederationRegistry();
+  if (mode === 'memory' || (!mode && envFlag(env, 'VERCEL'))) return new FederationRegistry();
   const filePath = (env.ISABELLA_FEDERATION_STORE_PATH ?? '.data/federation.json').trim();
   try {
     return new FederationRegistry(

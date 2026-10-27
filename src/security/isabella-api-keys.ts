@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { envFlag } from '../lib/env-flags';
 
 export const API_KEY_SCOPES = [
   'cognition:read',
@@ -238,7 +239,7 @@ export function createDefaultApiKeyStore(
   env: Readonly<Record<string, string | undefined>> = process.env
 ): IsabellaApiKeyStore {
   const mode = (env.ISABELLA_API_KEY_STORE ?? '').trim().toLowerCase();
-  if (mode === 'memory' || (!mode && env.VERCEL)) return new IsabellaApiKeyStore();
+  if (mode === 'memory' || (!mode && envFlag(env, 'VERCEL'))) return new IsabellaApiKeyStore();
   const filePath = (env.ISABELLA_API_KEY_STORE_PATH ?? '.data/api-keys.json').trim();
   try {
     return new IsabellaApiKeyStore({

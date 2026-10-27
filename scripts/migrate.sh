@@ -28,12 +28,31 @@ if [[ -f "$ENV_FILE" ]]; then
     source "$ENV_FILE"
 fi
 
-# Database connection parameters
-DB_HOST="${POSTGRES_HOST:-postgres}"
-DB_PORT="${POSTGRES_PORT:-5432}"
-DB_USER="${POSTGRES_USER:-isabella_admin}"
-DB_NAME="${POSTGRES_DB:-isabella_db}"
-DB_PASSWORD="${POSTGRES_PASSWORD:-${DB_PASSWORD}}"
+# Database connection parameters. DATABASE_URL is the canonical contract (compose,
+# k8s, PaaS); the POSTGRES_* components remain as a fallback for operators that
+# prefer discrete variables.
+if [[ -n "${DATABASE_URL:-}" ]]; then
+    while IFS='=' read -r key value; do
+        [[ -n "$key" ]] && printf -v "$key" '%s' "$value"
+    done < <(DATABASE_URL="$DATABASE_URL" node -e '
+        const u = new URL(process.env.DATABASE_URL);
+        const dec = decodeURIComponent;
+        const out = {
+            DB_HOST: u.hostname,
+            DB_PORT: u.port || "5432",
+            DB_USER: dec(u.username || "postgres"),
+            DB_NAME: dec((u.pathname || "/postgres").slice(1)),
+            DB_PASSWORD: dec(u.password || ""),
+        };
+        for (const [k, v] of Object.entries(out)) console.log(k + "=" + v);
+    ')
+fi
+
+DB_HOST="${DB_HOST:-${POSTGRES_HOST:-postgres}}"
+DB_PORT="${DB_PORT:-${POSTGRES_PORT:-5432}}"
+DB_USER="${DB_USER:-${POSTGRES_USER:-isabella_admin}}"
+DB_NAME="${DB_NAME:-${POSTGRES_DB:-isabella_db}}"
+DB_PASSWORD="${DB_PASSWORD:-${POSTGRES_PASSWORD:-}}"
 
 export PGPASSWORD="$DB_PASSWORD"
 

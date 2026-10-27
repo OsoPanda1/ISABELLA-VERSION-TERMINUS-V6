@@ -123,7 +123,7 @@ No hay registry real del cliente (ECR/Harbor/GHCR comercial). Sin registry no se
 | `namespace.yaml` | Namespace aislado | — |
 | `serviceaccount.yaml` | SA dedicada, token no montado | ISA-361 |
 | `deployment.yaml` | Despliegue con probes/recursos/securityContext | ISA-355/356/357/362/363/366/367 |
-| `service.yaml` | ClusterIP (80 → 3000) | — |
+| `service.yaml` | ClusterIP (80 → 8080) | — |
 | `ingress.yaml` | TLS por referencia, host provisional | — |
 | `networkpolicy.yaml` | Default-deny + allowlist | ISA-360/368 |
 | `pdb.yaml` | PodDisruptionBudget minAvailable | ISA-358 |
@@ -189,7 +189,7 @@ No hay registry real del cliente (ECR/Harbor/GHCR comercial). Sin registry no se
 
 ```bash
 # Imagen (BuildKit)
-docker build --no-cache -t isabella-genesisai:v40.0.0 .
+docker build --no-cache -t isabella-terminus-v6:local .
 
 # Manifiestos
 kubectl apply -k k8s/
@@ -197,5 +197,5 @@ kubectl -n isabella-genesis get all,networkpolicy,pdb,hpa
 
 # Digest inmutable (una vez exista registry)
 crane digest gcr.io/distroless/nodejs22-debian12:latest
-crane digest <registry>/<repo>:v40.0.0
+crane digest <registry>/<repo>:production
 ```

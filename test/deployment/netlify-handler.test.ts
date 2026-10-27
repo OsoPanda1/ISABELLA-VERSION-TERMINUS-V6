@@ -21,7 +21,10 @@ describe('Netlify Express adapter', () => {
     const client = await request('/ui/cognition-client.js?v=test');
     expect(client.status).toBe(200);
     expect(await client.text()).toContain('/api/v1/cognition/route');
-  }, 60_000);
+    // First request boots the full server module and builds the workspace; under
+    // parallel CI load that alone can exceed a minute, so it must sit above the
+    // global testTimeout rather than the old 60_000 override that capped it.
+  }, 180_000);
 
   it('preserves cache validation and HEAD semantics', async () => {
     const response = await request('/');

@@ -19,7 +19,10 @@ beforeAll(async () => {
   if (!address || typeof address !== "object") throw new Error("smoke server failed to bind an ephemeral port");
   server = created;
   baseUrl = `http://127.0.0.1:${address.port}`;
-}, 60_000);
+  // This hook imports the full server module and builds the workspace. Under CI/parallel
+  // load that alone can exceed a minute, so it must sit above the global hookTimeout
+  // rather than the old 60_000 override that silently defeated it.
+}, 180_000);
 
 afterAll(async () => {
   if (!server) return;

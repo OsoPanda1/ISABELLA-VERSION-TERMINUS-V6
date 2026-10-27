@@ -3,6 +3,7 @@
  * Complementa `dependency-readiness` (presencia/IO) con calidad de secretos y coherencia entre variables.
  * Nunca incluye valores de secretos en el informe. No verifica alcance de red de dependencias externas.
  */
+import { envFlag } from '../lib/env-flags';
 export type PreflightSeverity = 'ERROR' | 'WARN';
 
 export interface PreflightFinding {
@@ -107,11 +108,14 @@ export function runPreflight(env: Env): PreflightReport {
   }
 
   const tp = trimmed(env, 'TRUST_PROXY');
-  if (tp !== undefined && !/^(?:[1-9]|10)$/.test(tp))
+  // "false"/"0"/"off" are the documented way to disable proxy trust; only a
+  // non-numeric, non-boolean literal is a configuration error.
+  const trustProxyDisabled = tp !== undefined && /^(?:false|0|no|off)$/i.test(tp);
+  if (tp !== undefined && !trustProxyDisabled && !/^(?:[1-9]|10)$/.test(tp))
     add(
       'PF-TRUST-PROXY-INVALID',
       'ERROR',
-      'TRUST_PROXY must be an integer 1..10; any other value is ignored (X-Forwarded-For untrusted).'
+      'TRUST_PROXY must be an integer 1..10 (or false to disable); any other value is ignored (X-Forwarded-For untrusted).'
     );
 
   const port = env.PORT;
@@ -122,7 +126,7 @@ export function runPreflight(env: Env): PreflightReport {
   )
     add('PF-PORT-INVALID', 'ERROR', 'PORT must be an integer between 1 and 65535.');
 
-  if (production && trimmed(env, 'BOOKPI_LEDGER_PATH') === undefined && !env.VERCEL)
+  if (production && trimmed(env, 'BOOKPI_LEDGER_PATH') === undefined && !envFlag(env, 'VERCEL'))
     add(
       'PF-BOOKPI-VOLATILE',
       'WARN',

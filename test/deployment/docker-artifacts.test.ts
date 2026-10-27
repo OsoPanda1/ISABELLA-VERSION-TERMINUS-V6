@@ -4,12 +4,17 @@ import { describe, expect, it } from "vitest";
 
 const dockerfile = readFileSync(fileURLToPath(new URL("../../Dockerfile", import.meta.url)), "utf8");
 const compose = readFileSync(fileURLToPath(new URL("../../docker-compose.yml", import.meta.url)), "utf8");
+const entrypoint = readFileSync(
+  fileURLToPath(new URL("../../scripts/docker-entrypoint.sh", import.meta.url)),
+  "utf8",
+);
 
 describe("container build artifact", () => {
   it("builds and runs the bundled ESM entrypoint without tsx", () => {
     expect(dockerfile).toContain("pnpm run build:dist");
-    // dumb-init execs CMD directly: without `node` the bundle (no shebang, not executable) cannot start.
-    expect(dockerfile).toContain('CMD ["node", "dist/server.js"]');
+    // dumb-init execs CMD directly; the entrypoint applies migrations and then execs the bundle.
+    expect(dockerfile).toContain('CMD ["bash", "scripts/docker-entrypoint.sh"]');
+    expect(entrypoint).toContain("exec node dist/server.js");
     expect(dockerfile).not.toMatch(/\btsx\b/);
   });
 

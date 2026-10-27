@@ -10,7 +10,7 @@
 
 [dev]
   command = "corepack pnpm dev"
-  targetPort = 3000
+  targetPort = 8080
   port = 8889
   framework = "custom"
 

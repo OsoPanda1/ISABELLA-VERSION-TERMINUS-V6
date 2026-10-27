@@ -211,7 +211,7 @@ El inventario completo generado está en [`docs/api/route-inventory.json`](docs/
 Ejemplo:
 
 ```bash
-curl -s http://127.0.0.1:3000/api/v1/cognition/route \
+curl -s http://127.0.0.1:8080/api/v1/cognition/route \
   -H 'content-type: application/json' \
   -d '{"input":"Explica el modelo de gobernanza de Isabella.","modelEngine":"auto","focusLens":"governance","history":[]}'
 ```
@@ -219,7 +219,7 @@ curl -s http://127.0.0.1:3000/api/v1/cognition/route \
 Para SSE:
 
 ```bash
-curl -N http://127.0.0.1:3000/api/v1/cognition/stream \
+curl -N http://127.0.0.1:8080/api/v1/cognition/stream \
   -H 'content-type: application/json' \
   -d '{"input":"¿Qué puedes hacer?","modelEngine":"auto","focusLens":"general","history":[]}'
 ```
@@ -274,7 +274,7 @@ Variables frecuentes:
 
 ```dotenv
 # Servidor y persistencia
-PORT=3000
+PORT=8080
 HOST=0.0.0.0
 DATABASE_URL=
 POSTGRES_URL=
@@ -317,9 +317,9 @@ pnpm dev
 
 Abrir:
 
-- `http://127.0.0.1:3000/`
-- `http://127.0.0.1:3000/chat`
-- `http://127.0.0.1:3000/platform/status`
+- `http://127.0.0.1:8080/`
+- `http://127.0.0.1:8080/chat`
+- `http://127.0.0.1:8080/platform/status`
 
 Producción compilada:
 

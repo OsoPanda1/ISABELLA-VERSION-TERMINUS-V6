@@ -7,7 +7,8 @@ services:
     environment:
       POSTGRES_DB: isabella_db
       POSTGRES_USER: isabella_admin
-      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      # Fail closed: the password must be defined in the untracked .env file.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?define POSTGRES_PASSWORD in .env}
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
     command: >
       postgres
@@ -35,8 +36,6 @@ services:
       - ./infra/db/migrations/003_commerce_tenant_isolation_rls.sql:/docker-entrypoint-initdb.d/10-003_commerce_tenant_isolation_rls.sql:ro
       - ./infra/db/migrations/004_commerce_webhook_idempotency.sql:/docker-entrypoint-initdb.d/10-004_commerce_webhook_idempotency.sql:ro
       - ./infra/db/migrations/005_commerce_persistent_subscriptions.sql:/docker-entrypoint-initdb.d/10-005_commerce_persistent_subscriptions.sql:ro
-    secrets:
-      - db_password
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U isabella_admin -d isabella_db"]
       interval: 10s
@@ -47,6 +46,9 @@ services:
     image: ollama/ollama:latest
     container_name: isabella-ollama
     restart: always
+    # Optional local inference: `docker compose --profile local-inference up -d`.
+    # The runtime starts without it and falls back to the configured remote provider.
+    profiles: ["local-inference"]
     ports:
       - "127.0.0.1:11434:11434"
     volumes:
@@ -173,10 +175,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      ollama:
-        condition: service_started
     environment:
       NODE_ENV: production
+      PORT: "8080"
+      HOST: 0.0.0.0
+      # The image entrypoint applies pending migrations against DATABASE_URL (fail closed).
+      RUN_MIGRATIONS: "1"
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:8080}
       # Explicit operator opt-in: prompts and bounded history may leave the node to text.pollinations.ai.
       # Remove these three lines (or set ISABELLA_KEYLESS_FREE_PROVIDER=off) to disable keyless inference.
       ISABELLA_KEYLESS_FREE_PROVIDER: pollinations
@@ -185,13 +191,19 @@ services:
       # Explicit operator opt-in for the keyless neural voice fallback (spoken text leaves the node).
       ISABELLA_KEYLESS_TTS: google
       ISABELLA_KEYLESS_TTS_MAX_CHARS: "1200"
-      # Never commit the connection string: define DATABASE_URL in the untracked .env (see .env.example).
-      DATABASE_URL: ${DATABASE_URL:?define DATABASE_URL in .env, e.g. postgresql://isabella_admin:<password from secrets/db_password.txt>@postgres:5432/isabella_db}
+      # Never commit the connection string: define DATABASE_URL in the untracked .env, e.g.
+      # postgresql://isabella_admin:<POSTGRES_PASSWORD>@postgres:5432/isabella_db
+      DATABASE_URL: ${DATABASE_URL:?define DATABASE_URL in .env, matching POSTGRES_PASSWORD}
       OLLAMA_BASE_URL: http://ollama:11434
       VICTORIA_METRICS_URL: http://victoriametrics:8428
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel:4318
       CROWDSEC_LAPI_URL: http://crowdsec:8080
       BOOKPI_LEDGER_PATH: /app/data/bookpi-ledger.jsonl
+      # Durable local stores live on the writable volume, not on the read-only root.
+      ISABELLA_API_KEY_STORE: file
+      ISABELLA_API_KEY_STORE_PATH: /app/data/api-keys.json
+      ISABELLA_FEDERATION_STORE: file
+      ISABELLA_FEDERATION_STORE_PATH: /app/data/federation.json
     user: "10001:10001"
     security_opt:
       - no-new-privileges:true
@@ -205,6 +217,7 @@ services:
       - ./package.json:/app/package.json:ro
       - ./pnpm-lock.yaml:/app/pnpm-lock.yaml:ro
       - bookpi-data:/app/data
+      - app-logs:/app/logs
     deploy:
       resources:
         limits:
@@ -227,7 +240,4 @@ volumes:
   caddy_data:
   caddy_config:
   bookpi-data:
-
-secrets:
-  db_password:
-    file: ./secrets/db_password.txt
+  app-logs:

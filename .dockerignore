@@ -13,10 +13,10 @@ coverage
 .github
 
 # Directorios no necesarios en la imagen (`scripts/` SÍ es necesario: `build:dist` ejecuta ui-smoke y runtime-smoke)
+# `infra/` SÍ es necesario: la imagen copia infra/db/migrations para aplicar el esquema al arrancar.
 docs
 test
 services
-infra
 k8s
 data
 

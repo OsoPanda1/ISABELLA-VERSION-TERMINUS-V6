@@ -1,4 +1,5 @@
 import { buildPricingCatalog } from './commerce/catalog';
+import { envFlag } from './lib/env-flags';
 import { boundedBudgetMs, DeadlineBudget, hedgedFirst } from './inference/deadline';
 import { buildAsset, contentHash, serveAsset, type StaticAsset } from './http/static-assets';
 import express, { type Application, type NextFunction, type Request, type Response } from 'express';
@@ -243,7 +244,8 @@ const ikesHealthCache = new TtlSingleFlight<{
 // Port is taken from the platform environment (PORT is the de-facto contract for
 // containers and PaaS). Validate it: an invalid value must fail loudly, not silently
 // bind the default and leave the deployment unreachable.
-const requestedPort = Number(process.env.PORT ?? 3000);
+// 8080 matches Dockerfile EXPOSE, docker-compose and the k8s manifests.
+const requestedPort = Number(process.env.PORT ?? 8080);
 if (!Number.isSafeInteger(requestedPort) || requestedPort < 1 || requestedPort > 65_535) {
   throw new RangeError(
     `PORT must be an integer between 1 and 65535, received: ${process.env.PORT}`
@@ -252,9 +254,9 @@ if (!Number.isSafeInteger(requestedPort) || requestedPort < 1 || requestedPort >
 const port = requestedPort;
 const host = process.env.HOST?.trim() || '0.0.0.0';
 
-// Preflight de configuración: con STRICT_PREFLIGHT=1 un error bloqueante aborta el arranque (fail-fast);
-// en producción sin esa bandera solo se advierte (ids, nunca valores de secretos).
-if (process.env.STRICT_PREFLIGHT === '1') {
+// Preflight de configuración: con STRICT_PREFLIGHT=1|true un error bloqueante aborta el arranque
+// (fail-fast); en producción sin esa bandera solo se advierte (ids, nunca valores de secretos).
+if (['1', 'true', 'yes'].includes((process.env.STRICT_PREFLIGHT ?? '').trim().toLowerCase())) {
   assertPreflight(process.env);
 } else if (process.env.NODE_ENV === 'production') {
   const preflight = runPreflight(process.env);
@@ -6005,7 +6007,7 @@ app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
 
 // state: draft | engine-generated — serverless runtimes invoke the exported app.
 if (
-  !process.env.VERCEL &&
+  !envFlag(process.env, 'VERCEL') &&
   process.argv[1] &&
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 )

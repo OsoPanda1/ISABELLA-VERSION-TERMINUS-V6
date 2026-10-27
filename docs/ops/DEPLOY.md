@@ -13,7 +13,7 @@ Guía operativa verificada contra el repo el 2026-10-27. Lo que no se pudo proba
 
 ## 1. Camino A — contenedor (compose / k8s)
 - El workflow `Deploy Production Ω` (tras CI verde, gate de evidencia y aprobación del entorno `production`) publica `ghcr.io/<owner>/isabella-terminus-v6:<sha>` y `:production`.
-- Compose: crear `.env` con `DATABASE_URL` (no va en el compose) y `secrets/db_password.txt`; `docker compose up -d`. **[NO PROBADO en Docker real]**
+- Compose: crear `.env` con `POSTGRES_PASSWORD` y `DATABASE_URL` (con la misma contraseña); `docker compose up -d`. La imagen aplica migraciones al arrancar (`RUN_MIGRATIONS=1`).
 - k8s: `k8s/deployment.yaml` debe apuntar al digest/tag publicado (`kustomize edit set image`); hoy el test lo marca `BLOCKED_ENVIRONMENT` hasta fijar un digest real. Secretos con SealedSecrets (plantilla en `k8s/sealed-secret-example.yaml`).
 - Salud: liveness `/health`, readiness `/api/v1/health`, profunda (admin) `/api/v1/healthz`, `/api/v1/readyz`.
 
