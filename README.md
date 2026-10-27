@@ -1,10 +1,10 @@
 # Isabella Villaseñor AI — Genesis TINA V6
 
 **Versión del paquete:** `0.1.0`
-**Línea de producto:** `Genesis TINA V6 / Terminus`
+**Línea de producto:** `Genesis TINA V6 / Terminus · capa Ω∞ GENESIS`
 **Estado documental:** `draft | auto_generated` — este documento describe el código y la configuración observables en el repositorio; requiere revisión humana antes de considerarse una certificación.
 
-Isabella es un runtime de conversación e inteligencia gobernada para el proyecto TAMV Online Network. Combina una interfaz web, un servidor HTTP, rutas cognitivas, agentes locales deterministas, memoria acotada, observabilidad, BookPI, seguridad, integraciones opcionales y superficies comerciales. Su diseño separa explícitamente capacidad, autoridad, ejecución, evidencia, aprendizaje y producción.
+Isabella es un runtime de conversación e inteligencia gobernada para el proyecto TAMV Online Network. Combina una interfaz web, un servidor HTTP, rutas cognitivas, agentes locales deterministas, memoria acotada, observabilidad, BookPI, seguridad, integraciones opcionales y superficies comerciales. La capa **Ω∞ GENESIS** (`src/omega/genesis/*`) reexpresa esas facultades como una pila cognitiva de nueva generación de doce capas y seis macrodominios. Su diseño separa explícitamente capacidad, autoridad, ejecución, evidencia, aprendizaje y producción.
 
 > **CAPABILITY ≠ AUTHORITY ≠ EXECUTION ≠ EVIDENCE ≠ LEARNING ≠ PRODUCTION**
 >
@@ -16,6 +16,8 @@ Isabella es un runtime de conversación e inteligencia gobernada para el proyect
 - [Qué puede hacer realmente](#qué-puede-hacer-realmente)
 - [Qué no afirma hacer](#qué-no-afirma-hacer)
 - [Estado operativo](#estado-operativo)
+- [Capa Genesis (Omega Infinito)](#capa-genesis)
+- [Los veinte incrementos Genesis](#los-veinte-incrementos-genesis)
 - [Arquitectura](#arquitectura)
 - [Superficies web y API](#superficies-web-y-api)
 - [Flujo de una conversación](#flujo-de-una-conversación)
@@ -135,6 +137,48 @@ Los adaptadores para proveedores externos o runtimes locales solo están activos
 
 `GET /api/v1/readyz` puede devolver `503` de forma correcta cuando falta una dependencia requerida. Servir HTML no significa estar listo para producción.
 
+## Capa Genesis
+
+La capa **Ω∞ GENESIS** (`src/omega/genesis/`) integra de forma real y funcional los módulos cognitivos del sistema como una pila de nueva generación organizada en dos ejes: seis **macrodominios** (CORE, GOVERNANCE, KNOWLEDGE, ECONOMY, IMMUNITY, EXPERIENCE — ver `src/omega/native/contracts.ts`) y doce **capas de ejecución** \(L0–L11\). Es **determinista, en memoria y sin efectos externos**: modela, estructura y gobierna la RUTA cognitiva. No entrena un modelo neuronal, no mueve dinero, no firma post-cuántico y no abre red.
+
+Todo turno se rige por el principio canónico de separación y por una admisión **Zero-Trust** \(FAIL-CLOSED: \(\text{ALLOW} = I \times A \times C \times P \times E\)\): si algún factor vale 0, el turno queda `DENIED` y ninguna etapa posterior eleva una conclusión a verdad. La ecuación de legitimidad de ocho factores y la autoridad ejecutiva siguen residiendo en la Constitución (`src/omega/constitution.ts`) y en CROWN (`src/crown/`), no en GENESIS.
+
+Contratos abiertos (documentación, no endpoints en producción — el inventario de rutas está congelado):
+
+- [`openapi/isabella_genesis_openapi.yaml`](openapi/isabella_genesis_openapi.yaml) — superficie gobernada de los cinco skills fundacionales.
+- [`asyncapi/isabella_genesis_asyncapi.yaml`](asyncapi/isabella_genesis_asyncapi.yaml) — canales de eventos de skills.
+- [`docs/isabella_genesis_omega.tex`](docs/isabella_genesis_omega.tex) — especificación canónica en LaTeX.
+- `src/omega/genesis/spec-contract.ts` valida la **anti-deriva** spec ↔ código; `src/omega/genesis/convergence.ts` orquesta un turno cognitivo gobernado completo sobre esos módulos.
+
+## Los veinte incrementos Genesis
+
+Veinte mejoras reales y funcionales, cada una con su evidencia en `test/omega/genesis.test.ts` y `test/bookpi/anchor.test.ts`. Un test verde demuestra **capacidad computacional**, no una facultad, no autoridad, no producción (AGENTS.md §1).
+
+| # | Mejora | Módulo |
+| - | ------ | ------ |
+| 1 | Pila de 12 capas con guard de orden \(L0–L11\) | `genesis/layers.ts` |
+| 2 | Fastlane semántico adaptativo (regex + caché léxica + reglas aprendidas) | `genesis/fastlane-v2.ts` |
+| 3 | Orquestador metacognitivo de presupuesto cognitivo (suma exacta 100) | `genesis/meta-orchestrator.ts` |
+| 4 | Sociedad de microagentes con DID y refuerzo de confianza acotado | `genesis/agent-society.ts` |
+| 5 | Memoria Ejecutiva Fractal de 6 niveles (FEM) con backends inyectables | `genesis/fem.ts` |
+| 6 | Malla de conocimiento (grafo semántico, BFS, fuerza de relación, huecos) | `genesis/knowledge-mesh.ts` |
+| 7 | Razonamiento híbrido de 6 etapas, FAIL-CLOSED | `genesis/hybrid-reasoning.ts` |
+| 8 | Puerta de admisión Zero-Trust (5 factores) | `genesis/zero-trust.ts` |
+| 9 | Evolución controlada (self-improvement ≠ self-modification) | `genesis/controlled-evolution.ts` |
+| 10 | Gemelo digital cognitivo read-only con huella determinista | `genesis/cognitive-twin.ts` |
+| 11 | Observabilidad cognitiva (alucinación, verificación, percentiles) | `genesis/observability.ts` |
+| 12 | Expansión gobernada de herramientas a 250 (cuota + suelo de riesgo) | `genesis/tool-expansion.ts` |
+| 13 | Anclaje Merkle del libro mayor (raíz + pruebas de inclusión \(O(\log n)\)) | `bookpi/anchor.ts` |
+| 14 | Bus de eventos AsyncAPI en memoria para skills | `genesis/event-bus.ts` |
+| 15 | Contrato anti-deriva spec ↔ código (OpenAPI/AsyncAPI) | `genesis/spec-contract.ts` |
+| 16 | Convergencia: turno cognitivo gobernado capstone | `genesis/convergence.ts` |
+| 17 | Barril de la capa Genesis | `genesis/index.ts` |
+| 18 | Contrato abierto OpenAPI de skills fundacionales | `openapi/*.yaml` |
+| 19 | Contrato de eventos AsyncAPI | `asyncapi/*.yaml` |
+| 20 | Especificación canónica LaTeX | `docs/isabella_genesis_omega.tex` |
+
+La mejora n.º 13 **cierra una laguna real**: la instantánea del ledger exponía `merkleRoot: null`. GENESIS no reemplaza la gobernanza existente; la complementa. La firma post-cuántica (ML-DSA/SLH-DSA) y el hash SHA3-512 especificados en el documento canónico permanecen `BLOCKED_ENVIRONMENT` mientras no exista un proveedor PQC real (HSM/KMS): no se fabrican.
+
 ## Arquitectura
 
 | Módulo           | Responsabilidad                                                               |
@@ -144,7 +188,10 @@ Los adaptadores para proveedores externos o runtimes locales solo están activos
 | `src/agents/`    | Runtime determinista, herramientas y conocimiento curado                      |
 | `src/routes/`    | Superficies HTTP de plataforma, agentes, cognición, TTS, economía y operación |
 | `src/memory/`    | Sesión, ETM, IKES, memoria verificada y mesh                                  |
-| `src/bookpi/`    | Ledger de evidencia y almacenamiento de eventos                               |
+| `src/bookpi/`    | Ledger de evidencia y almacenamiento de eventos                              |
+| `src/omega/`     | Constitución, capacidades nativas y macrodominios Ω                            |
+| `src/omega/native/` | Contratos de integración nativa Ω∞ (6 macrodominios, ecuación de legitimidad) |
+| `src/omega/genesis/` | Pila cognitiva de nueva generación Ω∞ (12 capas, convergencia, anti-deriva)  |
 | `src/security/`  | Tokens, rate limiting, headers, autenticación de confianza y zero trust       |
 | `src/commerce/`  | Suscripciones, Stripe, webhooks, cuotas y ledger comercial                    |
 | `src/economy/`   | Cotización, revenue fabric, tesorería y flujos económicos                     |
@@ -396,7 +443,9 @@ src/inference/                Cognición, proveedores y multimodalidad
 src/agents/                   Agente local y herramientas
 src/routes/                   API HTTP
 src/memory/                   Memoria y contexto
-src/bookpi/                   Evidencia append-only
+src/bookpi/                   Evidencia append-only + anclaje Merkle
+src/omega/native/             Contratos de integración nativa Ω∞
+src/omega/genesis/            Pila cognitiva Ω∞ GENESIS (20 incrementos)
 src/security/                 Seguridad y confianza
 src/commerce/                 Suscripciones, Stripe y webhooks
 src/economy/                  Ledger y monetización
@@ -405,6 +454,8 @@ src/ui/                       Interfaz web
 scripts/                      Aseguramiento y smoke tests
 test/                         Pruebas
 docs/                         Especificaciones y contratos
+openapi/                      Contrato abierto de skills Genesis
+asyncapi/                     Contrato de eventos de skills Genesis
 ```
 
 ## Registro
