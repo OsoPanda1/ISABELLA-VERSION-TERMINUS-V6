@@ -2,7 +2,7 @@
  * GAME OVER — Universal Agent Governance Protocol (UAGP-1) (state: draft).
  *
  * Decide, score and record agent actions before execution. Never execute,
- * never certify. See docs/GAME_OVER_UAGP1_CANONICAL.md for the fidelity
+ * never certify. See docs/reference/GOVERNANCE.md for the fidelity
  * contract and the Jenkins gate that consumes this engine.
  */
 export * from './types';
