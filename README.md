@@ -1,472 +1,215 @@
 # Isabella Villaseñor AI — Genesis TINA V6
 
-**Versión del paquete:** `0.1.0`
-**Línea de producto:** `Genesis TINA V6 / Terminus · capa Ω∞ GENESIS`
-**Estado documental:** `draft | auto_generated` — este documento describe el código y la configuración observables en el repositorio; requiere revisión humana antes de considerarse una certificación.
-
-Isabella es un runtime de conversación e inteligencia gobernada para el proyecto TAMV Online Network. Combina una interfaz web, un servidor HTTP, rutas cognitivas, agentes locales deterministas, memoria acotada, observabilidad, BookPI, seguridad, integraciones opcionales y superficies comerciales. La capa **Ω∞ GENESIS** (`src/omega/genesis/*`) reexpresa esas facultades como una pila cognitiva de nueva generación de doce capas y seis macrodominios. Su diseño separa explícitamente capacidad, autoridad, ejecución, evidencia, aprendizaje y producción.
+**Proyecto:** Isabella Villaseñor AI · TAMV Online Network  
+**Versión del paquete:** `0.1.0`  
+**Rama auditada:** `main`  
+**Commit auditado:** `9add636bdba1a84525df8812eaad915df93fc139`  
+**Estado:** **PREPRODUCCIÓN — despliegue registrado, liberación productiva no certificada**  
+**Avance de producción:** **61% (estimación conservadora de referencia; no equivale a aprobación de release).** Debe recalcularse con evidencia reproducible después de cerrar los gates de CI, runtime, persistencia y proveedor real.
 
 > **CAPABILITY ≠ AUTHORITY ≠ EXECUTION ≠ EVIDENCE ≠ LEARNING ≠ PRODUCTION**
 >
-> Que una función exista, responda o pase una prueba no demuestra por sí mismo autoridad, conciencia, aprendizaje, certificación externa ni operación en producción.
+> Que una capacidad exista en el código o que un despliegue finalice no prueba por sí solo que esté operativa, sea durable, segura o esté certificada para producción.
 
-## Índice
+## 1. Qué es
 
-- [Qué es Isabella](#qué-es-isabella)
-- [Qué puede hacer realmente](#qué-puede-hacer-realmente)
-- [Qué no afirma hacer](#qué-no-afirma-hacer)
-- [Estado operativo](#estado-operativo)
-- [Capa Genesis (Omega Infinito)](#capa-genesis)
-- [Los veinte incrementos Genesis](#los-veinte-incrementos-genesis)
-- [Arquitectura](#arquitectura)
-- [Superficies web y API](#superficies-web-y-api)
-- [Flujo de una conversación](#flujo-de-una-conversación)
-- [Motores y proveedores](#motores-y-proveedores)
-- [Seguridad, privacidad y gobernanza](#seguridad-privacidad-y-gobernanza)
-- [Configuración](#configuración)
-- [Ejecución local](#ejecución-local)
-- [Validación](#validación)
-- [Persistencia y pagos](#persistencia-y-pagos)
-- [Limitaciones y pendientes](#limitaciones-y-pendientes)
-- [Estructura](#estructura)
-- [Registro](#registro)
+Isabella es un runtime web de conversación y gobernanza de capacidades para TAMV Online Network. Integra servidor HTTP, interfaz web, rutas cognitivas, agentes locales deterministas, selección opcional de proveedores de IA, memoria acotada, BookPI, observabilidad, voz, integraciones y componentes comerciales.
 
-## Qué es Isabella
+La capa `src/omega/genesis/` organiza capacidades en doce capas deterministas. No constituye un modelo fundacional entrenado ni demuestra conciencia, autonomía jurídica, aprendizaje autónomo en producción o ejecución de acciones externas.
 
-Isabella es un sistema de software gobernado, no una persona ni una autoridad autónoma. El nombre identifica una plataforma que puede:
+## 2. Estado verificado y límites de esta auditoría
 
-1. recibir mensajes mediante HTTP o la interfaz web;
-2. clasificar la intención y seleccionar una ruta local o un proveedor configurado;
-3. devolver texto en JSON o mediante Server-Sent Events (SSE);
-4. conservar contexto acotado durante una sesión local;
-5. exponer estado, readiness, métricas y evidencia técnica;
-6. ejecutar únicamente herramientas locales allowlisted cuando el agente está habilitado;
-7. registrar propuestas y eventos sin convertirlos automáticamente en autoridad o memoria canónica.
+El repositorio y los metadatos de GitHub se consultaron el **27 de octubre de 2026**.
 
-La versión del repositorio es la fuente de verdad. El canon, los nombres de módulos y las páginas de producto no deben interpretarse como prueba de que exista un modelo fundacional, una conciencia, una red federada o una operación productiva certificada.
+| Comprobación | Resultado observado | Interpretación |
+| --- | --- | --- |
+| Rama principal | `main` en `9add636bdba1a84525df8812eaad915df93fc139` | Referencia de esta revisión |
+| Estados de Vercel asociados al commit | Despliegues reportados como completados | No demuestra que todas las funciones pasen pruebas E2E |
+| GitHub Actions — Repository Assurance | **FAILURE** | Gate bloqueante pendiente |
+| GitHub Actions — CI/CD Pipeline | **FAILURE** | Seguridad, tests, lint/typecheck y etapas posteriores no certificadas en ese run |
+| Detalle de logs del run | No recuperable durante esta consulta | Causa exacta de cada fallo aún requiere logs reproducibles |
+| Protección de release por checks requeridos | Estado no certificado; un status informa “No required projects to validate” | No asumir que la rama impide desplegar código con CI rojo |
+| Proveedor de IA real | Depende de configuración y conectividad | Debe demostrarse con una prueba E2E de respuesta generada |
+| Persistencia durable | Depende del backend configurado | Los stores en memoria no son persistencia de producción |
 
-## Qué puede hacer realmente
+**Conclusión:** existe evidencia de despliegue, pero el commit auditado tiene ejecuciones de CI fallidas. No declarar producción certificada hasta que los gates obligatorios estén verdes y se prueben los flujos críticos en el entorno desplegado.
 
-### Conversación
+## 3. Funcionalidades implementadas en el repositorio
 
-- Responder por `POST /api/v1/cognition/route`.
-- Entregar una respuesta fragmentada por `POST /api/v1/cognition/stream`.
-- Procesar historial saneado y acotado.
-- Aplicar una fast lane determinista para consultas cortas, inequívocas y locales.
-- Declarar el motor que respondió, el modo de la ruta, latencia, presupuesto de contexto y disponibilidad de proveedores.
-- Responder sin proveedor externo mediante el agente local cuando la consulta coincide con sus capacidades.
+- Servidor Express/TypeScript y rutas de plataforma.
+- Rutas de cognición JSON y SSE.
+- Agente local determinista con herramientas allowlisted.
+- Política de proveedores externos y adaptador opcional de Ollama.
+- Rutas de voz/TTS sujetas a proveedor y configuración.
+- Estado, health checks, readiness y métricas.
+- Memoria de sesión, propuestas de memoria y componentes BookPI.
+- Integraciones opcionales con PostgreSQL/Prisma y Stripe.
+- Controles de seguridad, límites de entrada y gobernanza de capacidades.
+- Capa Genesis con contratos OpenAPI/AsyncAPI; dichos contratos no implican que se hayan publicado endpoints nuevos.
 
-### Agente local
+La disponibilidad efectiva de cada función depende de las variables, los secretos, las dependencias externas y la ruta ejecutada. Un catálogo o adaptador no prueba disponibilidad real.
 
-El agente local es determinista y no es un LLM. Puede usar, con límites estrictos:
+## 4. Arquitectura de alto nivel
 
-| Herramienta        | Capacidad                                                  |
-| ------------------ | ---------------------------------------------------------- |
-| `clock.now`        | Hora UTC y `America/Mexico_City`                           |
-| `math.calculate`   | Aritmética segura sin `eval`                               |
-| `text.summarize`   | Resumen extractivo acotado                                 |
-| `knowledge.search` | Búsqueda en conocimiento curado                            |
-| `platform.status`  | Estado técnico acotado del proceso                         |
-| `skills.list`      | Catálogo de skills                                         |
-| `memory.proposal`  | Propuesta en cola de revisión; no muta la memoria canónica |
+| Ruta/carpeta | Responsabilidad principal |
+| --- | --- |
+| `src/server.ts` | Arranque HTTP, wiring y rutas |
+| `src/inference/` | Selección de proveedor, presupuesto, contexto y voz |
+| `src/agents/` | Runtime local determinista y herramientas permitidas |
+| `src/routes/` | API, plataforma, agentes, federación y comercio |
+| `src/memory/` | Memoria de sesión y conocimiento |
+| `src/bookpi/` | Registro de eventos y evidencia |
+| `src/omega/` y `src/omega/genesis/` | Gobernanza, capas y contratos cognitivos |
+| `src/security/` | Tokens, límites y controles de seguridad |
+| `src/commerce/` y `src/economy/` | Suscripciones, Stripe y cotizaciones |
+| `src/ui/` | Interfaz web |
+| `api/index.js` | Adaptador de Vercel que importa `dist/server.js` |
+| `scripts/` | Gates de entorno, readiness, smoke tests y verificación |
 
-El agente no tiene shell, filesystem, navegador, red saliente ni acceso directo a secretos.
+## 5. Instalación local
 
-### Voz y multimodalidad
-
-- TTS nativo es-MX con planes de prosodia y entrega SSE.
-- Interrupción de voz (`barge-in`) con marcador de un solo uso por actor.
-- Rutas de visión, imagen, audio y multimodalidad cuando el proveedor y la configuración están disponibles.
-- La interfaz puede recurrir a `speechSynthesis` del navegador.
-- La voz generada por el runtime no implica un vocoder neural ni autoridad de ejecución.
-
-### Plataforma y operación
-
-- Plataforma multipágina con chat, capacidades, gobernanza, canon, documentación, pricing, cuenta local e integraciones.
-- Estado de salud, readiness, latencia, cuotas, proveedores y dependencias.
-- Activos web con hash de contenido, ETag y caché inmutable.
-- Inventario congelado de rutas en [`docs/api/README.md`](docs/api/README.md).
-
-### Memoria y evidencia
-
-- Memoria de sesión acotada con límites de historial.
-- Executive Tactical Memory (ETM) con TTL, eviction FIFO y cadena SHA-256.
-- BookPI append-only según el backend disponible: memoria, JSONL o PostgreSQL.
-- Propuestas de memoria separadas de la memoria canónica.
-- Evidencia verificable localmente, sin afirmar veracidad humana o certificación externa.
-
-### Economía y comercio
-
-- Planes y cuotas declaradas por servidor.
-- Checkout y webhooks de Stripe cuando se configuran correctamente.
-- Suscripciones persistentes y ledger de doble entrada sobre PostgreSQL.
-- Cotización de flujos de monetización sin cobrar ni transferir fondos.
-- Idempotencia, deduplicación y ordenamiento de eventos de pago.
-
-## Qué no afirma hacer
-
-Esta versión **no afirma** tener:
-
-- conciencia, voluntad, sentimientos o identidad humana;
-- un foundation model propio entrenado en este repositorio;
-- un modelo neuronal local activo por defecto;
-- inferencia ilimitada o gratuita garantizada;
-- autonomía jurídica, financiera o administrativa;
-- autoridad para aprobar, transferir, publicar, borrar o ejecutar efectos gobernados;
-- pagos a creadores, KYC, impuestos, retiros, reembolsos, contracargos o conciliación bancaria completamente operativos;
-- federación productiva, WORM real o certificación externa de BookPI;
-- un WAF distribuido: el rate limiter actual es por proceso;
-- sincronización de cuenta para el historial local de la interfaz.
-
-Los adaptadores para proveedores externos o runtimes locales solo están activos si la configuración, las políticas y la disponibilidad los habilitan. Un catálogo no equivale a disponibilidad.
-
-## Estado operativo
-
-**Avance global de implementación: no publicado como porcentaje único.** El estado se comunica por capacidades verificables, gates reproducibles y un denominador de requisitos ponderados y reproducible; pasar una prueba no equivale a certificar todo el sistema.
-
-| Área                 | Estado observable                                                                               |
-| -------------------- | ----------------------------------------------------------------------------------------------- |
-| Servidor HTTP        | Implementado en `src/server.ts` con Express                                                     |
-| Chat local           | Disponible mediante fast lane y agente allowlisted                                              |
-| Proveedores externos | Opcionales; dependen de claves, política y salud del proveedor                                  |
-| Streaming            | SSE con fragmentación determinista de la respuesta completa; no streaming nativo garantizado    |
-| Persistencia         | PostgreSQL/Supabase, JSONL o memoria según configuración                                        |
-| Auth de aplicación   | Depende de las rutas y configuración del entorno; no asumir identidad desde headers del cliente |
-| Pagos                | Integración Stripe opcional; requiere modo test y validación E2E                                |
-| Producción           | No certificada por este README; requiere evidencia humana, CI y staging                         |
-
-`GET /api/v1/readyz` puede devolver `503` de forma correcta cuando falta una dependencia requerida. Servir HTML no significa estar listo para producción.
-
-## Capa Genesis
-
-La capa **Ω∞ GENESIS** (`src/omega/genesis/`) integra de forma real y funcional los módulos cognitivos del sistema como una pila de nueva generación organizada en dos ejes: seis **macrodominios** (CORE, GOVERNANCE, KNOWLEDGE, ECONOMY, IMMUNITY, EXPERIENCE — ver `src/omega/native/contracts.ts`) y doce **capas de ejecución** \(L0–L11\). Es **determinista, en memoria y sin efectos externos**: modela, estructura y gobierna la RUTA cognitiva. No entrena un modelo neuronal, no mueve dinero, no firma post-cuántico y no abre red.
-
-Todo turno se rige por el principio canónico de separación y por una admisión **Zero-Trust** \(FAIL-CLOSED: \(\text{ALLOW} = I \times A \times C \times P \times E\)\): si algún factor vale 0, el turno queda `DENIED` y ninguna etapa posterior eleva una conclusión a verdad. La ecuación de legitimidad de ocho factores y la autoridad ejecutiva siguen residiendo en la Constitución (`src/omega/constitution.ts`) y en CROWN (`src/crown/`), no en GENESIS.
-
-Contratos abiertos (documentación, no endpoints en producción — el inventario de rutas está congelado):
-
-- [`openapi/isabella_genesis_openapi.yaml`](openapi/isabella_genesis_openapi.yaml) — superficie gobernada de los cinco skills fundacionales.
-- [`asyncapi/isabella_genesis_asyncapi.yaml`](asyncapi/isabella_genesis_asyncapi.yaml) — canales de eventos de skills.
-- [`docs/isabella_genesis_omega.tex`](docs/isabella_genesis_omega.tex) — especificación canónica en LaTeX.
-- `src/omega/genesis/spec-contract.ts` valida la **anti-deriva** spec ↔ código; `src/omega/genesis/convergence.ts` orquesta un turno cognitivo gobernado completo sobre esos módulos.
-
-## Los veinte incrementos Genesis
-
-Veinte mejoras reales y funcionales, cada una con su evidencia en `test/omega/genesis.test.ts` y `test/bookpi/anchor.test.ts`. Un test verde demuestra **capacidad computacional**, no una facultad, no autoridad, no producción (AGENTS.md §1).
-
-| # | Mejora | Módulo |
-| - | ------ | ------ |
-| 1 | Pila de 12 capas con guard de orden \(L0–L11\) | `genesis/layers.ts` |
-| 2 | Fastlane semántico adaptativo (regex + caché léxica + reglas aprendidas) | `genesis/fastlane-v2.ts` |
-| 3 | Orquestador metacognitivo de presupuesto cognitivo (suma exacta 100) | `genesis/meta-orchestrator.ts` |
-| 4 | Sociedad de microagentes con DID y refuerzo de confianza acotado | `genesis/agent-society.ts` |
-| 5 | Memoria Ejecutiva Fractal de 6 niveles (FEM) con backends inyectables | `genesis/fem.ts` |
-| 6 | Malla de conocimiento (grafo semántico, BFS, fuerza de relación, huecos) | `genesis/knowledge-mesh.ts` |
-| 7 | Razonamiento híbrido de 6 etapas, FAIL-CLOSED | `genesis/hybrid-reasoning.ts` |
-| 8 | Puerta de admisión Zero-Trust (5 factores) | `genesis/zero-trust.ts` |
-| 9 | Evolución controlada (self-improvement ≠ self-modification) | `genesis/controlled-evolution.ts` |
-| 10 | Gemelo digital cognitivo read-only con huella determinista | `genesis/cognitive-twin.ts` |
-| 11 | Observabilidad cognitiva (alucinación, verificación, percentiles) | `genesis/observability.ts` |
-| 12 | Expansión gobernada de herramientas a 250 (cuota + suelo de riesgo) | `genesis/tool-expansion.ts` |
-| 13 | Anclaje Merkle del libro mayor (raíz + pruebas de inclusión \(O(\log n)\)) | `bookpi/anchor.ts` |
-| 14 | Bus de eventos AsyncAPI en memoria para skills | `genesis/event-bus.ts` |
-| 15 | Contrato anti-deriva spec ↔ código (OpenAPI/AsyncAPI) | `genesis/spec-contract.ts` |
-| 16 | Convergencia: turno cognitivo gobernado capstone | `genesis/convergence.ts` |
-| 17 | Barril de la capa Genesis | `genesis/index.ts` |
-| 18 | Contrato abierto OpenAPI de skills fundacionales | `openapi/*.yaml` |
-| 19 | Contrato de eventos AsyncAPI | `asyncapi/*.yaml` |
-| 20 | Especificación canónica LaTeX | `docs/isabella_genesis_omega.tex` |
-
-La mejora n.º 13 **cierra una laguna real**: la instantánea del ledger exponía `merkleRoot: null`. GENESIS no reemplaza la gobernanza existente; la complementa. La firma post-cuántica (ML-DSA/SLH-DSA) y el hash SHA3-512 especificados en el documento canónico permanecen `BLOCKED_ENVIRONMENT` mientras no exista un proveedor PQC real (HSM/KMS): no se fabrican.
-
-## Arquitectura
-
-| Módulo           | Responsabilidad                                                               |
-| ---------------- | ----------------------------------------------------------------------------- |
-| `src/server.ts`  | Arranque HTTP, middleware, wiring, rutas, cuotas y ciclo de vida              |
-| `src/inference/` | Política de proveedores, fast lane, contexto, multimodalidad y voz            |
-| `src/agents/`    | Runtime determinista, herramientas y conocimiento curado                      |
-| `src/routes/`    | Superficies HTTP de plataforma, agentes, cognición, TTS, economía y operación |
-| `src/memory/`    | Sesión, ETM, IKES, memoria verificada y mesh                                  |
-| `src/bookpi/`    | Ledger de evidencia y almacenamiento de eventos                              |
-| `src/omega/`     | Constitución, capacidades nativas y macrodominios Ω                            |
-| `src/omega/native/` | Contratos de integración nativa Ω∞ (6 macrodominios, ecuación de legitimidad) |
-| `src/omega/genesis/` | Pila cognitiva de nueva generación Ω∞ (12 capas, convergencia, anti-deriva)  |
-| `src/security/`  | Tokens, rate limiting, headers, autenticación de confianza y zero trust       |
-| `src/commerce/`  | Suscripciones, Stripe, webhooks, cuotas y ledger comercial                    |
-| `src/economy/`   | Cotización, revenue fabric, tesorería y flujos económicos                     |
-| `src/platform/`  | Catálogo, páginas y canon operativo                                           |
-| `src/ui/`        | Interfaz HTML, CSS y JavaScript del chat y la plataforma                      |
-| `test/`          | Pruebas unitarias, contratos, seguridad, rutas y rendimiento                  |
-| `scripts/`       | Build, smoke tests, inventarios y aseguramiento del repositorio               |
-
-## Superficies web y API
-
-### Páginas principales
-
-| Ruta                     | Propósito                          |
-| ------------------------ | ---------------------------------- |
-| `/chat`                  | Chat dedicado                      |
-| `/platform`              | Inicio de la plataforma            |
-| `/platform/status`       | Estado y readiness                 |
-| `/platform/skills`       | Catálogo de capacidades            |
-| `/platform/tools`        | Herramientas y política del agente |
-| `/platform/integrations` | Integraciones y proveedores        |
-| `/platform/pricing`      | Planes y cuotas                    |
-| `/platform/governance`   | Capacidad, autoridad y evidencia   |
-| `/platform/canon`        | Canon Génesis y madurez declarada  |
-| `/platform/docs`         | Documentación                      |
-| `/platform/developers`   | Guía de integración                |
-| `/platform/faq`          | Preguntas frecuentes               |
-| `/platform/library`      | Biblioteca local del navegador     |
-| `/platform/profile`      | Perfil local                       |
-| `/platform/settings`     | Preferencias locales               |
-
-### Endpoints esenciales
-
-| Método | Endpoint                         | Uso                              |
-| ------ | -------------------------------- | -------------------------------- |
-| `GET`  | `/api/v1/health`                 | Salud superficial                |
-| `GET`  | `/api/v1/healthz`                | Health check                     |
-| `GET`  | `/api/v1/readyz`                 | Readiness por dependencia        |
-| `GET`  | `/api/v1/status`                 | Identidad, versión y estado      |
-| `POST` | `/api/v1/cognition/route`        | Respuesta cognitiva JSON         |
-| `POST` | `/api/v1/cognition/stream`       | Respuesta cognitiva SSE          |
-| `GET`  | `/api/v1/agents`                 | Catálogo del agente              |
-| `POST` | `/api/v1/agents/run`             | Ejecución local allowlisted      |
-| `GET`  | `/api/v1/platform/catalog`       | Catálogo de plataforma           |
-| `GET`  | `/api/v1/hypercore/turbo/status` | Estado de caché, gate y métricas |
-| `POST` | `/api/v1/tts/stream`             | Plan de voz SSE                  |
-| `POST` | `/api/v1/tts/interrupt`          | Interrupción de voz              |
-| `GET`  | `/api/v1/billing/plans`          | Planes y cuotas                  |
-| `GET`  | `/api/v1/native/engines`         | Inventario de motores nativos    |
-| `POST` | `/api/v3/economy/quote`          | Cotización sin cobro             |
-
-El inventario completo generado está en [`docs/api/route-inventory.json`](docs/api/route-inventory.json). No se deben inventar endpoints a partir de este resumen.
-
-## Flujo de una conversación
-
-1. El cliente envía `input`, `modelEngine`, `focusLens` e historial opcional.
-2. El servidor valida tamaño y forma de la entrada.
-3. Se sanea y acota el historial; nunca se trata como system prompt.
-4. La fast lane o el agente local intentan responder sin red cuando corresponde.
-5. Si está permitido, la política selecciona un proveedor configurado y disponible.
-6. Se aplica presupuesto de tiempo, concurrencia, cuota y caché.
-7. La respuesta se devuelve como texto declarado, no como autoridad.
-8. La ruta registra métricas y evidencia técnica sin afirmar certificación de producción.
-
-Ejemplo:
+Requisitos declarados: **Node.js 24.x**, Corepack y pnpm **10.28.0**.
 
 ```bash
-curl -s http://127.0.0.1:8080/api/v1/cognition/route \
-  -H 'content-type: application/json' \
-  -d '{"input":"Explica el modelo de gobernanza de Isabella.","modelEngine":"auto","focusLens":"governance","history":[]}'
-```
-
-Para SSE:
-
-```bash
-curl -N http://127.0.0.1:8080/api/v1/cognition/stream \
-  -H 'content-type: application/json' \
-  -d '{"input":"¿Qué puedes hacer?","modelEngine":"auto","focusLens":"general","history":[]}'
-```
-
-La respuesta SSE emite eventos `meta`, `chunk`, `done` y `error`. La fragmentación posterior de texto no debe confundirse con streaming nativo del proveedor.
-
-## Motores y proveedores
-
-| Motor        | Realidad actual                                                                                        |
-| ------------ | ------------------------------------------------------------------------------------------------------ |
-| Fast lane    | Clasificación determinista de intenciones cortas                                                       |
-| Agente local | Herramientas allowlisted, sin LLM                                                                      |
-| LLM nativo   | Generación determinista/traza local; no es una red neuronal entrenada                                  |
-| MoE nativo   | Router top-k y diagnóstico local; no es un MoE de producción                                           |
-| TTS nativo   | Prosodia y normalización es-MX; no es un vocoder neural                                                |
-| AI Gateway   | Proveedor opcional mediante `@ai-sdk/gateway` y configuración válida                                   |
-| Google GenAI | Opcional mediante `GEMINI_API_KEY` o `MODEL_API_KEY`                                                   |
-| OpenRouter   | Opcional mediante `OPENROUTER_API_KEY` y modelo permitido                                              |
-| DeepSeek     | Puede configurarse mediante `DEEPSEEK_APIKEY` si la política/adaptador correspondiente está habilitado |
-| Hugging Face | Opcional mediante token y modelos permitidos                                                           |
-| Ollama       | Ruta de evolución; no se presenta como activa por defecto                                              |
-
-Nunca se debe exponer una clave al navegador ni insertar una clave en el código fuente. El motor ganador debe ser visible en la respuesta o en el estado del nodo.
-
-## Gates pendientes para liberar
-
-Antes de declarar una versión operativa, deben conservarse como evidencia verificable: el resultado de `pnpm install --frozen-lockfile`, `pnpm run lint`, `pnpm run typecheck`, `pnpm test`, `pnpm run security:suite`, `pnpm run build` y los gates de IGE-Ω (`cargo fmt --check`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo test --workspace --all-targets --all-features` y `cargo build --workspace --release --locked`). La convención `SPECIFIED ≠ IMPLEMENTED ≠ TESTED` recuerda que una capacidad descrita no equivale a una capacidad implementada ni a una capacidad verificada.
-
-## Seguridad, privacidad y gobernanza
-
-- Secretos de servidor nunca se envían al cliente: claves de Stripe, Supabase service role, tokens administrativos y credenciales de proveedores permanecen en el proceso.
-- Los headers `x-user-id` y `x-session-id` no conceden identidad por sí mismos.
-- Las entradas, historial, adjuntos y respuestas se tratan como datos no confiables.
-- El contenido se escapa antes de insertarse en el DOM.
-- Se aplican límites de tamaño, tiempo, concurrencia y rate limiting.
-- La aprobación administrativa se decide en servidor mediante bearer verificado; un booleano del cuerpo no concede permisos.
-- BookPI registra integridad y procedencia técnica; no convierte una afirmación en verdad.
-- El fallback local se declara como fallback y no se presenta como un LLM.
-- La caché, el single-flight y los fragmentos SSE no son permisos ni evidencia de producción.
-- Cualquier escritura gobernada requiere una política y una aprobación separadas del texto generado.
-
-## Configuración
-
-Usa Node.js `24.x` y pnpm `10.28.0`.
-
-```bash
+corepack enable
+corepack pnpm install --frozen-lockfile
 cp .env.example .env
-pnpm install --frozen-lockfile
 ```
 
-Variables frecuentes:
+Completa las variables necesarias para la modalidad elegida. No uses valores de ejemplo ni secretos reales en el repositorio.
 
-```dotenv
-# Servidor y persistencia
-PORT=8080
-HOST=0.0.0.0
-DATABASE_URL=
-POSTGRES_URL=
-POSTGRES_PRISMA_URL=
-
-# Supabase opcional
-SUPABASE_URL=
-SUPABASE_ANON_KEY=
-SUPABASE_PUBLISHABLE_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-
-# Proveedores opcionales; solo servidor
-GEMINI_API_KEY=
-DEEPSEEK_APIKEY=
-OPENROUTER_API_KEY=
-OPENROUTER_FREE_MODEL=
-HF_TOKEN=
-OLLAMA_BASE_URL=
-OLLAMA_API_KEY=
-AI_GATEWAY_API_KEY=
-
-# Stripe opcional; solo servidor
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
-STRIPE_PUBLISHABLE_KEY=
-STRIPE_PRICE_PREMIUM=
-STRIPE_PRICE_VIP=
-STRIPE_PRICE_ENTERPRISE=
-```
-
-La lista canónica y completa está en [`.env.example`](.env.example) y [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md). No copies secretos reales al repositorio. `DEEPSEEK_APIKEY` debe ser una variable de entorno real; no se debe escribir literalmente `"process.env.DEEPSEEK_APIKEY"` como valor.
-
-## Ejecución local
+Comandos principales:
 
 ```bash
-pnpm dev
+corepack pnpm run typecheck
+corepack pnpm run lint
+corepack pnpm run format:check
+corepack pnpm test
+corepack pnpm run build:dist
+corepack pnpm run smoke:runtime
+corepack pnpm run smoke:ui
+corepack pnpm run check:env
+corepack pnpm run check:sops
+corepack pnpm run deploy:readiness
 ```
 
-Abrir:
-
-- `http://127.0.0.1:8080/`
-- `http://127.0.0.1:8080/chat`
-- `http://127.0.0.1:8080/platform/status`
-
-Producción compilada:
+Para ejecutar localmente:
 
 ```bash
-pnpm run build
-pnpm run start:dist
+corepack pnpm run dev
 ```
 
-## Validación
+El script `validate` usa Corepack/pnpm para ejecutar typecheck, lint, formato y build. Ejecuta además los smoke tests y las pruebas E2E de las integraciones que realmente se vayan a habilitar.
 
-Gates mínimos exigidos por el repositorio:
+## 6. Configuración de Vercel
+
+El repositorio incluye `vercel.json` con:
+
+- instalación mediante `corepack pnpm install --frozen-lockfile`;
+- build mediante `corepack pnpm run build:dist`;
+- función `api/index.js` con duración máxima configurada de 60 segundos;
+- inclusión de `dist/**`, `src/ui/**` y recursos de vídeo;
+- rewrite general hacia `/api`.
+
+Antes de publicar, confirma en el proyecto correcto de Vercel el directorio raíz, Node.js 24.x, comandos, variables de entorno y dominios. La existencia de varios estados de despliegue asociados a diferentes proyectos exige comprobar cuál es el proyecto canónico y cuál dominio se considera producción.
+
+## 7. Variables y servicios externos
+
+Configura solo los servicios que vayas a activar. Las variables se documentan en `.env.example`; sus valores no deben copiarse literalmente a producción.
+
+| Servicio | Configuración y validación requerida |
+| --- | --- |
+| Runtime | `NODE_ENV=production`, `PORT`, URL pública y orígenes permitidos |
+| Proveedor de IA | Configurar un proveedor soportado, su clave si aplica, modelo permitido y timeout; ejecutar una conversación E2E |
+| PostgreSQL | `DATABASE_URL` y las URLs auxiliares que requiera el backend seleccionado; probar TLS, conexión, migraciones y lectura/escritura |
+| BookPI | Secreto de integridad fuerte y backend persistente; probar reinicio, integridad y recuperación |
+| Tokens operativos | Generar tokens únicos, de alta entropía y rotables; no reutilizar valores de ejemplo |
+| Voz | Seleccionar proveedor, límites de texto y consentimiento para transmitir contenido a terceros |
+| Stripe | Claves de test, Price IDs coherentes y webhook secret; probar checkout y webhook en modo test antes de activar cobros |
+| WebAuthn/federación | Configurar solo si se habilitan esas funciones; validar dominios, claves y firma |
+| Observabilidad | Logs sin secretos, alertas, retención y correlación por request |
+
+En Vercel, el filesystem y los stores en memoria pueden ser efímeros o estar aislados por instancia. No uses un store en memoria para API keys, federación, sesiones o evidencia que deban sobrevivir a reinicios o distribuirse entre instancias. Usa un backend durable y prueba concurrencia y recuperación.
+
+## 8. API y comprobaciones mínimas
+
+El inventario canónico de rutas está en `docs/api/route-inventory.json`. Entre las rutas documentadas se encuentran:
+
+- `GET /api/v1/healthz` — salud del proceso.
+- `GET /api/v1/readyz` — readiness de dependencias.
+- `GET /api/v1/status` — estado operativo.
+- `POST /api/v1/cognition/route` — conversación JSON.
+- `POST /api/v1/cognition/stream` — conversación SSE.
+- `GET /api/v1/agents` y `POST /api/v1/agents/run` — agente local.
+- `POST /api/v1/tts/stream` — salida de voz cuando está habilitada.
+
+Ejemplo de conversación local:
 
 ```bash
-pnpm run typecheck
-pnpm test
+curl -i https://TU-DOMINIO/api/v1/healthz
+curl -i https://TU-DOMINIO/api/v1/readyz
+curl -sS https://TU-DOMINIO/api/v1/cognition/route \
+  -H 'content-type: application/json' \
+  -d '{"input":"Explica qué puedes hacer y qué limitaciones tienes.","modelEngine":"auto","focusLens":"general","history":[]}'
 ```
 
-Validación ampliada:
+Revisa código HTTP, esquema de respuesta, motor reportado, latencia, errores, logs y consumo del proveedor. Una respuesta determinista local no debe contarse como inferencia de un LLM.
 
-```bash
-pnpm run lint
-pnpm run format:check
-pnpm run build
-pnpm run security:suite
-pnpm run smoke:runtime
-pnpm run smoke:ui
-pnpm run smoke:production
-```
+## 9. Checklist de liberación
 
-Para PostgreSQL y despliegue:
+### Bloqueos previos a staging
 
-```bash
-pnpm run postgres:e2e
-pnpm run verify:production
-pnpm run deploy:verify
-```
+- [ ] Recuperar logs y corregir los fallos de **Repository Assurance**.
+- [ ] Recuperar logs y corregir los fallos del workflow **CI/CD Pipeline**.
+- [ ] Ejecutar y registrar typecheck, lint, formato, tests y build en el mismo SHA.
+- [ ] Revisar el workflow de Rust/IGE-Ω y determinar si sus fallos corresponden a código, toolchain o configuración.
+- [ ] Hacer obligatorios los checks correctos para proteger la rama de release.
+- [ ] Confirmar que `build:dist` genera el artefacto importado por `api/index.js`.
 
-Un resultado verde demuestra que la comprobación ejecutada pasó en ese entorno. No demuestra por sí solo autoridad, consciencia, seguridad absoluta ni certificación de producción. Antes de marcar una capacidad como `verified` o `wired`, se requiere revisión y aprobación humana conforme a `AGENTS.md`.
+### Bloqueos previos a producción
 
-## Persistencia y pagos
+- [ ] Elegir y documentar el proyecto y dominio canónicos de Vercel.
+- [ ] Validar en vivo health, readiness, páginas, rutas API y logs de la versión desplegada.
+- [ ] Completar una conversación E2E con proveedor real configurado y verificar respuesta, timeout y fallback.
+- [ ] Probar PostgreSQL con TLS, migraciones, operaciones CRUD y recuperación ante reconexión.
+- [ ] Confirmar que BookPI y toda información crítica sobreviven a reinicios y no dependen de memoria efímera.
+- [ ] Revisar autenticación, autorización, CORS, rate limiting, límites de payload y protección de rutas administrativas.
+- [ ] Ejecutar pruebas de abuso, prompt injection, filtración de secretos, SSRF y manejo de errores.
+- [ ] Probar voz/TTS y documentar qué contenido sale a terceros.
+- [ ] Ejecutar Stripe en modo test: checkout, firma de webhook, idempotencia, duplicados y eventos fuera de orden.
+- [ ] Configurar logs, métricas, alertas, backup, restauración y procedimiento de rollback.
+- [ ] Completar pruebas de navegador para navegación, formularios, errores, accesibilidad y móvil.
+- [ ] Revisar dependencias, licencia, vulnerabilidades y secretos expuestos.
+- [ ] Registrar aprobación humana, SHA exacto, resultados de los gates y URL de la release.
 
-La persistencia puede usar PostgreSQL/Supabase, JSONL local o memoria degradada según el entorno. Antes de staging o producción deben validarse migraciones, permisos, backups, restauración y aislamiento de tenants.
+### Criterio de liberación
 
-Stripe es opcional. Para habilitarlo de forma responsable:
+**No publicar como producción certificada** si algún gate obligatorio falla, si el proveedor real no responde de extremo a extremo, si los datos críticos son efímeros o si no existe rollback comprobado. Si solo se valida el runtime básico, etiquetar el entorno como preview o beta técnica.
 
-1. configurar Price IDs y secretos en el entorno del servidor;
-2. registrar el webhook `/api/v1/billing/stripe/webhook`;
-3. verificar firma, deduplicación y orden de eventos;
-4. probar checkout, renovación, cancelación, expiración y reintentos en modo test;
-5. validar la suscripción persistida antes de conceder entitlements.
+## 10. Limitaciones explícitas
 
-La cotización no cobra. El ledger no prueba que el dinero haya sido transferido. Stripe Connect, KYC, impuestos, payouts, reembolsos, contracargos y conciliación requieren implementación y evidencia adicional.
+- El agente local es determinista; no sustituye un modelo neuronal.
+- Los proveedores gratuitos o sin clave pueden cambiar, limitar solicitudes, fallar o tener condiciones de privacidad distintas.
+- El streaming de texto fragmentado no implica generación token a token por el modelo.
+- Los contratos OpenAPI/AsyncAPI no implican endpoints desplegados.
+- Los módulos de gobernanza y evidencia no son certificaciones externas.
+- Las funciones comerciales no equivalen a pagos reales de extremo a extremo.
+- Las afirmaciones de producción requieren pruebas observables del commit y entorno exactos.
 
-## Limitaciones y pendientes
+## 11. Seguridad y gobernanza
 
-Antes de una declaración de operación productiva todavía deben comprobarse, según el despliegue:
+- Nunca publiques tokens, claves privadas, cadenas de conexión ni secretos de Stripe.
+- Usa variables de entorno o el almacén de secretos del proveedor.
+- Rota cualquier credencial que haya aparecido en logs, commits o conversaciones compartidas.
+- Mantén aprobación humana para efectos externos sensibles.
+- Revisa [SECURITY.md](SECURITY.md) y [AGENTS.md](AGENTS.md) antes de aprobar cambios de gobernanza.
 
-- CI remota completa y revisión humana identificada.
-- PostgreSQL/Supabase, migraciones y restauración en staging.
-- Rotación de claves, recuperación ante fallos y observabilidad operativa.
-- Rate limiting distribuido para múltiples réplicas.
-- Stripe test mode y todos los eventos relevantes.
-- Payouts, KYC, impuestos, reembolsos y conciliación, si se requieren.
-- Runtime local de pesos abiertos con licencia, aislamiento y evaluación verificables.
-- Persistencia real de métricas y medición económica de los flujos nativos.
-- Auditoría de sesgos, seguridad, privacidad y contenido con criterios reproducibles.
-- Validación en navegadores, dispositivos y redes objetivo.
+## 12. Registro del proyecto
 
-## Estructura
+- **Proyecto:** Isabella Villaseñor AI · Genesis TINA V6.
+- **Ecosistema:** TAMV Online Network.
+- **ORCID:** [0009-0008-5050-1539](https://orcid.org/0009-0008-5050-1539).
+- **DOI declarado para IGE-Ω:** [10.5281/zenodo.20606361](https://doi.org/10.5281/zenodo.20606361).
+- **Licencia:** MIT, consultar [LICENSE](LICENSE).
 
-```text
-src/server.ts                 Servidor y composición del runtime
-src/inference/                Cognición, proveedores y multimodalidad
-src/agents/                   Agente local y herramientas
-src/routes/                   API HTTP
-src/memory/                   Memoria y contexto
-src/bookpi/                   Evidencia append-only + anclaje Merkle
-src/omega/native/             Contratos de integración nativa Ω∞
-src/omega/genesis/            Pila cognitiva Ω∞ GENESIS (20 incrementos)
-src/security/                 Seguridad y confianza
-src/commerce/                 Suscripciones, Stripe y webhooks
-src/economy/                  Ledger y monetización
-src/platform/                 Páginas, catálogo y canon
-src/ui/                       Interfaz web
-scripts/                      Aseguramiento y smoke tests
-test/                         Pruebas
-docs/                         Especificaciones y contratos
-openapi/                      Contrato abierto de skills Genesis
-asyncapi/                     Contrato de eventos de skills Genesis
-```
-
-## Registro
-
-- **Proyecto:** Isabella Villaseñor AI · Genesis TINA V6 · TAMV Online Network.
-- **Nodo Cero:** Real del Monte, Hidalgo, México.
-- **Fundador:** Edwin Oswaldo Castillo Trejo (Anubis Villaseñor).
-- **ORCID:** `0009-0008-5050-1539`.
-- **DOI:** `10.5281/zenodo.20606361`.
-- **Licencia:** MIT — [`LICENSE`](LICENSE).
-- **Seguridad:** [`SECURITY.md`](SECURITY.md).
-- **Constitución operativa:** [`AGENTS.md`](AGENTS.md).
-
-La documentación debe mantenerse alineada con el código, las pruebas y la evidencia observada. Si existe conflicto entre esta guía y la especificación canónica en `docs/spec/` o `docs/evolution/`, prevalece la especificación y el conflicto debe registrarse para arbitraje humano.
+Este README es una guía operativa y un registro de estado; no sustituye una auditoría de seguridad independiente ni la evidencia de pruebas de producción.
