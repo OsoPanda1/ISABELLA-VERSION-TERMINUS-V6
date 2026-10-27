@@ -40,13 +40,6 @@
         </label>
       </div>
 
-      <nav class="chat-side-nav" aria-label="Superficies de la plataforma">
-        <a href="/platform">PANEL</a>
-        <a href="/platform/skills">SKILLS</a>
-        <a href="/platform/tools">TOOLS</a>
-        <a href="/platform/docs">DOCS</a>
-      </nav>
-
       <div class="chat-sessions">
         <div class="chat-sessions-label"><span>HISTORIAL LOCAL</span><span id="sessionCount">00</span></div>
         <div class="session-list" id="sessionList" role="list"></div>
@@ -54,6 +47,10 @@
       </div>
 
       <div class="chat-sidebar-foot">
+        <div class="tamv-signature">
+          <img src="/ui/platform/logo-isav6.jpeg" alt="Logotipo oficial de Isabella Villaseñor AI" />
+          <div><strong>TAMV ONLINE</strong><span>Orgullosamente Latinoamericanos</span><small>Real del Monte, Hidalgo, México</small></div>
+        </div>
         <p>LOCAL-FIRST · SIN CUENTA REMOTA<br />SESIÓN PÚBLICA / VIEWER</p>
         <a href="/platform/settings">Ajustes del espacio</a>
         <a href="/platform/governance">Gobernanza y evidencia</a>
@@ -69,42 +66,16 @@
         </div>
         <div class="chat-topbar-spacer"></div>
         <span class="chat-engine-badge" id="engineBadge"><i aria-hidden="true"></i><span id="engineBadgeText">AUTO · VERIFICANDO</span></span>
-        <div class="chat-top-actions">
-          <button class="chat-icon-button" id="exportButton" type="button" aria-label="Exportar conversación en Markdown" title="Exportar Markdown">↓</button>
-          <button class="chat-icon-button inspector-toggle" id="inspectorToggle" type="button" aria-label="Abrir contexto de sesión" aria-controls="chatInspector" aria-expanded="false" title="Contexto de sesión">◎</button>
-        </div>
       </header>
 
       <div class="chat-thread" id="chatThread">
         <div class="chat-thread-inner">
           <section class="chat-welcome" id="chatWelcome" aria-labelledby="welcomeTitle">
+            <img class="welcome-logo" src="/ui/platform/logo-isav6.jpeg" alt="Isabella Villaseñor AI" />
             <p class="eyebrow">SALA DE COGNICIÓN · NODO CERO</p>
             <h1 id="welcomeTitle">Inteligencia con <em>trazabilidad</em>, no con promesas.</h1>
             <p>Conversa con la capa pública de Isabella. Cada respuesta declara su motor, su latencia y sus límites. Las sesiones viven en este navegador; la conversación no se presenta como memoria canónica ni como acceso a sistemas privados.</p>
-            <div class="chat-welcome-note">
-              <span class="pill is-info">RUTA GOBERNADA</span>
-              <span class="pill">HYPERCORE TURBO</span>
-              <span class="pill">LOCAL-FIRST</span>
-              <span class="pill">SIN TELEMETRÍA DE TERCEROS</span>
-            </div>
-            <div class="starter-grid">
-              <button class="starter" type="button" data-starter="¿Qué es Isabella y qué puede hacer hoy con honestidad?">
-                <span aria-hidden="true">◇</span>
-                <span><strong>Conoce el sistema</strong><small>Capacidades reales, límites declarados y estado del nodo.</small></span>
-              </button>
-              <button class="starter" type="button" data-starter="Calcula (18*7)+15/3 y explica qué herramienta local usaste.">
-                <span aria-hidden="true">∑</span>
-                <span><strong>Prueba una herramienta local</strong><small>Aritmética determinista, sin modelo generativo ni red.</small></span>
-              </button>
-              <button class="starter" type="button" data-starter="Resume: La inteligencia artificial debe declarar sus límites, distinguir evidencia de inferencia y no confundir capacidad con autoridad. Una interfaz honesta muestra el origen de cada respuesta y permite auditar sus decisiones.">
-                <span aria-hidden="true">≡</span>
-                <span><strong>Resume un texto</strong><small>Método extractivo local, sin inventar contenido.</small></span>
-              </button>
-              <button class="starter" type="button" data-starter="¿Cuál es el invariante de gobernanza de Isabella y qué significa?">
-                <span aria-hidden="true">◈</span>
-                <span><strong>Consulta la gobernanza</strong><small>Capacidad, autoridad, ejecución y evidencia no son lo mismo.</small></span>
-              </button>
-            </div>
+
           </section>
 
           <div class="chat-messages" id="chatMessages" role="log" aria-live="polite" aria-relevant="additions text"></div>
@@ -125,7 +96,7 @@
               </select>
             </label>
             <label class="composer-select" title="Lente de análisis">
-              <span class="sr-only">Lente de análisis</span>
+              <span class="sr-only">Lente de an��lisis</span>
               <select id="lensSelect">
                 <option value="general">LENTE GENERAL</option>
                 <option value="territorial">TERRITORIAL</option>
@@ -134,15 +105,6 @@
                 <option value="governance">GOBERNANZA</option>
               </select>
             </label>
-            <button class="composer-tool" id="attachButton" type="button" title="Adjuntar archivos de texto (se leen solo en este navegador)">
-              <span aria-hidden="true">⌁</span><span class="label">ADJUNTAR</span>
-            </button>
-            <button class="composer-tool" id="micButton" type="button" aria-pressed="false" title="Dictado por voz del navegador">
-              <span aria-hidden="true">◉</span><span class="label">VOZ</span>
-            </button>
-            <button class="composer-tool" id="ttsButton" type="button" aria-pressed="false" title="Leer respuestas en voz alta">
-              <span aria-hidden="true">◁))</span><span class="label">LEER</span>
-            </button>
             <span class="composer-spacer"></span>
             <button class="send-button" id="sendButton" type="submit" aria-label="Enviar mensaje">↑</button>
           </div>
@@ -152,7 +114,7 @@
       </div>
     </main>
 
-    <aside class="chat-inspector" id="chatInspector" aria-label="Contexto de la sesión">
+    <aside class="chat-inspector" id="chatInspector" hidden aria-label="Contexto de la sesión">
       <div class="inspector-head">
         <strong>CONTEXTO DE SESIÓN</strong>
         <button class="chat-icon-button inspector-close" id="inspectorClose" type="button" aria-label="Cerrar panel de contexto">×</button>

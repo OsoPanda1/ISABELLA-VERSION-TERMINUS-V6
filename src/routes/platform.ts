@@ -197,6 +197,16 @@ export function registerPlatformRoutes(deps: PlatformRouteDeps): void {
     serveAsset(req, res, assets.chatJs, IMMUTABLE_CACHE);
   });
 
+  app.get('/ui/platform/logo-isav6.jpeg', (_req, res) => {
+    const logoPath = path.join(process.cwd(), 'src', 'ui', 'platform', 'logo-isav6.jpeg');
+    if (!fs.existsSync(logoPath)) {
+      res.status(404).send('Logo unavailable');
+      return;
+    }
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.type('jpeg').sendFile(logoPath);
+  });
+
   app.get('/api/v1/platform/catalog', (req, res) => {
     if (!deps.enforceRateLimit(req, res, deps.rateLimiter, 'platform-catalog')) return;
     res.setHeader('Cache-Control', 'no-store');
