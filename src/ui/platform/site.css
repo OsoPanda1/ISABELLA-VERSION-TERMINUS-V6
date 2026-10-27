@@ -3862,6 +3862,101 @@ body.chat-app {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
 }
 
+.official-logo {
+  width: 46px;
+  height: 28px;
+  object-fit: cover;
+  object-position: center;
+  border: 1px solid rgba(159, 247, 255, 0.24);
+  border-radius: 7px;
+  opacity: 0.9;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+}
+
+.tamv-signature {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 12px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.tamv-signature img {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  object-position: center;
+  border: 1px solid rgba(159, 247, 255, 0.22);
+  border-radius: 9px;
+  opacity: 0.92;
+}
+
+.tamv-signature div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tamv-signature strong,
+.tamv-signature span,
+.tamv-signature small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tamv-signature strong {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  color: var(--text-soft);
+}
+
+.tamv-signature span,
+.tamv-signature small {
+  font-size: 9px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.tamv-signature small {
+  font-family: var(--mono);
+  font-size: 7px;
+  letter-spacing: 0.03em;
+  color: var(--dim);
+}
+
+.chat-welcome .welcome-logo {
+  display: block;
+  width: min(280px, 58vw);
+  height: 86px;
+  margin: 0 0 22px;
+  object-fit: cover;
+  object-position: center;
+  border: 1px solid rgba(159, 247, 255, 0.18);
+  border-radius: 14px;
+  opacity: 0.9;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+}
+
+@media (max-width: 620px) {
+  .official-logo {
+    display: none;
+  }
+
+  .chat-welcome .welcome-logo {
+    width: min(240px, 78vw);
+    height: 70px;
+  }
+
+  .tamv-signature span {
+    white-space: normal;
+  }
+}
+
 .chat-app #menuToggle.chat-menu {
   display: none !important;
 }
