@@ -39,6 +39,7 @@
   "GET /api/v1/federation/webhooks/:connectorId",
   "GET /api/v1/gameover/constitution",
   "GET /api/v1/gameover/passports",
+  "GET /api/v1/gateway/activity",
   "GET /api/v1/governance/audit",
   "GET /api/v1/health",
   "GET /api/v1/healthz",
@@ -113,6 +114,7 @@
   "GET /assets/video/IntroVideoIsabella.mp4",
   "GET /chat",
   "GET /health",
+  "GET /llama/v1/models",
   "GET /platform",
   "GET /platform/:page",
   "GET /styles/cinematic.css",
@@ -258,6 +260,9 @@
   "POST /api/v3/omega/twins/federate",
   "POST /api/v3/treasury/credit",
   "POST /api/v3/treasury/debit",
+  "POST /llama/v1/chat/completions",
   "POST /v1/chat/completions",
-  "POST /v1/completions"
+  "POST /v1/completions",
+  "POST /v1/messages",
+  "POST /v1beta/models/:spec"
 ]

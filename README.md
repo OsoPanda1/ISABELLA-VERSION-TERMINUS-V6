@@ -159,7 +159,7 @@ Antes de publicar, confirma en el proyecto correcto de Vercel el directorio raí
 
 ## 8. Contrato de entorno: secretos y variables
 
-El contrato canónico está en [`.env.example`](.env.example) (**165 claves**) y es guardado por `scripts/check-env-example.mjs`, que falla si existe una lectura `process.env.X` en `src/` no documentada. Ejecuta `corepack pnpm run check:env` para validarlo.
+El contrato canónico está en [`.env.example`](.env.example) (**173 claves**) y es guardado por `scripts/check-env-example.mjs`, que falla si existe una lectura `process.env.X` en `src/` no documentada. Ejecuta `corepack pnpm run check:env` para validarlo.
 
 ### 8.1 Claves REQUIRED en producción (el runtime aborta sin ellas)
 
@@ -217,6 +217,38 @@ curl -sS https://TU-DOMINIO/api/v1/cognition/route \
 ```
 
 Una respuesta determinista local no debe contarse como inferencia de un LLM.
+
+### 9.1 Puerta de API multiproveedor (gateway compatible)
+
+Isabella expone las mismas facultades de mediación (`runtime.mediateIsabella`) detrás de
+varias **puertas de transporte** wire-compatibles, para que un SDK existente apunte a
+Isabella sin reescribirse. **No** es un proxy de servicios de terceros ni reutiliza
+sesiones ajenas (p. ej. GitHub Copilot): cada puerta enruta la intención hacia la
+mediación canónica y **no otorga autoridad** (CAPABILITY ≠ AUTHORITY, AGENTS.md §1).
+
+| Formato | Rutas | Notas |
+| --- | --- | --- |
+| OpenAI | `GET /v1/models`, `POST /v1/chat/completions`, `POST /v1/completions` | streaming SSE soportado |
+| Anthropic | `POST /v1/messages` | SSE `message_start … message_stop` |
+| Google (Gemini) | `POST /v1beta/models/<model>:generateContent` y `:streamGenerateContent` | `contents[].parts[].text` |
+| Llama | `GET /llama/v1/models`, `POST /llama/v1/chat/completions` | forma OpenAI |
+| Actividad | `GET /api/v1/gateway/activity` | **solo admin** (`GENESIS_ADMIN_API_TOKEN`); vista con previas **redactadas** |
+
+El perfil se deriva **del id del modelo en el servidor** (sufijos `-gobernanza`,
+`-contra-auditoria`, `-simulacion`, `-secretaria`), nunca de texto libre del cliente.
+Se activan con el mismo gate que la puerta OpenAI: define `OPENAI_COMPAT_API_TOKEN`
+para exigir `Authorization: Bearer <token>`, y comparten el rate limiter público.
+
+```bash
+# Anthropic-compatible (con token configurado en el servidor):
+curl -sS https://TU-DOMINIO/v1/messages \
+  -H 'content-type: application/json' -H 'authorization: Bearer TU-TOKEN' \
+  -d '{"model":"isabella-genesis","max_tokens":64,"messages":[{"role":"user","content":"Hola"}]}'
+```
+
+El registro de actividad (`GATEWAY_AUDIT_MAX_ENTRIES`, `GATEWAY_AUDIT_SALT`) es un anillo
+en memoria con previas pasadas por el redactor de PII/secreto (`src/privacy/pii-redactor.ts`);
+no es el plano de evidencia durable (ese es BookPI). Estado: `draft | engine-generated`.
 
 ## 10. Gates pendientes para liberar
 

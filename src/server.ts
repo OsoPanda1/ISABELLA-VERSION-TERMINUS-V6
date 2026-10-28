@@ -159,6 +159,8 @@ import {
 } from './gameover';
 import { registerHyperCoreRoutes } from './routes/hypercore';
 import { registerOpenAiCompatibleRoutes } from './routes/openai';
+import { registerLlmGatewayRoutes, LLM_GATEWAY_VERSION } from './routes/llm-gateway';
+import { GatewayAuditLog } from './observability/gateway-audit';
 import { registerOrderPermissionRoutes } from './routes/governance-permissions';
 import { registerTurboPlannerRoutes } from './routes/turbo-planner';
 import { registerTtsRoutes } from './routes/tts';
@@ -5442,6 +5444,37 @@ registerOpenAiCompatibleRoutes({
   rateLimiter: publicCognitionLimiter,
   authorizeApiToken,
   ...(process.env.OPENAI_COMPAT_API_TOKEN ? { apiTokenEnvName: 'OPENAI_COMPAT_API_TOKEN' } : {}),
+});
+
+// ── Multi-provider gateway (Anthropic / Google / Llama) ─ (state: draft | engine-generated)
+// Same canonical mediation as the OpenAI surface; transport only, grants no authority.
+// The activity ledger stores REDACTED prompt previews (see GatewayAuditLog). It is an
+// observability view, not the durable evidence plane (that is BookPI).
+const gatewayAuditLog = new GatewayAuditLog(
+  Number(process.env.GATEWAY_AUDIT_MAX_ENTRIES ?? 500),
+  process.env.GATEWAY_AUDIT_SALT ?? 'isabella-gateway'
+);
+registerLlmGatewayRoutes({
+  app,
+  mediate: (input, profile) => {
+    const result = runtime.mediateIsabella({ input, profile });
+    return { answer: result.answer, profile: result.profile, safeguards: result.safeguards };
+  },
+  modelId: process.env.OPENAI_COMPAT_MODEL_ID ?? 'isabella-genesis',
+  ownedBy: 'tamv-isabella',
+  enforceRateLimit,
+  rateLimiter: publicCognitionLimiter,
+  authorizeApiToken,
+  audit: gatewayAuditLog,
+  ...(process.env.OPENAI_COMPAT_API_TOKEN ? { apiTokenEnvName: 'OPENAI_COMPAT_API_TOKEN' } : {}),
+});
+
+// Recent gateway activity (redacted). Admin-gated: the previews are sanitized but the
+// volume/model/latency metadata is still operational detail, not public.
+app.get('/api/v1/gateway/activity', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const limit = Math.min(200, Math.max(1, Number(req.query.limit ?? 50) || 50));
+  res.json({ version: LLM_GATEWAY_VERSION, count: gatewayAuditLog.size(), recent: gatewayAuditLog.recent(limit) });
 });
 
 // ── Permission Map Ω (state: draft | engine-generated) ─ mapea una orden a sus permisos
