@@ -182,6 +182,53 @@ export function resolveLocalOllamaProvider(
   });
 }
 
+export interface LocalCompatibleProviderConfig {
+  readonly name: 'local-compatible';
+  readonly endpoint: string;
+  readonly model: string;
+  readonly apiKey: string;
+}
+
+/**
+ * Private local OpenAI-compatible inference server (llama.cpp / vLLM / LM Studio
+ * serving a Qwen-class model). Opt-in and restricted to loopback/private addresses
+ * unless the operator explicitly allows a remote host — mirroring the Ollama gate.
+ * It is disclosed as "local-compatible", never presented as sovereign inference and
+ * never confused with a paid provider. The base URL must already include the version
+ * path (e.g. http://127.0.0.1:8089/v1); /chat/completions is appended.
+ */
+export function resolveLocalCompatibleProvider(
+  env: Readonly<Record<string, string | undefined>>
+): LocalCompatibleProviderConfig | null {
+  if (env.ISABELLA_LOCAL_COMPAT_ENABLED?.trim().toLowerCase() !== 'true') return null;
+  const model = env.ISABELLA_LOCAL_COMPAT_MODEL?.trim();
+  if (!model) return null;
+  const rawBase = (
+    env.ISABELLA_LOCAL_COMPAT_BASE_URL?.trim() || 'http://127.0.0.1:8089/v1'
+  ).replace(/\/+$/, '');
+  let base: URL;
+  try {
+    base = new URL(rawBase);
+  } catch {
+    return null;
+  }
+  if (base.protocol !== 'http:' && base.protocol !== 'https:') return null;
+  const host = base.hostname.toLowerCase();
+  const privateHost =
+    LOOPBACK_HOSTS.has(host) ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+  if (!privateHost && env.ISABELLA_LOCAL_COMPAT_ALLOW_REMOTE?.trim().toLowerCase() !== 'true')
+    return null;
+  return Object.freeze({
+    name: 'local-compatible',
+    endpoint: `${rawBase}/chat/completions`,
+    model,
+    apiKey: env.ISABELLA_LOCAL_COMPAT_API_KEY?.trim() ?? 'local',
+  });
+}
+
 const KEYLESS_FREE_ENABLE_VALUES: ReadonlySet<string> = new Set([
   'on',
   'true',

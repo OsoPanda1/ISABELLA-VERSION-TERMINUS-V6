@@ -85,6 +85,20 @@ Además del núcleo previo (regresión logística SGD binaria/multiclase, k-mean
 
 **Límite honesto:** `src/lib` está excluido del `tsc` de typecheck principal; estos módulos se empaquetan con esbuild (build + vitest) y se prueban, pero **no** pueden declararse "listos para producción" por esa exclusión (CAPABILITY ≠ PRODUCTION). Ver `docs/STATUS.md`.
 
+## 4.1 Modelo local privado (Qwen) y aclaración sobre `.vscode/extensions.json`
+
+La extensión recomendada en `.vscode/extensions.json` (`edikerciku.noko-ai`) es una **herramienta del editor** (un chat de VS Code para modelos Qwen locales vía un servidor llama.cpp en `http://127.0.0.1:8089`). **No** es una dependencia de la aplicación: un `extensions.json` no se "instala dentro de Isabella"; lo instala el desarrollador en su IDE.
+
+La **capacidad** que esa herramienta representa — inferencia privada con un modelo local tipo Qwen — sí puede operarse en Isabella de forma real y funcional, reutilizando el adaptador OpenAI-compatible ya presente (`src/inference/openai-compatible.ts`) y conectándolo al carril soberano/local mediante `resolveLocalCompatibleProvider`. Se activa con:
+
+```bash
+ISABELLA_LOCAL_COMPAT_ENABLED=true
+ISABELLA_LOCAL_COMPAT_BASE_URL=http://127.0.0.1:8089/v1
+ISABELLA_LOCAL_COMPAT_MODEL=qwen2.5-7b-instruct
+```
+
+Por seguridad es **loopback/privado por defecto** (falla cerrado ante hosts remotos salvo `ISABELLA_LOCAL_COMPAT_ALLOW_REMOTE=true` en una red de confianza), no añade rutas HTTP y se divulga como `local-compatible`, nunca como inferencia soberana. Coexiste con el carril Ollama local (`OLLAMA_*`). Estado: `draft | engine-generated`, con tests de resolución de proveedor.
+
 ## 5. Arquitectura de alto nivel
 
 | Ruta/carpeta | Responsabilidad principal |
@@ -178,7 +192,7 @@ El contrato canónico está en [`.env.example`](.env.example) (**165 claves**) y
 | Observabilidad | `OTEL_EXPORTER_OTLP_*`, `OTEL_SERVICE_NAME` |
 | Procedencia PID | `ORCID_ID`, `ZENODO_DOI`, `DATACITE_DOI`, `ISNI`, `PID_NAMESPACE`, `PID_STRICT` |
 
-> **Divergencia de precios (pendiente de arbitraje humano):** `src/commerce/pricing.ts` fija Premium mensual 1900¢ / anual 19000¢ y VIP mensual 7900¢ / anual 79000¢, mientras la política de `economy` documenta "US$20 de referencia + 25% = US$25/mes". Ambos conjuntos de Price IDs conviven; **no** se activa cobro real hasta reconciliar la política con el catálogo y evidencia humana. Ver §11.
+> **Precios Premium (armonizados):** `src/commerce/pricing.ts` fija ahora Premium **US$25/mes (2500¢)** y **US$250/año (25000¢)**, coherente con la política canónica de `economy` (referencia US$20 + 25% de margen = US$25, calculada en `revenue-fabric/storage.ts`). VIP: US$79/mes / US$790/año. Los dos conjuntos de Price IDs (`STRIPE_PRICE_PREMIUM` del *economy* y `STRIPE_PRICE_PREMIUM_MONTHLY/YEARLY` del *commerce*) conviven por diseño; el cobro real sigue requiriendo aprobación humana y pruebas en modo test.
 
 En Vercel, el filesystem y los stores en memoria pueden ser efímeros o estar aislados por instancia. No uses un store en memoria para API keys, federación, sesiones o evidencia que deba sobrevivir a reinicios o distribuirse entre instancias. Usa un backend durable y prueba concurrencia y recuperación.
 
@@ -226,7 +240,7 @@ Los gates de liberación son obligatorios: CI verde en el SHA exacto, pruebas E2
 - [ ] Revisar autenticación, autorización, CORS, rate limiting, límites de payload y protección de rutas administrativas.
 - [ ] Ejecutar pruebas de abuso, prompt injection, filtración de secretos, SSRF y manejo de errores.
 - [ ] Probar voz/TTS y documentar qué contenido sale a terceros.
-- [ ] Ejecutar Stripe en modo test: checkout, firma de webhook, idempotencia, duplicados y eventos fuera de orden (y reconciliar la divergencia de precios de §8).
+- [ ] Ejecutar Stripe en modo test: checkout, firma de webhook, idempotencia, duplicados y eventos fuera de orden (Premium ya armonizado a US$25; verificar Price IDs reales).
 - [ ] Configurar logs, métricas, alertas, backup, restauración y procedimiento de rollback.
 - [ ] Completar pruebas de navegador para navegación, formularios, errores, accesibilidad y móvil.
 - [ ] Revisar dependencias, licencia, vulnerabilidades y secretos expuestos.
@@ -244,7 +258,7 @@ Los gates de liberación son obligatorios: CI verde en el SHA exacto, pruebas E2
 - Los proveedores gratuitos o sin clave pueden cambiar, limitar solicitudes, fallar o tener condiciones de privacidad distintas.
 - El streaming de texto fragmentado no implica generación token a token por el modelo.
 - Los contratos OpenAPI/AsyncAPI no implican endpoints desplegados.
-- Existe una divergencia de política de precios entre `commerce` y `economy` (§8) sin arbitraje humano.
+- El catálogo `commerce` y la política `economy` están armonizados en US$25/mes para Premium, pero la activación de cobro real requiere aprobación humana y pruebas E2E en modo test.
 - Las funciones comerciales no equivalen a pagos reales de extremo a extremo.
 - Las afirmaciones de producción requieren pruebas observables del commit y entorno exactos.
 
