@@ -34,6 +34,8 @@ export interface FederationRouteDeps {
   readonly rateLimiter: FixedWindowRateLimiter;
   readonly authorizeAdmin: (req: Request, res: Response) => boolean;
   readonly readRawBody: (req: Request) => string | undefined;
+  /** Process-local provider outcomes (never secrets); omitted by default. */
+  readonly describeProviderRuntime?: () => Record<string, unknown>;
   readonly recordEvidence?: (event: {
     action: 'connector.create' | 'connector.delete' | 'webhook.ingest';
     connectorId: string;
@@ -102,6 +104,7 @@ export function registerFederationRoutes(deps: FederationRouteDeps): void {
       verifyTokenConfigured: (env.ISABELLA_FEDERATION_VERIFY_TOKEN ?? '').trim().length >= 16,
       models: catalog.counts,
       speech: catalog.speech,
+      providerRuntime: deps.describeProviderRuntime?.() ?? null,
       authority: {
         ingressGrantsAuthority: false,
         ingressExecutesTools: false,
@@ -125,6 +128,7 @@ export function registerFederationRoutes(deps: FederationRouteDeps): void {
     res.json({
       success: true,
       ...catalog,
+      providerRuntime: deps.describeProviderRuntime?.() ?? null,
       note: 'Readiness is derived from local configuration. Describing a model does not call it.',
     });
   });

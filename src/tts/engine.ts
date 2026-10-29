@@ -174,10 +174,8 @@ export class GenesisTtsEngine {
     let audio: { mimeType: string; dataUrl: string; bytes: number } | null = null;
     let backend: ExpertKind = 'browser-speech';
     for (const r of planned.route.ranked) {
-      if (r.id === 'browser-speech') {
-        backend = 'browser-speech';
-        break;
-      }
+      // Browser speech is the fallback plan, never a reason to skip a configured backend.
+      if (r.id === 'browser-speech') continue;
       if (options.keylessOnly && r.id !== 'server-tts') continue;
       attempted.push(r.id);
       if (r.id === 'native-fsim' && this.native) {

@@ -1172,6 +1172,56 @@
         ready > 0 ? 'ready' : 'warn'
       );
       const speech = data.speech || {};
+      const freeDiagnostics = data.providerRuntime && data.providerRuntime.keylessFree;
+      if (freeDiagnostics) {
+        const card = el('div', 'nexus-model');
+        const top = el('div', 'nexus-row-top');
+        const freeProviders = Array.isArray(freeDiagnostics.providers)
+          ? freeDiagnostics.providers.map((provider) => provider && provider.name).filter(Boolean)
+          : [];
+        top.append(
+          el(
+            'h3',
+            null,
+            freeProviders.length
+              ? `gratuito sin clave · ${freeProviders.join(' / ')}`
+              : 'gratuito sin clave'
+          )
+        );
+        const cooldown = Math.max(0, Number(freeDiagnostics.cooldownRemainingMs) || 0);
+        const state = el(
+          'span',
+          'nexus-tag',
+          !freeDiagnostics.configured
+            ? 'NO CONFIGURADO'
+            : cooldown > 0
+              ? 'CUOTA EN ESPERA'
+              : 'OPERATIVO'
+        );
+        state.dataset.state = !freeDiagnostics.configured
+          ? 'unavailable'
+          : cooldown > 0
+            ? 'configured'
+            : 'ready';
+        top.append(state);
+        card.append(top);
+        card.append(
+          el(
+            'p',
+            null,
+            !freeDiagnostics.configured
+              ? 'El operador no habilitó inferencia externa gratuita; la conversación usa el fallback local.'
+              : cooldown > 0
+                ? `El proveedor gratuito limitó este nodo (HTTP ${display(freeDiagnostics.lastStatus, '—')}). Reintento en ${Math.ceil(cooldown / 1000)} s; el nodo sigue respondiendo con su fallback honesto.`
+                : freeDiagnostics.lastFailureKind
+                  ? `Último intento fallido: ${display(freeDiagnostics.lastFailureKind, '—')} (HTTP ${display(freeDiagnostics.lastStatus, '—')}).`
+                  : freeDiagnostics.keyedFreeTier
+                    ? 'Clave gratuita configurada: amplía el límite por IP sin convertir la ruta en un servicio de pago.'
+                    : 'Sin clave: el proveedor gratuito aplica su límite por IP. Una clave gratuita del operador amplía ese límite.'
+          )
+        );
+        list.append(card);
+      }
       const speechNode = byId('nexusSpeechReadiness');
       if (speechNode) {
         if (speech.textToSpeech) {

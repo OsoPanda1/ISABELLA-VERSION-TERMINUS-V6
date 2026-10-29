@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildKeylessFreeMessages,
+  classifyKeylessFreeHttpFailure,
   extractKeylessFreeText,
+  parseRetryAfterMs,
   resolveKeylessFreeProvider,
-  resolveLocalOllamaProvider,
+  resolveKeylessFreeProviders,
   resolveLocalCompatibleProvider,
+  resolveLocalOllamaProvider,
 } from '../../src/inference/provider-policy';
+import { describeModelRuntime } from '../../src/federation/openapi';
 
 describe('keyless free provider policy', () => {
   it('stays off unless the operator explicitly enables it', () => {
@@ -16,18 +20,35 @@ describe('keyless free provider policy', () => {
   });
 
   it('accepts the documented opt-in aliases case-insensitively', () => {
-    for (const flag of ['pollinations', 'on', 'ON', 'true', '1', '  pollinations  ']) {
+    for (const flag of ['on', 'ON', 'true', '1', 'auto']) {
       const config = resolveKeylessFreeProvider({ ISABELLA_KEYLESS_FREE_PROVIDER: flag });
       expect(config, flag).not.toBeNull();
-      expect(config?.name).toBe('pollinations');
-      expect(config?.endpoint).toBe('https://text.pollinations.ai');
-      expect(config?.model).toBe('openai');
+      expect(config?.name).toBe('llm7');
+      expect(config?.endpoint).toBe('https://api.llm7.io');
+      expect(config?.model).toBe('gpt-oss:20b');
+      expect(config?.protocol).toBe('openai');
     }
+    const explicit = resolveKeylessFreeProvider({
+      ISABELLA_KEYLESS_FREE_PROVIDER: "  pollinations  ",
+    });
+    expect(explicit?.name).toBe("pollinations");
+    expect(explicit?.endpoint).toBe("https://text.pollinations.ai");
+    expect(explicit?.model).toBe("openai");
+    expect(explicit?.protocol).toBe("pollinations");
+  });
+
+  it("keeps an explicit order and de-duplicates providers", () => {
+    const configs = resolveKeylessFreeProviders({
+      ISABELLA_KEYLESS_FREE_PROVIDER: "pollinations, llm7,pollinations",
+    });
+    expect(configs.map((config) => config.name)).toEqual(["pollinations", "llm7"]);
+    expect(resolveKeylessFreeProviders({ ISABELLA_KEYLESS_FREE_PROVIDER: "off" })).toEqual([]);
+    expect(resolveKeylessFreeProviders({ ISABELLA_KEYLESS_FREE_PROVIDER: "unknown" })).toEqual([]);
   });
 
   it('honors endpoint and model overrides and normalizes trailing slashes', () => {
     const config = resolveKeylessFreeProvider({
-      ISABELLA_KEYLESS_FREE_PROVIDER: 'on',
+      ISABELLA_KEYLESS_FREE_PROVIDER: 'pollinations',
       KEYLESS_FREE_PROVIDER_URL: 'https://example.invalid/free///',
       KEYLESS_FREE_PROVIDER_MODEL: '  mistral  ',
     });
@@ -58,6 +79,61 @@ describe('keyless free provider policy', () => {
     expect(extractKeylessFreeText('  hola\r\nmundo  ')).toBe('hola\nmundo');
     expect(extractKeylessFreeText('   ')).toBeNull();
     expect(extractKeylessFreeText('abcdef', 3)).toBe('abc');
+  });
+
+  it("accepts an optional free-tier key but never exposes it in the public catalog", () => {
+    const env = {
+      ISABELLA_KEYLESS_FREE_PROVIDER: "pollinations",
+      KEYLESS_FREE_PROVIDER_KEY: "  pol_free_secret  ",
+    };
+    const config = resolveKeylessFreeProvider(env);
+    expect(config?.authorization).toBe("Bearer pol_free_secret");
+    expect(config?.endpoint).toBe("https://text.pollinations.ai");
+    const catalog = describeModelRuntime(env);
+    expect(catalog.models.some((model) => model.id === "keyless-pollinations")).toBe(true);
+    expect(JSON.stringify(catalog)).not.toContain("pol_free_secret");
+  });
+
+  it("keeps the optional llm7 free-tier key server-side only", () => {
+    const env = {
+      ISABELLA_KEYLESS_FREE_PROVIDER: "llm7",
+      LLM7_MODEL: "  minimax-m2.7  ",
+      LLM7_API_KEY: "llm7_secret_value",
+    };
+    const config = resolveKeylessFreeProvider(env);
+    expect(config?.name).toBe("llm7");
+    expect(config?.model).toBe("minimax-m2.7");
+    expect(config?.authorization).toBe("Bearer llm7_secret_value");
+    expect(JSON.stringify(describeModelRuntime(env))).not.toContain("llm7_secret_value");
+  });
+
+  it("classifies quota and auth failures as terminal for the request", () => {
+    expect(classifyKeylessFreeHttpFailure(402)).toEqual({
+      kind: "quota",
+      retryable: false,
+      retryAfterMs: null,
+    });
+    expect(classifyKeylessFreeHttpFailure(429, "7")).toEqual({
+      kind: "quota",
+      retryable: false,
+      retryAfterMs: 7_000,
+    });
+    expect(classifyKeylessFreeHttpFailure(401).kind).toBe("auth");
+    expect(classifyKeylessFreeHttpFailure(403).retryable).toBe(false);
+    expect(classifyKeylessFreeHttpFailure(400).retryable).toBe(false);
+    expect(classifyKeylessFreeHttpFailure(503).retryable).toBe(true);
+    expect(classifyKeylessFreeHttpFailure(408).retryable).toBe(true);
+  });
+
+  it("parses Retry-After as delta-seconds or an HTTP-date and rejects garbage", () => {
+    expect(parseRetryAfterMs("30")).toBe(30_000);
+    expect(parseRetryAfterMs("0")).toBe(0);
+    expect(parseRetryAfterMs("nope")).toBeNull();
+    expect(parseRetryAfterMs("")).toBeNull();
+    expect(parseRetryAfterMs(null)).toBeNull();
+    const now = Date.parse("2026-10-26T00:00:00Z");
+    expect(parseRetryAfterMs("Sun, 26 Oct 2026 00:00:12 GMT", now)).toBe(12_000);
+    expect(parseRetryAfterMs("Sun, 26 Oct 2026 00:00:00 GMT", now)).toBe(0);
   });
 });
 

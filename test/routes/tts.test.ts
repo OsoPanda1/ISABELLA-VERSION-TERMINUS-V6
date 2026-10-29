@@ -188,6 +188,19 @@ describe('TTS HTTP surface', () => {
     ).toBe(401);
   });
 
+  it('uses the configured server backend even when the router ranks browser speech first', async () => {
+    // CONVERSACION ranks browser-speech above server-tts; a configured backend must still speak.
+    const r = await call(harness(), 'POST /api/v1/tts/synthesize', {
+      text: 'Hola, esta es la voz canónica del nodo.',
+    });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({
+      status: 'audio',
+      backend: 'server-tts',
+      audio: { mimeType: 'audio/wav' },
+    });
+  });
+
   it('streams sentence plans over SSE without claiming audio or authority', async () => {
     const result = await callSse(harness(), 'POST ' + TTS_STREAM_PATH, {
       text: 'Primera oración completa. Segunda oración completa. Tercera oración completa.',

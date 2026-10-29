@@ -109,13 +109,14 @@ export function describeModelRuntime(
   }
   if (keyless) {
     models.push({
-      id: 'keyless-pollinations',
+      id: `keyless-${keyless.name}`,
       provider: keyless.name,
       family: keyless.model,
       transport: 'keyless',
       capabilities: ['text'],
       readiness: 'ready',
-      disclosure: 'Keyless external inference is operator-enabled; prompts may leave the node.',
+      disclosure:
+        'External free inference is operator-enabled; prompts may leave the node and the free tier applies its own per-IP limits.',
     });
   }
 

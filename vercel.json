@@ -3,7 +3,7 @@
   "installCommand": "corepack pnpm install --frozen-lockfile",
   "buildCommand": "corepack pnpm run build:dist",
   "env": {
-    "ISABELLA_KEYLESS_FREE_PROVIDER": "pollinations",
+    "ISABELLA_KEYLESS_FREE_PROVIDER": "llm7,pollinations",
     "KEYLESS_FREE_PROVIDER_TIMEOUT_MS": "30000",
     "CHAT_CHAIN_BUDGET_MS": "45000",
     "ISABELLA_KEYLESS_TTS": "google",

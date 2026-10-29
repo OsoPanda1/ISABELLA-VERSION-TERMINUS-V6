@@ -14,12 +14,17 @@ import {
   boundedMilliseconds,
   buildKeylessFreeMessages,
   buildOpenAICompatibleCandidates,
+  classifyKeylessFreeHttpFailure,
   extractAssistantText,
   extractKeylessFreeText,
   isOpenRouterModelAllowed,
   resolveKeylessFreeProvider,
+  resolveKeylessFreeProviders,
   resolveLocalOllamaProvider,
   resolveLocalCompatibleProvider,
+  type KeylessFreeFailure,
+  type KeylessFreeMessage,
+  type KeylessFreeProviderConfig,
 } from './inference/provider-policy';
 import {
   MULTIMODAL_CONTRACT_VERSION,
@@ -189,9 +194,9 @@ import { LatinoGenesis, SEED_LATAM, type IngestRecord } from './linguistics';
 
 const app: Application = express();
 const latinoGenesis = new LatinoGenesis(SEED_LATAM);
-// La inferencia gratuita sin clave reenvía el prompt y parte del historial a un proveedor externo.
+// La inferencia gratuita sin clave reenvía el prompt y parte del historial a proveedores externos.
 // Por privacidad, sólo se activa con opt-in explícito del operador:
-// ISABELLA_KEYLESS_FREE_PROVIDER=pollinations (o on/true/1).
+// ISABELLA_KEYLESS_FREE_PROVIDER=llm7,pollinations (o on/true/1 para el orden por defecto).
 app.disable('x-powered-by');
 // Detrás de un balanceador, req.ip sería la IP del proxy y todos los clientes compartirían cubeta de rate limit.
 // TRUST_PROXY=<saltos> (entero 1..10) habilita X-Forwarded-For; sin valor válido NO se confía en él.
@@ -513,7 +518,55 @@ let deepSeekCooldownUntil = 0;
 let openRouterCooldownUntil = 0;
 let huggingFaceCooldownUntil = 0;
 let compatibleProviderCooldownUntil = 0;
-let keylessFreeCooldownUntil = 0;
+interface KeylessFreeOutcome {
+  status: number | null;
+  kind: 'quota' | 'auth' | 'request' | 'server' | 'network' | null;
+  at: number | null;
+  retryAfterMs: number | null;
+}
+const keylessFreeCooldownUntil = new Map<string, number>();
+const keylessFreeOutcomes = new Map<string, KeylessFreeOutcome>();
+
+/**
+ * Runtime diagnostics for the free providers. Configuration-only readiness is
+ * separate: this reports observed outcomes on THIS process and never includes
+ * any free-tier key.
+ */
+function keylessFreeDiagnostics(): Record<string, unknown> {
+  const now = Date.now();
+  const providers = resolveKeylessFreeProviders(process.env).map((config) => {
+    const outcome = keylessFreeOutcomes.get(config.name);
+    return {
+      name: config.name,
+      model: config.model,
+      keyedFreeTier: Boolean(config.authorization),
+      cooldownRemainingMs: Math.max(0, (keylessFreeCooldownUntil.get(config.name) ?? 0) - now),
+      lastStatus: outcome?.status ?? null,
+      lastFailureKind: outcome?.kind ?? null,
+      lastFailureAt: outcome?.at ? new Date(outcome.at).toISOString() : null,
+      retryAfterMs: outcome?.retryAfterMs ?? null,
+    };
+  });
+  const cooling = providers.filter((provider) => provider.cooldownRemainingMs > 0);
+  const allCooling = providers.length > 0 && cooling.length === providers.length;
+  const latest = providers
+    .filter((provider) => provider.lastFailureAt)
+    .sort((left, right) =>
+      String(right.lastFailureAt).localeCompare(String(left.lastFailureAt))
+    )[0];
+  return {
+    configured: providers.length > 0,
+    keyedFreeTier: providers.some((provider) => provider.keyedFreeTier),
+    // Zero while at least one provider can still be tried.
+    cooldownRemainingMs: allCooling
+      ? Math.min(...cooling.map((provider) => provider.cooldownRemainingMs))
+      : 0,
+    lastStatus: latest?.lastStatus ?? null,
+    lastFailureKind: latest?.lastFailureKind ?? null,
+    retryAfterMs: latest?.retryAfterMs ?? null,
+    providers,
+  };
+}
 let localOllamaCooldownUntil = 0;
 let localCompatibleCooldownUntil = 0;
 
@@ -642,6 +695,11 @@ async function generateCompatibleProviderNarrative(
  * Produces REAL generative text without any credential, so a node can converse
  * before a keyed provider is configured. It is disclosed as an external engine
  * ("keyless-free") and never presented as sovereign inference.
+ *
+ * Free tiers answer a bounded number of replies per IP and report exhaustion
+ * with 402/429. Those are terminal for the request: retrying the same endpoint
+ * (even the plain-text contract) only burns the same window, so the adapter
+ * records the reason, sets a quota cooldown and lets the chain continue.
  */
 async function generateKeylessFreeNarrative(
   systemPrompt: string,
@@ -650,52 +708,158 @@ async function generateKeylessFreeNarrative(
   budget?: DeadlineBudget
 ): Promise<string | null> {
   if (budget?.expired()) return null;
-  const config = resolveKeylessFreeProvider(process.env);
-  if (!config || Date.now() < keylessFreeCooldownUntil) return null;
+  const providers = resolveKeylessFreeProviders(process.env);
+  if (providers.length === 0) return null;
   const messages = buildKeylessFreeMessages(systemPrompt, input, history);
-  try {
-    // Preferred contract: OpenAI-compatible JSON. It is faster and exposes the
-    // assistant message without the provider's reasoning trace.
-    const openAiUrl = config.endpoint.endsWith('/openai')
-      ? config.endpoint
-      : `${config.endpoint}/openai`;
-    try {
-      const jsonResponse = await fetch(openAiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ model: config.model, messages, stream: false }),
-        signal: budget
-          ? budget.signal(keylessFreeTimeoutMs)
-          : AbortSignal.timeout(keylessFreeTimeoutMs),
-      });
-      if (jsonResponse.ok) {
-        const text = extractAssistantText((await jsonResponse.json()) as unknown);
-        if (text) return text;
-      }
-    } catch {
-      /* fall through to the plain-text contract */
-    }
+  for (const provider of providers) {
     if (budget?.expired()) return null;
+    if (Date.now() < (keylessFreeCooldownUntil.get(provider.name) ?? 0)) continue;
+    const text = await generateFromKeylessProvider(provider, messages, budget);
+    if (text) return text;
+    if (budget?.cancelled()) return null;
+  }
+  return null;
+}
+
+/** Per-provider attempt. Records the outcome so diagnostics stay truthful. */
+async function generateFromKeylessProvider(
+  config: KeylessFreeProviderConfig,
+  messages: readonly KeylessFreeMessage[],
+  budget?: DeadlineBudget
+): Promise<string | null> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    accept: 'application/json',
+    ...(config.authorization ? { authorization: config.authorization } : {}),
+  };
+  const nextSignal = (): AbortSignal =>
+    budget ? budget.signal(keylessFreeTimeoutMs) : AbortSignal.timeout(keylessFreeTimeoutMs);
+  const noteSuccess = (): void => {
+    keylessFreeCooldownUntil.delete(config.name);
+    keylessFreeOutcomes.set(config.name, {
+      status: 200,
+      kind: null,
+      at: Date.now(),
+      retryAfterMs: null,
+    });
+  };
+  const noteFailure = (status: number, failure: KeylessFreeFailure): void => {
+    const cooldownMs =
+      failure.kind === 'quota'
+        ? Math.min(300_000, Math.max(config.quotaCooldownMs, failure.retryAfterMs ?? 0))
+        : providerCooldownMs;
+    keylessFreeCooldownUntil.set(config.name, Date.now() + cooldownMs);
+    keylessFreeOutcomes.set(config.name, {
+      status,
+      kind: failure.kind,
+      at: Date.now(),
+      retryAfterMs: failure.retryAfterMs,
+    });
+    console.warn('[Isabella] keyless free provider rejected the request', {
+      provider: config.name,
+      status,
+      kind: failure.kind,
+      retryAfterMs: failure.retryAfterMs,
+      cooldownMs,
+    });
+  };
+  if (config.protocol === 'openai') {
+    // Plain OpenAI-compatible route (LLM7). One contract, terminal errors.
+    const url = config.endpoint.endsWith('/v1/chat/completions')
+      ? config.endpoint
+      : `${config.endpoint}/v1/chat/completions`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ model: config.model, messages, stream: false }),
+        signal: nextSignal(),
+      });
+      if (response.ok) {
+        const text = extractAssistantText((await response.json()) as unknown);
+        if (text) {
+          noteSuccess();
+          return text;
+        }
+        noteFailure(response.status, { kind: 'request', retryable: false, retryAfterMs: null });
+        return null;
+      }
+      noteFailure(
+        response.status,
+        classifyKeylessFreeHttpFailure(response.status, response.headers.get('retry-after'))
+      );
+      return null;
+    } catch {
+      if (budget?.cancelled()) return null;
+      noteFailure(0, { kind: 'network', retryable: true, retryAfterMs: null });
+      return null;
+    }
+  }
+  // Pollinations exposes an OpenAI-style JSON contract and a plain-text one.
+  const openAiUrl = config.endpoint.endsWith('/openai')
+    ? config.endpoint
+    : `${config.endpoint}/openai`;
+  let transportFailure: KeylessFreeFailure = {
+    kind: 'network',
+    retryable: true,
+    retryAfterMs: null,
+  };
+  try {
+    const jsonResponse = await fetch(openAiUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model: config.model, messages, stream: false }),
+      signal: nextSignal(),
+    });
+    if (jsonResponse.ok) {
+      const text = extractAssistantText((await jsonResponse.json()) as unknown);
+      if (text) {
+        noteSuccess();
+        return text;
+      }
+      // An empty JSON body is a provider-side answer, not a transport failure.
+      // The plain-text contract shares the same ledger, so do not duplicate it.
+      noteFailure(jsonResponse.status, { kind: 'request', retryable: false, retryAfterMs: null });
+      return null;
+    }
+    const failure = classifyKeylessFreeHttpFailure(
+      jsonResponse.status,
+      jsonResponse.headers.get('retry-after')
+    );
+    if (!failure.retryable) {
+      noteFailure(jsonResponse.status, failure);
+      return null;
+    }
+    transportFailure = failure;
+  } catch {
+    if (budget?.cancelled()) return null;
+    transportFailure = { kind: 'network', retryable: true, retryAfterMs: null };
+  }
+  if (budget?.expired()) return null;
+  try {
     const response = await fetch(`${config.endpoint}/`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', accept: 'text/plain' },
+      headers: { ...headers, accept: 'text/plain' },
       body: JSON.stringify({ model: config.model, messages }),
-      signal: budget
-        ? budget.signal(keylessFreeTimeoutMs)
-        : AbortSignal.timeout(keylessFreeTimeoutMs),
+      signal: nextSignal(),
     });
-    if (!response.ok) throw new Error(`${config.name} HTTP ${response.status}`);
+    if (!response.ok) {
+      noteFailure(
+        response.status,
+        classifyKeylessFreeHttpFailure(response.status, response.headers.get('retry-after'))
+      );
+      return null;
+    }
     const text = extractKeylessFreeText(await response.text());
-    if (!text) throw new Error(`${config.name} returned empty content`);
+    if (!text) {
+      noteFailure(response.status, { kind: 'request', retryable: false, retryAfterMs: null });
+      return null;
+    }
+    noteSuccess();
     return text;
-  } catch (error) {
+  } catch {
     if (budget?.cancelled()) return null;
-    keylessFreeCooldownUntil = Date.now() + providerCooldownMs;
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn('[Isabella] keyless free provider unavailable; cooldown activated', {
-      provider: config.name,
-      message: message.slice(0, 180),
-    });
+    noteFailure(0, transportFailure);
     return null;
   }
 }
@@ -2245,6 +2409,16 @@ app.post('/api/v1/cognition/route', async (req, res) => {
                       ),
                   },
                   {
+                    label: 'ollama-local',
+                    run: () =>
+                      generateLocalOllamaNarrative(
+                        systemPrompt,
+                        input,
+                        providerHistory,
+                        chainBudget
+                      ),
+                  },
+                  {
                     label: 'gateway',
                     run: () =>
                       generateGatewayNarrative(systemPrompt, input, providerHistory, chainBudget),
@@ -2482,6 +2656,7 @@ app.post('/api/v1/cognition/route', async (req, res) => {
         ? omegaRuntime.publicSummary(omegaPrepared, omegaFinalized)
         : null,
       ...describeProviderReadiness(process.env),
+      providerDiagnostics: { keylessFree: keylessFreeDiagnostics() },
       conversationContextTurns: history.length,
       // Token estimate and exact compression strategy applied to provider history.
       // Summarized turns are literal fragments, never instructions or permissions.
@@ -2522,6 +2697,7 @@ app.post('/api/v1/cognition/route', async (req, res) => {
         degraded: true,
         providerError: 'OPTIONAL_PROVIDER_UNAVAILABLE',
         ...describeProviderReadiness(process.env),
+        providerDiagnostics: { keylessFree: keylessFreeDiagnostics() },
       });
     }
   }
@@ -2742,6 +2918,11 @@ app.post('/api/v1/cognition/stream', async (req, res) => {
                   generateKeylessFreeNarrative(systemPrompt, input, providerHistory, chainBudget),
               },
               {
+                label: 'ollama-local',
+                run: () =>
+                  generateLocalOllamaNarrative(systemPrompt, input, providerHistory, chainBudget),
+              },
+              {
                 label: 'gateway',
                 run: () =>
                   generateGatewayNarrative(systemPrompt, input, providerHistory, chainBudget),
@@ -2828,6 +3009,7 @@ app.post('/api/v1/cognition/stream', async (req, res) => {
       latencyMs: Math.round(elapsedMs * 10) / 10,
       contextBudget: contextBudget.stats,
       providerReadiness: describeProviderReadiness(process.env),
+      providerDiagnostics: { keylessFree: keylessFreeDiagnostics() },
       disclaimers: [
         'Entrega progresiva de texto ya generado; no es streaming nativo del proveedor.',
         'Un fragmento no es evidencia ni una autorización.',
@@ -5317,6 +5499,10 @@ registerFederationRoutes({
   rateLimiter: federationLimiter,
   authorizeAdmin: (req, res) => authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN'),
   readRawBody: (req) => federationRawBodies.get(req),
+  describeProviderRuntime: () => ({
+    ...describeProviderReadiness(process.env),
+    keylessFree: keylessFreeDiagnostics(),
+  }),
   recordEvidence: (event) => {
     bookPiLedger.append({
       id: `evt-${randomUUID()}`,
