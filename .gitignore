@@ -19,3 +19,7 @@ firebase-applet-config.json
 
 # Generated Netlify publish media
 netlify/public/assets/
+
+# Perfiles de Chrome creados por las verificaciones headless (CDP): son basura de
+# entorno, no entradas versionables.
+.chrome-headless-profile*/

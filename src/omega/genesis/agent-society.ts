@@ -66,7 +66,12 @@ export class MicroAgentSociety {
   constructor(seedRoster = true) {
     if (seedRoster) {
       for (const entry of DEFAULT_ROSTER) {
-        this.register({ did: didForRole(entry.role), role: entry.role, cluster: entry.cluster, trustScore: MIN_TRUST });
+        this.register({
+          did: didForRole(entry.role),
+          role: entry.role,
+          cluster: entry.cluster,
+          trustScore: MIN_TRUST,
+        });
       }
     }
   }
@@ -78,7 +83,10 @@ export class MicroAgentSociety {
     if (!(agent.trustScore >= MIN_TRUST && agent.trustScore <= MAX_TRUST)) {
       throw new Error('AGENT_TRUST_OUT_OF_RANGE');
     }
-    this.agents.set(agent.did, Object.freeze({ ...agent, trustScore: clampUnit(agent.trustScore) }));
+    this.agents.set(
+      agent.did,
+      Object.freeze({ ...agent, trustScore: clampUnit(agent.trustScore) })
+    );
   }
 
   size(): number {
@@ -105,7 +113,9 @@ export class MicroAgentSociety {
    */
   selectByTrust(cluster?: AgentCluster, topK = 3): SocietySelection {
     const pool = cluster ? this.list().filter((a) => a.cluster === cluster) : this.list();
-    const ordered = pool.slice().sort((a, b) => b.trustScore - a.trustScore || a.did.localeCompare(b.did));
+    const ordered = pool
+      .slice()
+      .sort((a, b) => b.trustScore - a.trustScore || a.did.localeCompare(b.did));
     const chosen = ordered.slice(0, Math.max(0, topK));
     const total = chosen.reduce((acc, a) => acc + a.trustScore, 0);
     const weights = chosen.map((a) => (total === 0 ? 0 : a.trustScore / total));

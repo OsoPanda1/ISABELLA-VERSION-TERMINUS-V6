@@ -28,7 +28,8 @@ export interface ProviderPayoutRef {
 export type ReconciliationStatus = 'reconciled' | 'divergent';
 
 export interface ReconciliationDivergence {
-  readonly kind: 'missing_in_provider' | 'missing_in_ledger' | 'amount_mismatch' | 'currency_mismatch';
+  readonly kind:
+    'missing_in_provider' | 'missing_in_ledger' | 'amount_mismatch' | 'currency_mismatch';
   readonly idempotencyKey: string;
   readonly ledgerAmountMinor: string | null;
   readonly providerAmountMinor: string | null;

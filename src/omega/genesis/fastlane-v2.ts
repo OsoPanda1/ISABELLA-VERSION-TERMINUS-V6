@@ -4,7 +4,11 @@
 // similitud semántica por huella de tokens (Jaccard), y (3) reglas deterministas aprendidas.
 // NO es un modelo neuronal ni un embedding neural: la "similitud semántica" es un índice
 // léxico determinista y reproducible. No abre red, no autoriza, no ejecuta efectos.
-import { detectLocalIntent, normalizeLocalInput, type LocalIntent } from '../../inference/local-fast-lane';
+import {
+  detectLocalIntent,
+  normalizeLocalInput,
+  type LocalIntent,
+} from '../../inference/local-fast-lane';
 
 export type FastLaneSource = 'regex' | 'semantic_cache' | 'learned_rule';
 
@@ -24,9 +28,41 @@ export interface FastLaneResult {
 }
 
 const STOPWORDS = new Set([
-  'el', 'la', 'los', 'las', 'un', 'una', 'de', 'del', 'que', 'como', 'me', 'mi', 'tu',
-  'con', 'por', 'para', 'es', 'son', 'se', 'y', 'o', 'a', 'en', 'the', 'a', 'an', 'of',
-  'to', 'is', 'are', 'and', 'or', 'for', 'on', 'in',
+  'el',
+  'la',
+  'los',
+  'las',
+  'un',
+  'una',
+  'de',
+  'del',
+  'que',
+  'como',
+  'me',
+  'mi',
+  'tu',
+  'con',
+  'por',
+  'para',
+  'es',
+  'son',
+  'se',
+  'y',
+  'o',
+  'a',
+  'en',
+  'the',
+  'a',
+  'an',
+  'of',
+  'to',
+  'is',
+  'are',
+  'and',
+  'or',
+  'for',
+  'on',
+  'in',
 ]);
 
 /** Tokeniza normalizando acentos/case y removiendo stopwords y no-alphanumericos. */
@@ -67,7 +103,8 @@ export class AdaptiveSemanticFastlane {
   private readonly similarityThreshold: number;
   private readonly maxCacheEntries: number;
   private readonly cache = new Map<string, CacheEntry>();
-  private readonly learnedRules: Array<{ readonly pattern: RegExp; readonly intent: LocalIntent }> = [];
+  private readonly learnedRules: Array<{ readonly pattern: RegExp; readonly intent: LocalIntent }> =
+    [];
 
   constructor(options: FastlaneOptions = {}) {
     this.similarityThreshold = options.similarityThreshold ?? 0.97;

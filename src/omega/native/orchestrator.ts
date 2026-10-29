@@ -10,7 +10,13 @@
 //  - NO firma post-cuántico: la capa QSF queda BLOCKED_ENVIRONMENT (sin proveedor PQC/HSM).
 //  - El hash de evidencia es SHA-256 (el de la cadena BookPI existente), no SHA3-512; la
 //    divergencia con el documento está archivada en contracts.ts.
-import { buildMethodId, type GovernanceTier, type RiskTier, type TinaType, type YunFederation } from '../../authority/method-id';
+import {
+  buildMethodId,
+  type GovernanceTier,
+  type RiskTier,
+  type TinaType,
+  type YunFederation,
+} from '../../authority/method-id';
 import type { BookPiEvent, BookPiLedgerPort } from '../../bookpi/ledger';
 import { callGate, type CapabilityDescriptor, type CapabilityGate } from '../../crown/capability';
 import type { ApprovalRef } from '../../identity/approval';
@@ -27,9 +33,17 @@ import {
 import { computeLegitimacy, type LegitimacyEvaluation } from './legitimacy';
 
 const DOMAIN_BINDING: Readonly<
-  Record<MacroDomain, { tina: TinaType; yun: YunFederation; module: string; governance: GovernanceTier }>
+  Record<
+    MacroDomain,
+    { tina: TinaType; yun: YunFederation; module: string; governance: GovernanceTier }
+  >
 > = Object.freeze({
-  CORE: { tina: 'A', yun: 'COLLECTIVE_INTELLIGENCE', module: 'MOE_ROUTER', governance: 'OPERATIONAL' },
+  CORE: {
+    tina: 'A',
+    yun: 'COLLECTIVE_INTELLIGENCE',
+    module: 'MOE_ROUTER',
+    governance: 'OPERATIONAL',
+  },
   GOVERNANCE: { tina: 'I', yun: 'IDENTITY', module: 'CROWN', governance: 'CONSTITUTIONAL' },
   KNOWLEDGE: { tina: 'N', yun: 'PATRIMONY', module: 'HDCVSA_MEMORY', governance: 'OPERATIONAL' },
   ECONOMY: { tina: 'I', yun: 'ECONOMY', module: 'BOOKPI', governance: 'INSTITUTIONAL' },
@@ -131,7 +145,11 @@ export interface NativeConvergenceResult {
   readonly status: 'ALLOW' | 'DENY';
   readonly legitimacy: LegitimacyEvaluation;
   readonly hops: readonly NativeHop[];
-  readonly evidence: { readonly chainHead: string | null; readonly events: number; readonly valid: boolean };
+  readonly evidence: {
+    readonly chainHead: string | null;
+    readonly events: number;
+    readonly valid: boolean;
+  };
   readonly executionPerformed: boolean;
   readonly externalSideEffects: 'NONE';
   readonly governanceReason: string;
@@ -181,7 +199,15 @@ export function runNativeConvergence(
     const risk = DOMAIN_RISK[domain];
     const methodId = domainMethodId(domain, fn, risk);
     const event = seal(`native.${domain.toLowerCase()}`, methodId, risk, status);
-    hops.push({ domain, contract, methodId, actorDid: req.actorDid, evidenceId: event.hash, status, detail });
+    hops.push({
+      domain,
+      contract,
+      methodId,
+      actorDid: req.actorDid,
+      evidenceId: event.hash,
+      status,
+      detail,
+    });
   };
 
   recordHop('GOVERNANCE', 'SecureEnvelope', 'native_governance', 'OBSERVED', {
@@ -201,7 +227,8 @@ export function runNativeConvergence(
   });
 
   // Ω-CORE — SIGMA produce la intención semántica/emocional (SigmaToGenesisContract).
-  const dominantEmotion = Object.entries(req.intent.emotionVector).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'neutral';
+  const dominantEmotion =
+    Object.entries(req.intent.emotionVector).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'neutral';
   recordHop('CORE', 'SigmaToGenesis', 'native_cognition', 'OBSERVED', {
     semantic_intent: req.intent.semanticIntent.slice(0, 120),
     dominant_emotion: dominantEmotion,
@@ -286,7 +313,9 @@ export function runNativeConvergence(
     decidedAt: clock(),
     status,
     legitimacy,
-    hops: Object.freeze(hops.map((h) => Object.freeze({ ...h, detail: Object.freeze({ ...h.detail }) }))),
+    hops: Object.freeze(
+      hops.map((h) => Object.freeze({ ...h, detail: Object.freeze({ ...h.detail }) }))
+    ),
     evidence: Object.freeze({
       chainHead: finalVerify.chainHead,
       events: finalVerify.blocksValidated,

@@ -68,7 +68,11 @@ export function buildConstitutionalAssertions(
     { stage: 'constitution', territory: a.territory },
     { stage: 'policy' },
     { stage: 'mandate', identity: a.actorDid, authority: a.mandate },
-    { stage: 'capability', explanation: a.explanation, humanOverrideAvailable: a.humanOverrideAvailable },
+    {
+      stage: 'capability',
+      explanation: a.explanation,
+      humanOverrideAvailable: a.humanOverrideAvailable,
+    },
     {
       stage: 'execution',
       evidence: evidenceRefs,

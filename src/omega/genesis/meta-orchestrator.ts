@@ -28,12 +28,54 @@ export type GoalArchetype =
 
 /** Asignaciones base por arquetipo (Documento §V: 40/20/15/10/10/5 para política científica). */
 const ARCHETYPE_BASE: Readonly<Record<GoalArchetype, CognitiveBudget>> = Object.freeze({
-  scientific_policy: { reasoning: 40, evidence: 20, redaction: 15, audit: 10, verification: 10, memory: 5 },
-  legal_review: { reasoning: 25, evidence: 20, redaction: 15, audit: 20, verification: 15, memory: 5 },
-  creative_writing: { reasoning: 20, evidence: 10, redaction: 45, audit: 5, verification: 10, memory: 10 },
-  data_analysis: { reasoning: 35, evidence: 30, redaction: 10, audit: 5, verification: 15, memory: 5 },
-  operational_status: { reasoning: 15, evidence: 15, redaction: 10, audit: 10, verification: 10, memory: 40 },
-  general_inquiry: { reasoning: 30, evidence: 25, redaction: 15, audit: 5, verification: 15, memory: 10 },
+  scientific_policy: {
+    reasoning: 40,
+    evidence: 20,
+    redaction: 15,
+    audit: 10,
+    verification: 10,
+    memory: 5,
+  },
+  legal_review: {
+    reasoning: 25,
+    evidence: 20,
+    redaction: 15,
+    audit: 20,
+    verification: 15,
+    memory: 5,
+  },
+  creative_writing: {
+    reasoning: 20,
+    evidence: 10,
+    redaction: 45,
+    audit: 5,
+    verification: 10,
+    memory: 10,
+  },
+  data_analysis: {
+    reasoning: 35,
+    evidence: 30,
+    redaction: 10,
+    audit: 5,
+    verification: 15,
+    memory: 5,
+  },
+  operational_status: {
+    reasoning: 15,
+    evidence: 15,
+    redaction: 10,
+    audit: 10,
+    verification: 10,
+    memory: 40,
+  },
+  general_inquiry: {
+    reasoning: 30,
+    evidence: 25,
+    redaction: 15,
+    audit: 5,
+    verification: 15,
+    memory: 10,
+  },
 });
 
 export interface OrchestratorConstraints {
@@ -55,14 +97,15 @@ export interface OrchestrationPlan {
   readonly rationale: string;
 }
 
-const SPECIALIST_BY_EMPHASIS: Readonly<Record<CognitiveDimension, readonly string[]>> = Object.freeze({
-  reasoning: ['planner', 'reasoner'],
-  evidence: ['evidence', 'citation'],
-  redaction: ['writer'],
-  audit: ['compliance', 'auditor'],
-  verification: ['validator', 'verifier'],
-  memory: ['recall', 'archivist'],
-});
+const SPECIALIST_BY_EMPHASIS: Readonly<Record<CognitiveDimension, readonly string[]>> =
+  Object.freeze({
+    reasoning: ['planner', 'reasoner'],
+    evidence: ['evidence', 'citation'],
+    redaction: ['writer'],
+    audit: ['compliance', 'auditor'],
+    verification: ['validator', 'verifier'],
+    memory: ['recall', 'archivist'],
+  });
 
 /** Reparte `weights` como enteros que suman `total` (100) con el método del resto más grande. */
 export function normalizeToHundred(weights: readonly number[]): number[] {
@@ -132,7 +175,8 @@ export function planCognitiveBudget(
     maxLayer,
     depth,
     estimatedEnergyUnits: energyUnits,
-    rationale: `Presupuesto gobernado para '${goal}' con énfasis en ${topDims.join(', ')}; ` +
+    rationale:
+      `Presupuesto gobernado para '${goal}' con énfasis en ${topDims.join(', ')}; ` +
       `pila hasta ${maxLayer} (profundidad ${depth}); highStakes=${constraints.highStakes === true}.`,
   });
 }

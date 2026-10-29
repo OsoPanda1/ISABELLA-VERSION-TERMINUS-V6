@@ -6,7 +6,13 @@
 // evaluada ANTES de conceder cualquier contexto. No autoriza por sí misma acciones gobernadas:
 // la autoridad ejecutiva la decide CROWN + Constitución. Confianza nunca implícita.
 
-export const ZERO_TRUST_FACTORS = ['identity', 'authority', 'context', 'policy', 'evidence'] as const;
+export const ZERO_TRUST_FACTORS = [
+  'identity',
+  'authority',
+  'context',
+  'policy',
+  'evidence',
+] as const;
 export type ZeroTrustFactor = (typeof ZERO_TRUST_FACTORS)[number];
 
 export interface ZeroTrustSignals {

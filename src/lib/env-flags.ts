@@ -9,11 +9,11 @@
  */
 export type EnvLike = Readonly<Record<string, string | undefined>>;
 
-const TRUTHY = new Set(["1", "true", "yes", "on"]);
-const FALSY = new Set(["", "0", "false", "no", "off"]);
+const TRUTHY = new Set(['1', 'true', 'yes', 'on']);
+const FALSY = new Set(['', '0', 'false', 'no', 'off']);
 
 export function envFlag(env: EnvLike, name: string): boolean {
-  const raw = (env[name] ?? "").trim().toLowerCase();
+  const raw = (env[name] ?? '').trim().toLowerCase();
   if (TRUTHY.has(raw)) return true;
   if (FALSY.has(raw)) return false;
   // Any other explicit value (for example a deployment id) means "set".

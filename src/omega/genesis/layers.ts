@@ -142,7 +142,10 @@ export function layerIndex(layer: GenesisLayer): number {
  * una propuesta es gobernable. `resolveLayerPath` devuelve la secuencia canónica y,
  * opcionalmente, el subconjunto entre dos capas, siempre en orden ascendente.
  */
-export function resolveLayerPath(from: GenesisLayer = 'L0', to: GenesisLayer = 'L11'): GenesisLayer[] {
+export function resolveLayerPath(
+  from: GenesisLayer = 'L0',
+  to: GenesisLayer = 'L11'
+): GenesisLayer[] {
   const a = layerIndex(from);
   const b = layerIndex(to);
   if (a > b) {

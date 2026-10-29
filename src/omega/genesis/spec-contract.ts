@@ -35,9 +35,10 @@ export function pathFor(slug: GenesisSkillSlug): string {
 
 function channelFor(slug: GenesisSkillSlug): SkillChannel | null {
   const needle = `.${slug}.`;
-  return (SKILL_CHANNELS as readonly string[]).find((c) => c.includes(needle)) as
-    | SkillChannel
-    | undefined ?? null;
+  return (
+    ((SKILL_CHANNELS as readonly string[]).find((c) => c.includes(needle)) as
+      SkillChannel | undefined) ?? null
+  );
 }
 
 /**
@@ -98,7 +99,10 @@ export function checkGenesisContract(): ContractCheck {
     if (seenOps.has(spec.operationId)) issues.push(`DUPLICATE_OPERATION: ${spec.operationId}`);
     seenOps.add(spec.operationId);
   }
-  return Object.freeze({ ok: issues.length === 0 && specs.length === GENESIS_SKILL_SLUGS.length, issues });
+  return Object.freeze({
+    ok: issues.length === 0 && specs.length === GENESIS_SKILL_SLUGS.length,
+    issues,
+  });
 }
 
 /**

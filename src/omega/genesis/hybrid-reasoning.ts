@@ -93,12 +93,24 @@ export function runHybridReasoning(request: ReasoningRequest): ReasoningVerdict 
   if (request.mesh && request.meshSeed) {
     try {
       const reached = request.mesh.traverse(request.meshSeed, 2).reached.length;
-      trace.push({ stage: 'graph_traversal', status: 'PASSED', detail: `${reached} nodo(s) alcanzado(s)` });
+      trace.push({
+        stage: 'graph_traversal',
+        status: 'PASSED',
+        detail: `${reached} nodo(s) alcanzado(s)`,
+      });
     } catch {
-      trace.push({ stage: 'graph_traversal', status: 'FAILED', detail: 'semilla de grafo desconocida' });
+      trace.push({
+        stage: 'graph_traversal',
+        status: 'FAILED',
+        detail: 'semilla de grafo desconocida',
+      });
     }
   } else {
-    trace.push({ stage: 'graph_traversal', status: 'SKIPPED', detail: 'sin Knowledge Mesh en la solicitud' });
+    trace.push({
+      stage: 'graph_traversal',
+      status: 'SKIPPED',
+      detail: 'sin Knowledge Mesh en la solicitud',
+    });
   }
 
   // 4. Verificación simbólica: consistencia = ningún claim corrobora otro contradictorio.
@@ -108,7 +120,10 @@ export function runHybridReasoning(request: ReasoningRequest): ReasoningVerdict 
   let contradictions = 0;
   for (const claim of corroborated) {
     const negated = /^\s*(no|not)\b/i.test(claim.text);
-    const key = `${negated ? '!' : ''}${claim.text.replace(/^\s*(no|not)\s+/i, '').toLowerCase().trim()}`;
+    const key = `${negated ? '!' : ''}${claim.text
+      .replace(/^\s*(no|not)\s+/i, '')
+      .toLowerCase()
+      .trim()}`;
     if (texts.has(key)) contradictions += 1;
     texts.add(key);
   }
@@ -130,7 +145,9 @@ export function runHybridReasoning(request: ReasoningRequest): ReasoningVerdict 
   trace.push({
     stage: 'synthesis',
     status: canSynthesize ? 'PASSED' : 'FAILED',
-    detail: canSynthesize ? 'agregación determinista producida' : 'síntesis bloqueada por evidencia insuficiente',
+    detail: canSynthesize
+      ? 'agregación determinista producida'
+      : 'síntesis bloqueada por evidencia insuficiente',
   });
 
   // 6. Auditoría de cumplimiento: exige una referencia de política/mandato.

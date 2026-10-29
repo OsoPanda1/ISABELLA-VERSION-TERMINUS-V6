@@ -18,12 +18,54 @@ export interface FemLevelInfo {
 }
 
 export const FEM_REGISTRY: Readonly<Record<FemLevel, FemLevelInfo>> = Object.freeze({
-  1: { level: 1, name: 'Conversacional', horizon: 'minutos', canonicalBackend: 'Redis', minHorizonMs: 0, capacity: 64 },
-  2: { level: 2, name: 'Operacional', horizon: 'horas', canonicalBackend: 'PostgreSQL', minHorizonMs: 60_000, capacity: 256 },
-  3: { level: 3, name: 'Táctica', horizon: 'días', canonicalBackend: 'pgvector', minHorizonMs: 3_600_000, capacity: 512 },
-  4: { level: 4, name: 'Estratégica', horizon: 'meses', canonicalBackend: 'Neo4j', minHorizonMs: 86_400_000, capacity: 256 },
-  5: { level: 5, name: 'Institucional', horizon: 'años', canonicalBackend: 'Knowledge Graph', minHorizonMs: 2_592_000_000, capacity: 128 },
-  6: { level: 6, name: 'Canónica', horizon: 'permanente', canonicalBackend: 'BookPI (inmutable)', minHorizonMs: 31_536_000_000, capacity: 1024 },
+  1: {
+    level: 1,
+    name: 'Conversacional',
+    horizon: 'minutos',
+    canonicalBackend: 'Redis',
+    minHorizonMs: 0,
+    capacity: 64,
+  },
+  2: {
+    level: 2,
+    name: 'Operacional',
+    horizon: 'horas',
+    canonicalBackend: 'PostgreSQL',
+    minHorizonMs: 60_000,
+    capacity: 256,
+  },
+  3: {
+    level: 3,
+    name: 'Táctica',
+    horizon: 'días',
+    canonicalBackend: 'pgvector',
+    minHorizonMs: 3_600_000,
+    capacity: 512,
+  },
+  4: {
+    level: 4,
+    name: 'Estratégica',
+    horizon: 'meses',
+    canonicalBackend: 'Neo4j',
+    minHorizonMs: 86_400_000,
+    capacity: 256,
+  },
+  5: {
+    level: 5,
+    name: 'Institucional',
+    horizon: 'años',
+    canonicalBackend: 'Knowledge Graph',
+    minHorizonMs: 2_592_000_000,
+    capacity: 128,
+  },
+  6: {
+    level: 6,
+    name: 'Canónica',
+    horizon: 'permanente',
+    canonicalBackend: 'BookPI (inmutable)',
+    minHorizonMs: 31_536_000_000,
+    capacity: 1024,
+  },
 });
 
 export interface FemRecord {
@@ -78,7 +120,8 @@ export class FractalExecutiveMemory {
 
   constructor(clock: () => string = () => new Date().toISOString()) {
     this.clock = clock;
-    for (const level of FEM_LEVELS) this.backends.set(level, makeInMemoryBackend(FEM_REGISTRY[level].capacity));
+    for (const level of FEM_LEVELS)
+      this.backends.set(level, makeInMemoryBackend(FEM_REGISTRY[level].capacity));
   }
 
   /** Permite inyectar un backend real (p. ej. BookPI) para un nivel concreto. */

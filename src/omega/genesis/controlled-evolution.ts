@@ -65,20 +65,36 @@ export function runControlledEvolution(proposal: EvolutionProposal): EvolutionOu
   }
 
   const substantial = proposal.id.trim() !== '' && proposal.description.trim() !== '';
-  push('simulated', substantial ? 'PASSED' : 'BLOCKED', substantial ? 'simulación del cambio producida' : 'propuesta vacía');
+  push(
+    'simulated',
+    substantial ? 'PASSED' : 'BLOCKED',
+    substantial ? 'simulación del cambio producida' : 'propuesta vacía'
+  );
   if (!substantial) return freezeOutcome(proposal.id, false, trace, 'simulated');
 
   push('audited', 'PASSED', 'impacto y alcance auditados en simulación');
 
   const reversible = proposal.reversible === true;
-  push('validated', reversible ? 'PASSED' : 'BLOCKED', reversible ? 'validada: cambio reversible' : 'rechazada: cambio no reversible');
+  push(
+    'validated',
+    reversible ? 'PASSED' : 'BLOCKED',
+    reversible ? 'validada: cambio reversible' : 'rechazada: cambio no reversible'
+  );
   if (!reversible) return freezeOutcome(proposal.id, false, trace, 'validated');
 
   const authorized = nonEmpty(proposal.humanAuthorizer) && nonEmpty(proposal.approvalRef);
-  push('authorized', authorized ? 'PASSED' : 'BLOCKED', authorized ? 'autorización humana verificada' : 'sin autorización humana: la máquina no aplica');
+  push(
+    'authorized',
+    authorized ? 'PASSED' : 'BLOCKED',
+    authorized ? 'autorización humana verificada' : 'sin autorización humana: la máquina no aplica'
+  );
   if (!authorized) return freezeOutcome(proposal.id, false, trace, 'authorized');
 
-  push('applied', 'PASSED', 'cambio aplicado como propuesta registrada (sin efectos externos aquí)');
+  push(
+    'applied',
+    'PASSED',
+    'cambio aplicado como propuesta registrada (sin efectos externos aquí)'
+  );
   push('recorded', 'PASSED', 'evidencia del ciclo registrada');
   return freezeOutcome(proposal.id, true, trace, 'recorded');
 }

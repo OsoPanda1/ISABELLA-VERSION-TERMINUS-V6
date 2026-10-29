@@ -89,7 +89,10 @@ export class KnowledgeMesh {
         }
       }
     }
-    return Object.freeze({ reached: Object.freeze(Object.keys(distance)), paths: Object.freeze(distance) });
+    return Object.freeze({
+      reached: Object.freeze(Object.keys(distance)),
+      paths: Object.freeze(distance),
+    });
   }
 
   /**

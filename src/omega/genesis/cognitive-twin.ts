@@ -33,7 +33,14 @@ function clamp01(value: number): number {
 }
 
 function assertSignals(s: TwinSignals): void {
-  const ratios = [s.availabilityRatio, s.errorRate, s.queueDepthRatio, s.memoryUsageRatio, s.trustMean, s.policyCompliance];
+  const ratios = [
+    s.availabilityRatio,
+    s.errorRate,
+    s.queueDepthRatio,
+    s.memoryUsageRatio,
+    s.trustMean,
+    s.policyCompliance,
+  ];
   for (const r of ratios) {
     if (!Number.isFinite(r) || r < 0 || r > 1) throw new Error('TWIN_SIGNAL_OUT_OF_RANGE');
   }
@@ -67,7 +74,8 @@ export function buildCognitiveTwin(
   if (resourcePressure > 0.85) alerts.push('resource_saturation');
   if (signals.policyCompliance < 0.9) alerts.push('policy_compliance_below_threshold');
 
-  const health: TwinHealth = riskIndex >= 0.6 ? 'CRITICAL' : riskIndex >= 0.3 ? 'DEGRADED' : 'HEALTHY';
+  const health: TwinHealth =
+    riskIndex >= 0.6 ? 'CRITICAL' : riskIndex >= 0.3 ? 'DEGRADED' : 'HEALTHY';
   const observedAt = clock();
   const fingerprint = sha256({ ...signals, observedAt });
 

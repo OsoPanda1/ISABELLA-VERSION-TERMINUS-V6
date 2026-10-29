@@ -10,19 +10,26 @@
 // capacidad computacional, NO producción verificada.
 import { AdaptiveSemanticFastlane } from './fastlane-v2';
 import { evaluateZeroTrust, type ZeroTrustSignals, type ZeroTrustDecision } from './zero-trust';
-import { planCognitiveBudget, type GoalArchetype, type OrchestrationPlan } from './meta-orchestrator';
+import {
+  planCognitiveBudget,
+  type GoalArchetype,
+  type OrchestrationPlan,
+} from './meta-orchestrator';
 import { MicroAgentSociety, type SocietySelection } from './agent-society';
 import { runHybridReasoning, type ReasoningClaim, type ReasoningVerdict } from './hybrid-reasoning';
 import { FractalExecutiveMemory, type FemLevel } from './fem';
-import { CognitiveObservability, type TurnObservation, type CognitiveMetrics } from './observability';
+import {
+  CognitiveObservability,
+  type TurnObservation,
+  type CognitiveMetrics,
+} from './observability';
 import { buildCognitiveTwin, type TwinSnapshot, type TwinSignals } from './cognitive-twin';
 import { anchorLedger, type LedgerAnchor } from '../../bookpi/anchor';
 import type { BookPiEvent, BookPiEventInput } from '../../bookpi/ledger';
 import { sha256 } from '../../skills/canonical-json';
 
 /** Method ID canónico del turno de convergencia (AGENTS.md §5). */
-export const CONVERGENCE_METHOD_ID =
-  'TINA.GENESIS.CONVERGENCE.TURN.V1.MEDIUM.INSTITUTIONAL';
+export const CONVERGENCE_METHOD_ID = 'TINA.GENESIS.CONVERGENCE.TURN.V1.MEDIUM.INSTITUTIONAL';
 
 /** Puerto mínimo de evidencia: el ledger BookPI real (in-memory o durable) lo satisface. */
 export interface EvidenceLedgerPort {
@@ -152,7 +159,15 @@ export function runGenesisTurn(
   const metrics = observability.compute();
 
   // L10 — Gemelo digital (read-only) sobre señales (inyectadas o neutras por defecto).
-  const twin = buildCognitiveTwin({ ...defaultTwinSignals(), trustMean: societySelection.meanTrust, policyCompliance: allowed ? 1 : 0, ...(deps.twinSignals ?? {}) }, clock);
+  const twin = buildCognitiveTwin(
+    {
+      ...defaultTwinSignals(),
+      trustMean: societySelection.meanTrust,
+      policyCompliance: allowed ? 1 : 0,
+      ...(deps.twinSignals ?? {}),
+    },
+    clock
+  );
 
   // L11 — Sello de evidencia BookPI: solo si hay ledger real; nunca se fabrica evidencia.
   let evidenceAnchor: LedgerAnchor | null = null;
