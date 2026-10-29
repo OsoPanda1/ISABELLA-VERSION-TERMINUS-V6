@@ -289,15 +289,13 @@ export function registerLlmGatewayRoutes(deps: LlmGatewayDeps): void {
         '',
         streaming
       );
-      res
-        .status(400)
-        .json({
-          error: {
-            code: 400,
-            message: '`contents` with textual parts is required.',
-            status: 'INVALID_ARGUMENT',
-          },
-        });
+      res.status(400).json({
+        error: {
+          code: 400,
+          message: '`contents` with textual parts is required.',
+          status: 'INVALID_ARGUMENT',
+        },
+      });
       return;
     }
     if (input.length > MAX_INPUT_CHARS) {
@@ -312,15 +310,13 @@ export function registerLlmGatewayRoutes(deps: LlmGatewayDeps): void {
         '',
         streaming
       );
-      res
-        .status(413)
-        .json({
-          error: {
-            code: 413,
-            message: 'Input exceeds the 20000-character mediation limit.',
-            status: 'REQUEST_TOO_LARGE',
-          },
-        });
+      res.status(413).json({
+        error: {
+          code: 413,
+          message: 'Input exceeds the 20000-character mediation limit.',
+          status: 'REQUEST_TOO_LARGE',
+        },
+      });
       return;
     }
 
@@ -339,15 +335,13 @@ export function registerLlmGatewayRoutes(deps: LlmGatewayDeps): void {
         '',
         streaming
       );
-      res
-        .status(500)
-        .json({
-          error: {
-            code: 500,
-            message: error instanceof Error ? error.message : 'MEDIATION_FAILED',
-            status: 'INTERNAL',
-          },
-        });
+      res.status(500).json({
+        error: {
+          code: 500,
+          message: error instanceof Error ? error.message : 'MEDIATION_FAILED',
+          status: 'INTERNAL',
+        },
+      });
       return;
     }
 
@@ -439,16 +433,14 @@ export function registerLlmGatewayRoutes(deps: LlmGatewayDeps): void {
         '',
         false
       );
-      res
-        .status(400)
-        .json({
-          error: {
-            message: 'A `user` message with textual content is required.',
-            type: 'invalid_request_error',
-            param: null,
-            code: 'MISSING_USER_MESSAGE',
-          },
-        });
+      res.status(400).json({
+        error: {
+          message: 'A `user` message with textual content is required.',
+          type: 'invalid_request_error',
+          param: null,
+          code: 'MISSING_USER_MESSAGE',
+        },
+      });
       return;
     }
     if (input.length > MAX_INPUT_CHARS) {
@@ -463,16 +455,14 @@ export function registerLlmGatewayRoutes(deps: LlmGatewayDeps): void {
         '',
         false
       );
-      res
-        .status(413)
-        .json({
-          error: {
-            message: 'Input exceeds the 20000-character mediation limit.',
-            type: 'invalid_request_error',
-            param: null,
-            code: 'INPUT_TOO_LARGE',
-          },
-        });
+      res.status(413).json({
+        error: {
+          message: 'Input exceeds the 20000-character mediation limit.',
+          type: 'invalid_request_error',
+          param: null,
+          code: 'INPUT_TOO_LARGE',
+        },
+      });
       return;
     }
 
@@ -491,16 +481,14 @@ export function registerLlmGatewayRoutes(deps: LlmGatewayDeps): void {
         '',
         false
       );
-      res
-        .status(500)
-        .json({
-          error: {
-            message: error instanceof Error ? error.message : 'MEDIATION_FAILED',
-            type: 'server_error',
-            param: null,
-            code: 'MEDIATION_FAILED',
-          },
-        });
+      res.status(500).json({
+        error: {
+          message: error instanceof Error ? error.message : 'MEDIATION_FAILED',
+          type: 'server_error',
+          param: null,
+          code: 'MEDIATION_FAILED',
+        },
+      });
       return;
     }
 

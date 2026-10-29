@@ -3,7 +3,7 @@ import { envFlag } from './lib/env-flags';
 import { boundedBudgetMs, DeadlineBudget, hedgedFirst } from './inference/deadline';
 import { buildAsset, contentHash, serveAsset, type StaticAsset } from './http/static-assets';
 import express, { type Application, type NextFunction, type Request, type Response } from 'express';
-import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { createPublicKey, randomUUID, timingSafeEqual, type KeyObject } from 'node:crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'node:url';
@@ -127,6 +127,15 @@ import { CognitiveCapitalMarket } from './economy/cognitive-capital-market';
 import { CognitiveImmuneSystem } from './ihec/immune-system';
 import { CognitiveFabricEngine } from './core/cognitive-fabric-engine';
 import { ConstitutionalGovernanceFabric } from './governance/constitutional-governance-fabric';
+import {
+  BlackoutController,
+  assessConstitutionalIntegrity,
+  createBlackoutGuard,
+  type BlackoutEvidenceEvent,
+  type IntegrityFinding,
+} from './governance/blackout';
+import { registerBlackoutRoutes } from './routes/governance-blackout';
+import { KillSwitch } from './security/kill-switch';
 import { MonetizationEngine } from './economy/monetization-engine';
 import { DynamicPricingEngine } from './economy/dynamic-pricing';
 import {
@@ -358,6 +367,57 @@ try {
 } catch {
   console.warn('[Genesis] Cinematic UI assets are unavailable at startup.');
 }
+// ── Modo Terminus Blackout (state: draft | engine-generated) ────────────────────────────────
+// `KillSwitch` ya firmaba y verificaba órdenes, pero ninguna puerta del HTTP lo consultaba: un
+// alcance haltado seguía serviendo tráfico. El guard se monta ANTES de la primera ruta, para que
+// el halt corte el camino real y no solo aparezca en un diagnóstico.
+// Emisores autorizados: ISA_KILL_PUBKEY_<ISSUER>=<base64 SPKI-DER>. Sin ninguna clave el mapa
+// queda vacío y toda orden se rechaza con "issuer not authorized": fail-closed por construcción.
+const killSwitchAuthorizedKeys = new Map<string, KeyObject>();
+for (const [name, value] of Object.entries(process.env)) {
+  const slug = /^ISA_KILL_PUBKEY_([A-Z0-9_]{1,32})$/.exec(name);
+  if (slug === null || slug[1] === undefined || typeof value !== 'string' || value.trim() === '') {
+    continue;
+  }
+  try {
+    killSwitchAuthorizedKeys.set(
+      slug[1],
+      createPublicKey({ key: Buffer.from(value, 'base64'), format: 'der', type: 'spki' })
+    );
+  } catch {
+    console.warn(`[Genesis] ISA_KILL_PUBKEY_${slug[1]} no es una SPKI base64 válida; se ignora.`);
+  }
+}
+const envKillSwitchEngaged = ['1', 'true', 'yes'].includes(
+  (process.env.ISA_KILL_SWITCH ?? '').trim().toLowerCase()
+);
+const killSwitch = new KillSwitch({
+  authorizedKeys: killSwitchAuthorizedKeys,
+  envFlag: envKillSwitchEngaged,
+  ...(Number(process.env.ISA_KILL_MAX_DURATION_MS) > 0
+    ? { maxDurationMs: Number(process.env.ISA_KILL_MAX_DURATION_MS) }
+    : {}),
+});
+
+/** Libro de evidencia del plano de auditoría legacy (in-memory o JSONL durable según env). */
+function sealGovernanceEvent(event: BlackoutEvidenceEvent): void {
+  bookPiLedger.append(event);
+}
+
+app.use(
+  createBlackoutGuard({
+    killSwitch,
+    recordEvidence: sealGovernanceEvent,
+    newEventId: () => `blackout-denial-${randomUUID()}`,
+  })
+);
+
+const blackoutController = new BlackoutController({
+  killSwitch,
+  recordEvidence: sealGovernanceEvent,
+  newEventId: () => `blackout-${randomUUID()}`,
+});
+
 const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable';
 app.get('/', (req, res) => {
   if (htmlAsset === null) {
@@ -455,6 +515,13 @@ const runtime = new IsabellaGenesisRuntime(
   undefined,
   ikesPersistence
 );
+// El registro de herramientas se construye dentro del runtime, antes de que exista el ledger,
+// así que el sello se adjunta aquí. Desde ahora la evidencia es del camino de ejecución: toda
+// herramienta —la de esta ruta y la que invoque un agente interno— queda en BookPI antes de que
+// su salida llegue al llamador, y un fallo del libro retiene la salida en vez de fingir éxito.
+runtime.tools.attachEvidenceSeal((event) => {
+  bookPiLedger.append(event);
+});
 void runtime.initPersistence().catch((error) => {
   // A single provider failure must not hide which storage subsystem degraded.
   const reasons = error instanceof AggregateError ? [...error.errors] : [error];
@@ -2025,20 +2092,16 @@ app.post('/api/v1/tools/execute', async (req, res) => {
 
     const result = await runtime.executeTool(String(toolId), input, principal, 'read:territory');
 
-    // Append a verifiable event to the volatile in-memory hash chain (not WORM storage).
-    bookPiLedger.append({
-      id: `evt-${randomUUID()}`,
-      timestamp: new Date().toISOString(),
-      type: 'TOOL_EXECUTION',
-      methodId: `T.TOOL.${String(toolId)}.execute.v1.0.0.LOW.TERRITORIAL`,
-      principal: principal.id,
-      riskTier: 'LOW',
-      status: 'EXECUTED',
-    });
-
-    res.json({
-      success: true,
+    // El sello de evidencia lo escribe el propio ToolRegistry antes de devolver la salida
+    // (attachEvidenceSeal). Aquí ya no se duplica el evento: el append manual llevaba un
+    // methodId no canónico ('T.TOOL.<id>...' — TOOL no es federación YUN) que ningún verificador
+    // podría parsear y que además registraba EXECUTED aunque la ejecución hubiera sido denegada.
+    // `admitted:false` no es un éxito: el runtime devuelve decisión en vez de lanzar, así que la
+    // puerta reportaba 200/true a una herramienta bloqueada. Se informa lo que pasó de verdad.
+    res.status(result.admitted ? 200 : 403).json({
+      success: result.admitted,
       toolId,
+      evidenceSealed: result.receipt !== undefined,
       result,
     });
   } catch (error) {
@@ -5474,7 +5537,11 @@ registerLlmGatewayRoutes({
 app.get('/api/v1/gateway/activity', (req, res) => {
   if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
   const limit = Math.min(200, Math.max(1, Number(req.query.limit ?? 50) || 50));
-  res.json({ version: LLM_GATEWAY_VERSION, count: gatewayAuditLog.size(), recent: gatewayAuditLog.recent(limit) });
+  res.json({
+    version: LLM_GATEWAY_VERSION,
+    count: gatewayAuditLog.size(),
+    recent: gatewayAuditLog.recent(limit),
+  });
 });
 
 // ── Permission Map Ω (state: draft | engine-generated) ─ mapea una orden a sus permisos
@@ -5487,6 +5554,35 @@ registerOrderPermissionRoutes({
   enforceRateLimit,
   rateLimiter: publicScanLimiter,
   authorizeAdmin: (req, res) => authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN'),
+});
+
+// ── Modo Terminus Blackout por HTTP (state: draft | engine-generated) ───────────────────────
+// El guard de arriba corta el tráfico; esta puerta es el plano de control que lo gobierna:
+// ENGAGE/RELEASE con orden firmada, estado con integridad constitucional y la Ecuación de
+// Legitimidad Ω∞ evaluada en seco (no autoriza ni ejecuta: devuelve la cuenta para un humano).
+// Sin claves en ISA_KILL_PUBKEY_* ninguna orden pasa: la superficie está montada pero inerte.
+const governanceBlackoutLimiter = new FixedWindowRateLimiter(10, 60_000);
+registerBlackoutRoutes({
+  app,
+  controller: blackoutController,
+  assess: () =>
+    assessConstitutionalIntegrity({
+      verifyLedger: () => bookPiLedger.verify(),
+      readinessErrors: runPreflight(process.env)
+        .findings.filter((finding) => finding.severity === 'ERROR')
+        .map((finding): IntegrityFinding => ({
+          id: finding.id,
+          severity: 'ERROR',
+          message: finding.message,
+        })),
+      envHalted: envKillSwitchEngaged,
+      halted: (scope) => killSwitch.isHalted(scope),
+    }),
+  enforceRateLimit,
+  rateLimiter: governanceBlackoutLimiter,
+  authorizeAdmin: (req, res) => authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN'),
+  recordEvidence: sealGovernanceEvent,
+  newEventId: () => `legitimacy-${randomUUID()}`,
 });
 
 // ── Turbo Route Planner Ω (state: draft | engine-generated) ─ decide la ruta de baja
@@ -6222,17 +6318,22 @@ app.get('/api/v1/ops/preflight', (req, res) => {
 });
 
 // ── REINA (state: draft | engine-generated) ─ adjudicación previa a la ejecución; NO ejecuta acciones.
-const reina = createReinaRuntime(process.env, (record) => {
-  bookPiLedger.append({
-    id: `reina-${record.requestId}-${record.leafHash.slice(0, 12)}`,
-    timestamp: record.decidedAt,
-    type: 'REINA_ADJUDICATION',
-    methodId: 'N.IDENTITY.E03_GOVERNANCE.adjudicate_action.v1.0.0.HIGH.INSTITUTIONAL',
-    principal: 'reina',
-    riskTier: record.riskTier ?? 'UNASSESSED',
-    status: record.verdict,
-  });
-});
+// Recibe el KillSwitch compartido del proceso: un blackout GOBERNADO también detiene a REINA.
+const reina = createReinaRuntime(
+  process.env,
+  (record) => {
+    bookPiLedger.append({
+      id: `reina-${record.requestId}-${record.leafHash.slice(0, 12)}`,
+      timestamp: record.decidedAt,
+      type: 'REINA_ADJUDICATION',
+      methodId: 'N.IDENTITY.E03_GOVERNANCE.adjudicate_action.v1.0.0.HIGH.INSTITUTIONAL',
+      principal: 'reina',
+      riskTier: record.riskTier ?? 'UNASSESSED',
+      status: record.verdict,
+    });
+  },
+  killSwitch
+);
 
 app.get('/api/v1/reina/status', (req, res) => {
   if (!enforceRateLimit(req, res, publicScanLimiter, 'reina-status')) return;

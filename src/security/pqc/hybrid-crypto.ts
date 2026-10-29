@@ -1,13 +1,13 @@
 /**
  * Hybrid Cryptography Suite - FIPS 203 + FIPS 204 + Classical
- * Quantum-Ready Hybrid Cryptography for ISABELLA-Q Ω
- * state: engine-generated
+ * state: draft | engine-generated (pending human review)
  *
- * Combines:
- * - ML-KEM (Kyber) + X25519 for Key Encapsulation / Key Agreement
- * - ML-DSA (Dilithium) + Ed25519 for Digital Signatures
- * - AES-256-GCM / ChaCha20-Poly1305 for Symmetric Encryption
- * - SHA3-512 for Hashing
+ * La parte clásica es real y utilizable: AES-256-GCM / ChaCha20-Poly1305 con una
+ * clave que el llamador aporta (`symmetricEncrypt`/`symmetricDecrypt`), SHA3-512 y
+ * HKDF. La parte poscuántica NO existe: `generateIdentity`, el intercambio de claves
+ * y `sign`/`verify` lanzan `PqcProviderRequired` mientras no haya proveedor FIPS
+ * 203/204 auditado, porque con maquetas de KEM las dos partes derivaban secretos
+ * distintos y `verify` aceptaba cualquier firma. Ver `./provider-gate.ts`.
  */
 
 import {

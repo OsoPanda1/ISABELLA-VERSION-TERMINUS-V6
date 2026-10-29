@@ -1,19 +1,18 @@
 /**
- * ML-KEM (Kyber) Implementation - FIPS 203
- * Quantum-Ready Key Encapsulation Mechanism
- * state: engine-generated
+ * ML-KEM (Kyber) — FIPS 203 superficie declarada, proveedor pendiente.
+ * state: draft | engine-generated.
  *
- * ML-KEM is a Key Encapsulation Mechanism (KEM) based on the CRYSTALS-Kyber
- * lattice-based cryptosystem. It provides IND-CCA2 security against both
- * classical and quantum adversaries.
+ * Ninguna operación de este módulo calcula Kyber: `pqcProviderRequired` corta
+ * cada entrada hasta que un proveedor externo (liboqs, HSM o KMS) esté cableado
+ * y verificado por una persona. Ver `./provider-gate.ts`.
  *
  * Security Levels:
  * - ML-KEM-512: NIST Security Level 1 (AES-128 equivalent)
- * - ML-KEM-768: NIST Security Level 3 (AES-192 equivalent)  
+ * - ML-KEM-768: NIST Security Level 3 (AES-192 equivalent)
  * - ML-KEM-1024: NIST Security Level 5 (AES-256 equivalent)
  */
 
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { pqcProviderRequired } from './provider-gate';
 
 export type MLKEMParameterSet = 'ML-KEM-512' | 'ML-KEM-768' | 'ML-KEM-1024';
 
@@ -86,102 +85,36 @@ const ML_KEM_PARAMETERS: Record<MLKEMParameterSet, MLKEMParameters> = {
 };
 
 /**
- * ML-KEM Key Generation
- * Generates a public/private key pair for the specified parameter set.
- * In production, this should use a validated implementation like liboqs or pqc-lib.
+ * ML-KEM Key Generation — bloqueada sin proveedor.
  */
 export function mlKemKeyGen(parameterSet: MLKEMParameterSet = 'ML-KEM-768'): MLKEMKeyPair {
-  const params = ML_KEM_PARAMETERS[parameterSet];
-
-  // In production, use a validated ML-KEM implementation
-  // This is a placeholder that generates cryptographically random keys
-  // of the correct size. A real implementation would use the actual
-  // ML-KEM key generation algorithm (CRYSTALS-Kyber).
-
-  const publicKey = randomBytes(params.publicKeyBytes);
-  const privateKey = randomBytes(params.privateKeyBytes);
-
-  // The actual ML-KEM private key includes the public key
-  const fullPrivateKey = new Uint8Array(params.privateKeyBytes + params.publicKeyBytes);
-  fullPrivateKey.set(privateKey, 0);
-  fullPrivateKey.set(publicKey, params.privateKeyBytes);
-
-  return {
-    publicKey,
-    privateKey: fullPrivateKey,
-    parameterSet,
-  };
+  return pqcProviderRequired(parameterSet, 'generación de claves');
 }
 
 /**
- * ML-KEM Encapsulation
- * Generates a ciphertext and shared secret using the public key.
+ * ML-KEM Encapsulation — bloqueada sin proveedor.
  */
 export function mlKemEncaps(
   publicKey: Uint8Array,
   parameterSet: MLKEMParameterSet = 'ML-KEM-768'
 ): MLKEMCiphertext {
-  const params = ML_KEM_PARAMETERS[parameterSet];
-
-  // In production, use the actual ML-KEM encapsulation algorithm
-  // This generates a cryptographically random shared secret and ciphertext
-  const sharedSecret = randomBytes(params.sharedSecretBytes);
-  const ciphertext = randomBytes(params.ciphertextBytes);
-
-  // Derive the actual shared secret using KDF
-  const derivedSecret = deriveSharedSecret(sharedSecret, publicKey, ciphertext);
-
-  return {
-    ciphertext,
-    sharedSecret: derivedSecret,
-    parameterSet,
-  };
+  return pqcProviderRequired(parameterSet, 'encapsulación');
 }
 
 /**
- * ML-KEM Decapsulation
- * Recovers the shared secret from the ciphertext using the private key.
+ * ML-KEM Decapsulation — bloqueada sin proveedor.
  */
 export function mlKemDecaps(
   privateKey: Uint8Array,
   ciphertext: Uint8Array,
   parameterSet: MLKEMParameterSet = 'ML-KEM-768'
 ): Uint8Array {
-  const params = ML_KEM_PARAMETERS[parameterSet];
-
-  // In production, use the actual ML-KEM decapsulation algorithm
-  // This extracts the shared secret from the ciphertext using the private key
-
-  // The private key includes the public key at the end
-  const actualPrivateKey = privateKey.slice(0, params.privateKeyBytes);
-  const publicKey = privateKey.slice(params.privateKeyBytes);
-
-  // Derive shared secret using KDF (placeholder for actual decapsulation)
-  const sharedSecret = deriveSharedSecret(actualPrivateKey, publicKey, ciphertext);
-
-  return sharedSecret;
+  return pqcProviderRequired(parameterSet, 'desencapsulación');
 }
 
 /**
- * Key Derivation Function for ML-KEM
- * Uses SHA3-512 as specified in FIPS 203
- */
-function deriveSharedSecret(
-  secret: Uint8Array,
-  publicKey: Uint8Array,
-  ciphertext: Uint8Array
-): Uint8Array {
-  const hash = createHash('sha3-512');
-  hash.update(secret);
-  hash.update(publicKey);
-  hash.update(ciphertext);
-  return hash.digest().slice(0, 32);
-}
-
-/**
- * Hybrid Key Encapsulation
- * Combines ML-KEM with X25519 for defense-in-depth.
- * The resulting shared secret is secure if either primitive is secure.
+ * Resultado de un intercambio ML-KEM + X25519. Mientras no exista proveedor,
+ * `hybridKeyEncaps`/`hybridKeyDecaps` no lo construyen: lanzan `PqcProviderRequired`.
  */
 export interface HybridKEMResult {
   readonly mlkemCiphertext: Uint8Array;
@@ -195,27 +128,7 @@ export function hybridKeyEncaps(
   x25519PublicKey: Uint8Array,
   mlkemParameterSet: MLKEMParameterSet = 'ML-KEM-768'
 ): HybridKEMResult {
-  // ML-KEM encapsulation
-  const mlkemResult = mlKemEncaps(mlkemPublicKey, mlkemParameterSet);
-
-  // X25519 key agreement (ephemeral)
-  const x25519EphemeralPrivate = randomBytes(32);
-  const x25519EphemeralPublic = x25519PublicKey; // In production, compute X25519
-
-  // For now, use the provided public key as placeholder
-  // In production: x25519SharedSecret = X25519(ephemeralPrivate, x25519PublicKey)
-  const x25519SharedSecret = randomBytes(32);
-  const x25519Ciphertext = randomBytes(32);
-
-  // Combine secrets using HKDF
-  const combinedSecret = combineSecrets(mlkemResult.sharedSecret, x25519SharedSecret);
-
-  return {
-    mlkemCiphertext: mlkemResult.ciphertext,
-    x25519PublicKey: x25519EphemeralPublic,
-    x25519Ciphertext,
-    sharedSecret: combinedSecret,
-  };
+  return pqcProviderRequired(mlkemParameterSet, 'intercambio híbrido (encapsulación)');
 }
 
 export function hybridKeyDecaps(
@@ -225,22 +138,7 @@ export function hybridKeyDecaps(
   x25519Ciphertext: Uint8Array,
   mlkemParameterSet: MLKEMParameterSet = 'ML-KEM-768'
 ): Uint8Array {
-  // ML-KEM decapsulation
-  const mlkemSecret = mlKemDecaps(mlkemPrivateKey, mlkemCiphertext, mlkemParameterSet);
-
-  // X25519 decapsulation
-  // In production: x25519Secret = X25519(x25519PrivateKey, x25519Ciphertext)
-  const x25519Secret = randomBytes(32);
-
-  // Combine secrets
-  return combineSecrets(mlkemSecret, x25519Secret);
-}
-
-function combineSecrets(secret1: Uint8Array, secret2: Uint8Array): Uint8Array {
-  const hash = createHash('sha3-512');
-  hash.update(secret1);
-  hash.update(secret2);
-  return hash.digest().slice(0, 32);
+  return pqcProviderRequired(mlkemParameterSet, 'intercambio híbrido (desencapsulación)');
 }
 
 /**
