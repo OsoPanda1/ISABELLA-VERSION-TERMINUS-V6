@@ -52,24 +52,20 @@ export class SovereignRagStore {
   private docs: RagDocument[] = [];
 
   add(id: string, text: string): void {
-    if (this.docs.some((d) => d.id === id)) return;
-    this.rebuild();
-    const idf = this.computeIdf([...this.docs.map((d) => d.text), text]);
-    // rebuild all vectors with new idf
-    const allTexts = [...this.docs.map((d) => d.text), text];
-    const newDocs = [...this.docs, { id, text, vector: new Map() }];
-    const newIdf = this.computeIdf(allTexts);
-    for (const d of newDocs) {
-      if (d.id === id) d.vector = buildVector(d.text, newIdf);
-      else {
-        const existing = this.docs.find((x) => x.id === d.id);
-        if (existing) existing.vector = buildVector(existing.text, newIdf);
-      }
+    if (typeof id !== 'string' || id.trim() === '') {
+      throw new TypeError('RAG: document id must be a non-empty string');
     }
-    this.docs = newDocs.map((d) => ({
-      id: d.id,
-      text: d.text,
-      vector: d.id === id ? d.vector : this.docs.find((x) => x.id === d.id)?.vector ?? d.vector,
+    if (typeof text !== 'string' || text.trim() === '') {
+      throw new TypeError('RAG: document text must be a non-empty string');
+    }
+    if (this.docs.some((document) => document.id === id)) return;
+
+    // Recompute the vocabulary weights atomically so every document uses the same IDF.
+    const documents = [...this.docs.map(({ id: docId, text: docText }) => ({ id: docId, text: docText })), { id, text }];
+    const idf = this.computeIdf(documents.map((document) => document.text));
+    this.docs = documents.map((document) => ({
+      ...document,
+      vector: buildVector(document.text, idf),
     }));
   }
 
@@ -95,12 +91,16 @@ export class SovereignRagStore {
   }
 
   search(query: string, k = 3): RagHit[] {
-    if (this.docs.length === 0) return [];
-    const idf = this.computeIdf(this.docs.map((d) => d.text));
+    if (typeof query !== 'string') throw new TypeError('RAG: query must be a string');
+    if (!Number.isInteger(k) || k < 0) throw new RangeError('RAG: k must be a non-negative integer');
+    if (this.docs.length === 0 || k === 0 || tokenize(query).length === 0) return [];
+
+    const idf = this.computeIdf(this.docs.map((document) => document.text));
     const qvec = buildVector(query, idf);
     return this.docs
-      .map((d) => ({ id: d.id, text: d.text, score: cosine(qvec, d.vector) }))
-      .sort((a, b) => b.score - a.score)
+      .map((document) => ({ id: document.id, text: document.text, score: cosine(qvec, document.vector) }))
+      .filter((hit) => hit.score > 0)
+      .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
       .slice(0, k);
   }
 
