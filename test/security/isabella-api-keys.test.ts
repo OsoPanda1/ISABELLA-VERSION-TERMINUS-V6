@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { IsabellaApiKeyStore } from "../../src/security/isabella-api-keys";
+import { createDefaultApiKeyStore, IsabellaApiKeyStore } from "../../src/security/isabella-api-keys";
 
 describe("Isabella API key store", () => {
   it("issues hash-only keys and verifies scopes and tenants", () => {

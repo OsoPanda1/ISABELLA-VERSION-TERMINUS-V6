@@ -50,7 +50,10 @@ export function runDeployReadiness(env: Env): DeployReadinessReport {
   }
 
   const dbUrl =
-    env.DATABASE_URL?.trim() || env.POSTGRES_URL?.trim() || env.POSTGRES_URL_NON_POOLING?.trim();
+    env.DATABASE_URL?.trim() ||
+    env.POSTGRES_URL?.trim() ||
+    env.POSTGRES_PRISMA_URL?.trim() ||
+    env.POSTGRES_URL_NON_POOLING?.trim();
   if (!dbUrl) {
     add(
       'DR-DATABASE-MISSING',
@@ -90,6 +93,16 @@ export function runDeployReadiness(env: Env): DeployReadinessReport {
       'Supabase is not configured: Atlas/IKES probes keep /api/v1/readyz degraded.'
     );
 
+  // Supabase user identity resolution calls /auth/v1/user with the anon/publishable key.
+  // The service-role key is for server-side data access and is not a substitute for that key.
+  if (sbUrl && !has(env, 'SUPABASE_ANON_KEY') && !has(env, 'SUPABASE_PUBLISHABLE_KEY')) {
+    add(
+      'DR-SUPABASE-AUTH-KEY-MISSING',
+      'ERROR',
+      'Supabase is configured, but the anon/publishable key required for authenticated user resolution is missing.'
+    );
+  }
+
   // Generative inference: without a provider the chat answers from the local deterministic engine only.
   if (!PROVIDER_VARS.some((n) => has(env, n)) && !has(env, 'ISABELLA_KEYLESS_FREE_PROVIDER')) {
     add(
@@ -105,13 +118,23 @@ export function runDeployReadiness(env: Env): DeployReadinessReport {
     add('DR-ORIGINS-LOCAL', 'WARN', 'ALLOWED_ORIGINS is empty or points at localhost.');
   }
 
-  // Serverless with process-local stores loses state on every cold start.
+  // Serverless instances are ephemeral. Neither process memory nor local files are
+  // a durable credential store; production must not pass readiness with either backend.
   if (has(env, 'VERCEL') || has(env, 'VERCEL_ENV')) {
-    if ((env.ISABELLA_API_KEY_STORE ?? 'memory') === 'memory') {
+    const keyStore = (env.ISABELLA_API_KEY_STORE ?? 'memory').trim().toLowerCase();
+    if (keyStore === 'memory' || keyStore === 'file') {
       add(
-        'DR-SERVERLESS-MEMORY-KEYS',
-        'WARN',
-        'API keys are stored in memory on serverless: they are lost on cold start.'
+        'DR-SERVERLESS-NON_DURABLE_API_KEYS',
+        'ERROR',
+        'API key storage is process-local or filesystem-local on serverless. Configure a shared durable adapter before production.'
+      );
+    }
+    const federationStore = (env.ISABELLA_FEDERATION_STORE ?? 'memory').trim().toLowerCase();
+    if (federationStore === 'memory' || federationStore === 'file') {
+      add(
+        'DR-SERVERLESS-NON_DURABLE_FEDERATION',
+        'ERROR',
+        'Federation connector and inbox state is not durable across serverless instances. Configure a shared durable adapter before production.'
       );
     }
   }
