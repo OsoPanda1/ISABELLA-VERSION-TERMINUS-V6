@@ -43,6 +43,7 @@ import {
 } from './inference/speech';
 import { gateway } from '@ai-sdk/gateway';
 import { IsabellaGenesisRuntime } from './genesis/runtime';
+import { buildUniverseSnapshot } from './genesis/universe';
 import { assertBalancedAuthority, createPrincipal } from './identity/principal';
 import { createCapabilityGate } from './crown/capability';
 import { GENESIS_EXPERTS, EXPERT_REGISTRY } from './cognition/experts';
@@ -339,6 +340,7 @@ let jsAsset: StaticAsset | null = null;
 let chatPlusAsset: StaticAsset | null = null;
 let cognitionClientAsset: StaticAsset | null = null;
 let nexusJsAsset: StaticAsset | null = null;
+let universeMapAsset: StaticAsset | null = null;
 try {
   const rawHtml = fs.readFileSync(path.join(uiPath, 'index.html'), 'utf-8');
   const cinematicCss = fs.readFileSync(path.join(uiPath, 'cinematic.css'), 'utf-8');
@@ -348,6 +350,7 @@ try {
   const chatPlusJs = fs.readFileSync(path.join(uiPath, 'chat-plus.js'), 'utf-8');
   const cognitionClientJs = fs.readFileSync(path.join(uiPath, 'cognition-client.js'), 'utf-8');
   const nexusJs = fs.readFileSync(path.join(uiPath, 'nexus.js'), 'utf-8');
+  const universeMapJs = fs.readFileSync(path.join(uiPath, 'universe-map.js'), 'utf-8');
   const versioned = rawHtml
     .replace(/(\/styles\/cinematic\.css)\?v=[^"']*/, `$1?v=${contentHash(cinematicCss)}`)
     .replace(/(\/styles\/command-center\.css)\?v=[^"']*/, `$1?v=${contentHash(commandCenterCss)}`)
@@ -355,7 +358,8 @@ try {
     .replace(/(\/ui\/cognition-client\.js)\?v=[^"']*/, `$1?v=${contentHash(cognitionClientJs)}`)
     .replace(/(\/ui\/app\.js)\?v=[^"']*/, `$1?v=${contentHash(cinematicJs)}`)
     .replace(/(\/ui\/chat-plus\.js)\?v=[^"']*/, `$1?v=${contentHash(chatPlusJs)}`)
-    .replace(/(\/ui\/nexus\.js)\?v=[^"']*/, `$1?v=${contentHash(nexusJs)}`);
+    .replace(/(\/ui\/nexus\.js)\?v=[^"']*/, `$1?v=${contentHash(nexusJs)}`)
+    .replace(/(\/ui\/universe-map\.js)\?v=[^"']*/, `$1?v=${contentHash(universeMapJs)}`);
   htmlAsset = buildAsset(versioned, 'text/html; charset=utf-8');
   cssAsset = buildAsset(cinematicCss, 'text/css; charset=utf-8');
   commandCenterCssAsset = buildAsset(commandCenterCss, 'text/css; charset=utf-8');
@@ -364,6 +368,7 @@ try {
   chatPlusAsset = buildAsset(chatPlusJs, 'text/javascript; charset=utf-8');
   cognitionClientAsset = buildAsset(cognitionClientJs, 'text/javascript; charset=utf-8');
   nexusJsAsset = buildAsset(nexusJs, 'text/javascript; charset=utf-8');
+  universeMapAsset = buildAsset(universeMapJs, 'text/javascript; charset=utf-8');
 } catch {
   console.warn('[Genesis] Cinematic UI assets are unavailable at startup.');
 }
@@ -479,6 +484,13 @@ app.get('/ui/nexus.js', (req, res) => {
     return;
   }
   serveAsset(req, res, nexusJsAsset, IMMUTABLE_CACHE);
+});
+app.get('/ui/universe-map.js', (req, res) => {
+  if (universeMapAsset === null) {
+    res.status(404).type('js').send('// Universe map client unavailable');
+    return;
+  }
+  serveAsset(req, res, universeMapAsset, IMMUTABLE_CACHE);
 });
 // Intro media: the original is 1080p60 with its index (moov) at the END of the file, so playback cannot start
 // until the tail is fetched. The "web" rendition is 540p30 with +faststart (index first) for instant start.
@@ -1763,7 +1775,30 @@ const CROWN_NODES = [
   },
 ];
 
-// 6 Capas Soberanas MD-X5
+/* El universo observable del mapa se construye en src/genesis/universe.ts (modulo puro y probado); aqui solo se le entregan los registros reales de este proceso. */
+const universeSources = (bookpi: { backend: string; durability: string }) => {
+  const blackout = killSwitch.status();
+  return buildUniverseSnapshot({
+    crownNodes: CROWN_NODES,
+    experts: EXPERT_REGISTRY,
+    toolRiskTiers: runtime.tools.list().map((tool) => String(tool.riskTier)),
+    capabilityDescriptors: runtime.capabilities
+      .list()
+      .map((item) => ({ id: item.id, domain: item.domain, riskTier: item.riskTier })),
+    counts: {
+      skills: runtime.skills.list().length,
+      modules: runtime.modules.list().length,
+      protocols: runtime.protocols.list().length,
+      customizations: runtime.customizations.list().length,
+      memoryClaims: runtime.memory.listClaims().length,
+    },
+    toolEvidence: runtime.tools.diagnostics(),
+    blackout: { envFlag: blackout.envFlag, haltCount: blackout.halts.length },
+    bookpi,
+    quantumDescription: runtime.quantum.describe(),
+    ikesPersistenceConfigured: Boolean(ikesPersistence),
+  });
+};
 // BookPI uses the canonical process-local hash-chain adapter. It is not durable WORM storage.
 
 // --- API ROUTES ---
@@ -1856,6 +1891,7 @@ app.get('/api/v1/status', (_req, res) => {
       : pipelineBookPi.backend === 'DURABLE_JSONL_LOCAL'
         ? 'LOCAL_FILE_FSYNCED_NOT_SHARED_NOT_WORM'
         : 'PROCESS_MEMORY_NOT_DURABLE';
+  const universe = universeSources({ backend: bookPiBackend, durability: bookPiDurability });
   res.json({
     runtime: 'Isabella Genesis TINA',
     version: 'v40.0.0',
@@ -1866,31 +1902,18 @@ app.get('/api/v1/status', (_req, res) => {
       geographicAnchor:
         'Mineral del Monte (Real del Monte), Hidalgo, México (20.3833° N, 98.8500° O)',
     },
-    engines: {
-      crown: 'ACTIVE',
-      aegis: 'ACTIVE',
-      ikes: 'ACTIVE',
-      veritas: 'ACTIVE',
-      bookpi: bookPiBackend,
-      bookpiDurability: bookPiDurability,
-      pdp: 'ACTIVE',
-      litleTrustFabric: 'ACTIVE',
-      quantumPennyLane: runtime.quantum.describe(),
-      hyperSkillFabric: {
-        contract: 'isabella.hsf.v1',
-        capabilities: runtime.capabilities.list(),
-      },
-      geminiEngine: 'EXPLICIT_SELECTION_ONLY',
-    },
+    engines: universe.engineStates,
+    stateLegend: universe.stateLegend,
     experts: {
-      count: GENESIS_EXPERTS.length,
+      count: universe.counts.experts,
       modules: EXPERT_REGISTRY,
     },
-    crownNodesCount: CROWN_NODES.length,
-    toolsCount: 2,
-    skillsCount: runtime.skills.list().length,
-    modulesCount: runtime.modules.list().length,
-    protocolsCount: runtime.protocols.list().length,
+    crownNodesCount: universe.counts.crownNodes,
+    toolsCount: universe.counts.tools,
+    skillsCount: universe.counts.skills,
+    modulesCount: universe.counts.modules,
+    protocolsCount: universe.counts.protocols,
+    universe,
     invariant: 'CAPABILITY ≠ AUTHORITY ≠ EXECUTION ≠ EVIDENCE ≠ LEARNING ≠ PRODUCTION',
     trust: { litle: 'L-512.v1', evidence: 'SHA3-512', certificates: 'HMAC-SHA256' },
   });
@@ -5996,7 +6019,14 @@ app.get('/api/v1/observability/slos', async (req, res) => {
 
 app.get('/api/v1/observability/alerts', (req, res) => {
   if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
-  res.json({ success: true, data: observability.alerts.getActiveAlerts() });
+  res.json({
+    success: true,
+    data: observability.alerts.getActiveAlerts(),
+    // Toda regla que hoy no produce un número se declara, no se disimula.
+    ruleOutcomes: observability.alerts
+      .getRuleOutcomes()
+      .map(({ rule, outcome }) => ({ name: rule.name, expr: rule.expr, ...outcome })),
+  });
 });
 
 app.get('/api/v1/observability/dashboards', (req, res) => {

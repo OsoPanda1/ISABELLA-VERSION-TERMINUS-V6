@@ -16,6 +16,7 @@
 
 import { EventEmitter } from 'node:events';
 import { randomBytes, createHash } from 'node:crypto';
+import { getHeapStatistics } from 'node:v8';
 
 export type MetricType = 'counter' | 'gauge' | 'histogram' | 'summary';
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
@@ -599,8 +600,272 @@ interface HealthCheckFunction {
 }
 
 /**
+ * state: engine-generated — resolvedor determinista de las expresiones que el runtime puede medir.
+ *
+ * Subconjunto soportado: `<término> [ '/' <término> ] <op> <número>`, donde un término es
+ * `metric` o `metric{etiqueta=~"regex"}` y `rate(...)`, `increase(...)`, `sum(...)` se resuelven
+ * como la suma acumulada de la serie. El collector no guarda ventanas de tiempo, así que la
+ * resolución de `rate(x[w])` es `x` desde el arranque del proceso; los operadores restantes
+ * devuelven `not_evaluable` y se reportan como tales en lugar de inventarse un número.
+ */
+
+const WINDOW_FUNCTIONS = new Set([
+  'rate',
+  'irate',
+  'increase',
+  'delta',
+  'sum',
+  'avg',
+  'min',
+  'max',
+  'count',
+  'last_over_time',
+  'sum_over_time',
+  'avg_over_time',
+]);
+
+const COMPARISON =
+  /^(?<lhs>.+?)\s*(?<op>>=|<=|==|!=|>|<)\s*(?<rhs>[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)\s*$/;
+
+function labelSeriesKey(metric: Metric): string {
+  const labels = Object.keys(metric.labels)
+    .sort()
+    .map((k) => `${k}=${metric.labels[k]}`)
+    .join(',');
+  return `${metric.name}\u0000${labels}`;
+}
+
+function latestSeries(metrics: readonly Metric[]): Map<string, Metric> {
+  const latest = new Map<string, Metric>();
+  for (const metric of metrics) latest.set(labelSeriesKey(metric), metric);
+  return latest;
+}
+
+function splitSelectorClauses(raw: string): string[] {
+  const clauses: string[] = [];
+  let current = '';
+  let quote = '';
+  for (const char of raw) {
+    if (quote) {
+      current += char;
+      if (char === quote) quote = '';
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      current += char;
+      continue;
+    }
+    if (char === ',') {
+      clauses.push(current);
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+  clauses.push(current);
+  return clauses.filter((clause) => clause.trim() !== '');
+}
+
+function splitOnSlash(text: string): string[] | null {
+  const parts: string[] = [];
+  let current = '';
+  let depth = 0;
+  let quote = '';
+  for (const char of text) {
+    if (quote) {
+      current += char;
+      if (char === quote) quote = '';
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      current += char;
+      continue;
+    }
+    if (char === '(' || char === '{' || char === '[') depth += 1;
+    if (char === ')' || char === '}' || char === ']') depth -= 1;
+    if (char === '/' && depth === 0) {
+      parts.push(current);
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+  parts.push(current);
+  if (depth !== 0) return null;
+  return parts;
+}
+
+interface TermResolution {
+  readonly value: number | null;
+  readonly reason?: string;
+}
+
+function resolveTerm(term: string, metrics: readonly Metric[]): TermResolution {
+  let text = term.trim().replace(/\s*\[[^\]]*\]\s*$/, '');
+  const call = text.match(/^([A-Za-z_:][\w:]*?)\s*\(([\s\S]*)\)$/);
+  if (call) {
+    const fn = call[1];
+    if (!WINDOW_FUNCTIONS.has(fn)) return { value: null, reason: `FUNCION_NO_MEDIBLE:${fn}` };
+    return resolveTerm(call[2], metrics);
+  }
+  const selector = text.match(/^(?<name>[A-Za-z_:][\w:]*)(?:\{(?<labels>[^{}]*)\})?$/);
+  const name = selector?.groups?.name;
+  if (!name) return { value: null, reason: `TERMINO_NO_RESOLUBLE:${text}` };
+
+  const matchers: Array<{ label: string; op: string; value: string }> = [];
+  const rawLabels = selector?.groups?.labels ?? '';
+  for (const clause of splitSelectorClauses(rawLabels)) {
+    const parsed = clause.match(
+      /^\s*(?<label>[A-Za-z_:][\w:]*)\s*(?<op>=~|!~|=|!=)\s*(?<value>.*?)\s*$/
+    );
+    if (!parsed?.groups) return { value: null, reason: `SELECTOR_INVALIDO:${clause}` };
+    matchers.push({
+      label: parsed.groups.label,
+      op: parsed.groups.op,
+      value: parsed.groups.value.replace(/^["']|["']$/g, ''),
+    });
+  }
+
+  const matching: Metric[] = [];
+  for (const metric of metrics) {
+    if (metric.name !== name) continue;
+    let ok = true;
+    for (const matcher of matchers) {
+      const actual = metric.labels[matcher.label] ?? '';
+      if (matcher.op === '=' || matcher.op === '!=') {
+        const equal = actual === matcher.value;
+        ok = matcher.op === '=' ? equal : !equal;
+      } else {
+        let pattern: RegExp;
+        try {
+          pattern = new RegExp(`^(?:${matcher.value})$`);
+        } catch {
+          return { value: null, reason: `REGEX_INVALIDO:${matcher.value}` };
+        }
+        const matches = pattern.test(actual);
+        ok = matcher.op === '=~' ? matches : !matches;
+      }
+      if (!ok) break;
+    }
+    if (ok) matching.push(metric);
+  }
+  if (matching.length === 0) return { value: null, reason: `SIN_SERIES:${name}` };
+
+  // Un counter registra incrementos: su valor acumulado es la suma de todas las muestras.
+  // Un gauge registra lecturas del estado actual: sólo cuenta la última por combinación de etiquetas.
+  const isCounter = matching.some((metric) => metric.type === 'counter');
+  const samples = isCounter ? matching : Array.from(latestSeries(matching).values());
+  let total = 0;
+  for (const metric of samples) total += metric.value;
+  return { value: total };
+}
+
+export interface ExprResolution {
+  readonly value: number | null;
+  readonly reason: string;
+}
+
+/** Resuelve una expresión de un solo término o de cociente entre dos términos. */
+export function resolveExprValue(expr: string, metrics: readonly Metric[]): ExprResolution {
+  const parts = splitOnSlash(expr);
+  if (!parts) return { value: null, reason: 'EXPRESION_DESEQUILIBRADA' };
+  const first = resolveTerm(parts[0], metrics);
+  if (first.value === null) return { value: null, reason: first.reason ?? 'SIN_SERIES' };
+  let value = first.value;
+  for (const part of parts.slice(1)) {
+    const resolved = resolveTerm(part, metrics);
+    if (resolved.value === null) return { value: null, reason: resolved.reason ?? 'SIN_SERIES' };
+    if (resolved.value === 0) return { value: null, reason: 'DIVISOR_ZERO' };
+    value = value / resolved.value;
+  }
+  return { value, reason: 'MEDIDO' };
+}
+
+export interface AlertOutcome {
+  readonly state: 'evaluated' | 'not_evaluable' | 'no_data';
+  readonly value?: number;
+  readonly threshold?: number;
+  readonly operator?: string;
+  readonly firing?: boolean;
+  readonly reason: string;
+}
+
+const SYNTAX_REASONS = new Set([
+  'EXPRESION_DESEQUILIBRADA',
+  'SELECTOR_INVALIDO',
+  'REGEX_INVALIDO',
+  'TERMINO_NO_RESOLUBLE',
+]);
+
+function isNotEvaluable(reason: string): boolean {
+  return SYNTAX_REASONS.has(reason) || reason.startsWith('FUNCION_NO_MEDIBLE');
+}
+
+/** Compara la métrica real contra el umbral de la regla. Nunca devuelve un disparo simulado. */
+export function evaluateAlertExpr(expr: string, metrics: readonly Metric[]): AlertOutcome {
+  const comparison = expr.match(COMPARISON);
+  if (!comparison?.groups) return { state: 'not_evaluable', reason: 'SIN_COMPARACION_CON_UMBRAL' };
+  const resolved = resolveExprValue(comparison.groups.lhs, metrics);
+  if (resolved.value === null)
+    return {
+      state: isNotEvaluable(resolved.reason) ? 'not_evaluable' : 'no_data',
+      reason: resolved.reason,
+    };
+  const threshold = Number(comparison.groups.rhs);
+  const value = resolved.value;
+  let firing: boolean;
+  switch (comparison.groups.op) {
+    case '>':
+      firing = value > threshold;
+      break;
+    case '>=':
+      firing = value >= threshold;
+      break;
+    case '<':
+      firing = value < threshold;
+      break;
+    case '<=':
+      firing = value <= threshold;
+      break;
+    case '==':
+      firing = value === threshold;
+      break;
+    default:
+      firing = value !== threshold;
+  }
+  return {
+    state: 'evaluated',
+    value,
+    threshold,
+    operator: comparison.groups.op,
+    firing,
+    reason: 'MEDIDO',
+  };
+}
+
+const DURATION = /^(?<amount>\d+(?:\.\d+)?)\s*(?<unit>[smhd])$/;
+
+export function parseAlertDuration(forField: string): number {
+  const match = forField.trim().match(DURATION);
+  if (!match?.groups) return 0;
+  const perUnit: Record<string, number> = { s: 1e3, m: 6e4, h: 36e5, d: 864e5 };
+  return Number(match.groups.amount) * perUnit[match.groups.unit];
+}
+
+/**
  * SLO Manager
  */
+export interface SloEvaluation {
+  readonly slo: SLODefinition;
+  readonly value: number | null;
+  readonly met: boolean;
+  readonly state: 'MEASURED' | 'INSUFFICIENT_DATA';
+  readonly reason: string;
+  readonly good?: number;
+  readonly total?: number;
+}
 export class SLOManager extends EventEmitter {
   private slos: Map<string, SLODefinition> = new Map();
   private metricsCollector: MetricsCollector;
@@ -615,20 +880,34 @@ export class SLOManager extends EventEmitter {
     this.emit('slo:registered', slo);
   }
 
-  async evaluate(sloName: string): Promise<{ slo: SLODefinition; value: number; met: boolean }> {
+  async evaluate(sloName: string): Promise<SloEvaluation> {
     const slo = this.slos.get(sloName);
     if (!slo) throw new Error(`SLO_NOT_FOUND: ${sloName}`);
 
-    // In production, would query Prometheus
-    // For now, simulate
-    const value = 0.99; // Simulated SLI value
-    const met = value >= slo.target;
+    const metrics = this.metricsCollector.getMetrics();
+    const good = resolveExprValue(slo.sli.goodQuery, metrics);
+    const total = resolveExprValue(slo.sli.totalQuery, metrics);
+    if (good.value === null)
+      return { slo, value: null, met: false, state: 'INSUFFICIENT_DATA', reason: good.reason };
+    if (total.value === null)
+      return { slo, value: null, met: false, state: 'INSUFFICIENT_DATA', reason: total.reason };
 
+    const value = Math.min(1, Math.max(0, good.value / total.value));
+    const met = value >= slo.target;
+    const evaluation: SloEvaluation = {
+      slo,
+      value,
+      met,
+      state: 'MEASURED',
+      reason: 'MEDIDO',
+      good: good.value,
+      total: total.value,
+    };
     this.emit('slo:evaluated', { slo, value, met });
-    return { slo, value, met };
+    return evaluation;
   }
 
-  async evaluateAll(): Promise<Array<{ slo: SLODefinition; value: number; met: boolean }>> {
+  async evaluateAll(): Promise<SloEvaluation[]> {
     return Promise.all(Array.from(this.slos.keys()).map((name) => this.evaluate(name)));
   }
 
@@ -643,6 +922,8 @@ export class SLOManager extends EventEmitter {
 export class AlertManager extends EventEmitter {
   private rules: Map<string, AlertRule> = new Map();
   private activeAlerts: Map<string, ActiveAlert> = new Map();
+  private pendingSince: Map<string, number> = new Map();
+  private outcomes: Map<string, AlertOutcome> = new Map();
 
   addRule(rule: AlertRule): void {
     this.rules.set(rule.name, rule);
@@ -651,33 +932,57 @@ export class AlertManager extends EventEmitter {
 
   removeRule(name: string): void {
     this.rules.delete(name);
+    this.pendingSince.delete(name);
+    this.outcomes.delete(name);
     this.emit('rule:removed', name);
   }
 
-  evaluate(metrics: Metric[]): ActiveAlert[] {
+  /**
+   * Estado real de cada regla en la última pasada: MEDIDO, sin serie o no evaluable.
+   * Se expone para que un operador vea qué reglas todavía no miden nada.
+   */
+  getRuleOutcomes(): Array<{ rule: AlertRule; outcome: AlertOutcome }> {
+    return Array.from(this.rules.values()).map((rule) => ({
+      rule,
+      outcome: this.outcomes.get(rule.name) ?? { state: 'not_evaluable', reason: 'NUNCA_EVALUADA' },
+    }));
+  }
+
+  evaluate(metrics: Metric[], now: number = Date.now()): ActiveAlert[] {
     const newAlerts: ActiveAlert[] = [];
 
     for (const rule of this.rules.values()) {
-      // In production, would evaluate PromQL against metrics
-      // For now, simulate
-      const firing = Math.random() > 0.95; // 5% chance
+      const outcome = evaluateAlertExpr(rule.expr, metrics);
+      this.outcomes.set(rule.name, outcome);
+      const breached = outcome.state === 'evaluated' && outcome.firing === true;
 
-      if (firing) {
+      if (breached) {
+        const required = parseAlertDuration(rule.for);
+        const since = this.pendingSince.get(rule.name) ?? now;
+        this.pendingSince.set(rule.name, since);
+        // La regla sólo dispara después de su ventana `for`, medida sobre muestras reales.
+        if (now - since < required) continue;
+        const existing = this.activeAlerts.get(rule.name);
+        if (existing && existing.state === 'firing') continue;
         const alert: ActiveAlert = {
           rule,
           state: 'firing',
-          startsAt: Date.now(),
+          startsAt: since,
           labels: rule.labels,
           annotations: rule.annotations,
+          observed: outcome.value,
+          threshold: outcome.threshold,
+          operator: outcome.operator,
         };
         this.activeAlerts.set(rule.name, alert);
         newAlerts.push(alert);
         this.emit('alert:firing', alert);
       } else {
+        this.pendingSince.delete(rule.name);
         const existing = this.activeAlerts.get(rule.name);
         if (existing && existing.state === 'firing') {
           existing.state = 'resolved';
-          existing.endsAt = Date.now();
+          existing.endsAt = now;
           this.emit('alert:resolved', existing);
         }
       }
@@ -698,6 +1003,9 @@ interface ActiveAlert {
   endsAt?: number;
   labels: Record<string, string>;
   annotations: Record<string, string>;
+  observed?: number;
+  threshold?: number;
+  operator?: string;
 }
 
 /**
@@ -1025,6 +1333,22 @@ export class ObservabilityStack extends EventEmitter {
     });
 
     this.metrics.register({
+      name: 'process_heap_bytes',
+      type: 'gauge',
+      help: 'Used heap size in bytes',
+      labelNames: [],
+      unit: 'bytes',
+    });
+
+    this.metrics.register({
+      name: 'process_max_memory_bytes',
+      type: 'gauge',
+      help: 'V8 heap size limit in bytes',
+      labelNames: [],
+      unit: 'bytes',
+    });
+
+    this.metrics.register({
       name: 'process_cpu_seconds_total',
       type: 'counter',
       help: 'Total CPU time in seconds',
@@ -1205,12 +1529,17 @@ export class ObservabilityStack extends EventEmitter {
   }
 
   private setupDefaultAlerts(): void {
+    // Sin motor PromQL: la fracción se calcula sobre los contadores acumulados del proceso,
+    // no sobre una ventana de 5m. Se declara explícito para no vender una lectura que no existe.
     this.alerts.addRule({
       name: 'high_error_rate',
-      expr: 'rate(http_requests_total{status=~"5.."}[5m]) > 0.05',
+      expr: 'rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05',
       for: '2m',
       labels: { severity: 'critical' },
-      annotations: { summary: 'High error rate detected' },
+      annotations: {
+        summary: 'High error rate detected',
+        basis: 'cumulative_since_process_start',
+      },
     });
 
     this.alerts.addRule({
@@ -1223,20 +1552,25 @@ export class ObservabilityStack extends EventEmitter {
 
     this.alerts.addRule({
       name: 'memory_pressure',
-      expr: 'process_resident_memory_bytes / process_max_memory_bytes > 0.9',
+      expr: 'process_heap_bytes / process_max_memory_bytes > 0.9',
       for: '5m',
       labels: { severity: 'warning' },
-      annotations: { summary: 'Memory pressure detected' },
+      annotations: { summary: 'Heap usage above 90% of the V8 heap limit' },
     });
   }
 
   private startCollectionLoop(): void {
-    // Collect system metrics every 10 seconds
+    // Collect system metrics every 10 seconds. Cada lectura se toma del propio proceso:
+    // rss/heap reales, límite de heap de V8 y el delta de CPU medido entre tics.
+    let previousCpu = process.cpuUsage();
     setInterval(() => {
       const mem = process.memoryUsage();
+      const delta = process.cpuUsage(previousCpu);
+      previousCpu = process.cpuUsage();
       this.metrics.gauge('process_resident_memory_bytes', mem.rss);
       this.metrics.gauge('process_heap_bytes', mem.heapUsed);
-      this.metrics.counter('process_cpu_seconds_total', 0.01); // Approximate
+      this.metrics.gauge('process_max_memory_bytes', getHeapStatistics().heap_size_limit);
+      this.metrics.counter('process_cpu_seconds_total', (delta.user + delta.system) / 1e6);
     }, 10000);
 
     // Evaluate alerts every 30 seconds

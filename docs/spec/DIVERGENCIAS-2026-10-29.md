@@ -116,3 +116,71 @@ El archivo adjunto incluye **dos URL prefirmadas de Amazon S3 con credenciales t
 (`X-Amz-Security-Token` y un access key `ASIA…`) y números de teléfono personales de contactos de
 verificación. No se copiaron ni se comitearon en este repositorio. Esos tokens deben considerarse
 expuestos y rotarse; si el `.docx` se compartió, conviene redistribuir una versión sin URL firmadas.
+
+## 5. Segunda tanda (2026-10-29): mock data servido por HTTP y mapa del universo
+
+### 5.1 Datos inventados que se eliminaron de la superficie real
+
+| Sitio | Lo que publicaba | Lo que publica ahora |
+|---|---|---|
+| `GET /api/v1/status` | `toolsCount: 2` (el registro tiene 37 descriptores) | 37 medidos en vivo, más 9 subsistemas con sus conteos reales y la distribución de riesgo derivada del catálogo |
+| `GET /api/v1/status` → `engines` | 6 motores con `state: 'ACTIVE'` inventado | taxonomía `UNIVERSE_STATE_LEGEND` derivada del cableado; el PDP se declara `MODULE_NOT_WIRED_TO_HTTP` (verificado: `decidePdp` no se importa en `src/server.ts`) |
+| `#quantumMesh` (hero) | posiciones y estados generados con `Math.random()` | `src/ui/universe-map.js` pinta exclusivamente lo que devuelve `/api/v1/status`; si la lectura falla muestra `SIN DATOS · MAPA NO DISPONIBLE` y no dibuja nada |
+| `AlertManager.evaluate` (antes en `observability-stack.ts:663`) | `const firing = Math.random() > 0.95` en cada pasada de los 30 s → `GET /api/v1/observability/alerts` entregaba alertas fabricadas | umbral comparado contra la métrica real, ventana `for` respetada y valor observado en la alerta; la ruta añade `ruleOutcomes` con `evaluated / no_data / not_evaluable` |
+| `SLOManager.evaluate` (antes en `:624`) | `const value = 0.99; // Simulated SLI value` | `good / total` medidos sobre los contadores del proceso; sin datos devuelve `value: null` y `state: 'INSUFFICIENT_DATA'` |
+| bucle de recolección (antes en `:1239`) | `counter('process_cpu_seconds_total', 0.01) // Approximate` y `process_max_memory_bytes` inexistente | delta real de `process.cpuUsage()` y límite de heap real de V8; la regla `memory_pressure` compara heap contra su propio límite |
+| `SmartRouter.getMetrics()` | 11 campos en cero constante bajo el comentario «Aggregate metrics from both executors», publicados en `GET /api/v1/pipeline/hyper-turbo/metrics` | conteos de ruteo, llamadas y errores por etapa, media y máximo medidos; `errorRate`/`avgLatencyMs` son `null` si no hay llamadas, y `notInstrumented` lista lo que sigue sin medida (`throughputRps`, `stageLatencies`, `backpressureEvents`, percentil del camino frío) |
+| `getHotPathStats()` | `speculativeCacheSize: 0, // Would need access to private` | tamaño real de la caché, `speculativeHits`, `speculativeMisses` y percentil 99 del camino caliente |
+
+Ningún percentil se inventa: el `p99` se calcula por rango más cercano sobre una ventana
+deslizante de 4096 latencias realmente medidas.
+
+### 5.2 Fallo funcional descubierto al quitar el `eval`
+
+`SmartRouter.evaluateCondition` hacía `eval(condition.replace(/\binput\./g, ''))`. Borrar el prefijo
+dejaba `input.batchSize > 10` convertido en `batchSize > 10`, una variable inexistente cuyo
+`ReferenceError` silenciaba el `catch` devolviendo `false`. Consecuencia real: **ninguna regla de
+ruteo con campos se cumplía nunca** — sólo las literales `'true'` funcionaban — y todo el tráfico
+`path:'auto'` caía en la ruta caliente. Lo mismo valía para las reglas de los 4 pipelines por
+defecto. El reemplazo (`evaluateRoutingGuard` en el mismo módulo) resuelve rutas anidadas,
+`=== !== == != >= <= > <`, `&&` con precedencia sobre `||` y literales, y no ejecuta código; la
+prueba incluye una cadena que bajo `eval` habría escrito en `globalThis`.
+
+### 5.3 Mapa del universo: fuente única y contrato probado
+
+`src/genesis/universe.ts` (puro, independiente de Express) deriva el snapshot desde los registros
+del runtime (`CROWN_NODES`, `EXPERT_REGISTRY`, `runtime.tools/capabilities/skills/modules`,
+`killSwitch.status()`, `runtime.quantum.describe()`, contadores del sello BookPI) y
+`/api/v1/status` lo publica bajo `schema: 'isabella.universe.v1'`. El cliente rechaza pintar
+cualquier payload que no declare ese esquema. Pruebas: 10 unitarias
+(`test/genesis/universe-snapshot.test.ts`), 16 aserciones en `scripts/ui-smoke.mjs` y ~25 en
+`scripts/runtime-smoke.mjs` contra el servidor construido, incluidas «ningún motor puede estar
+`ACTIVE`», «cada `state` del snapshot existe en la leyenda» y `toolsCount ↔ universe.counts.tools ↔
+universe.evidence.tools`.
+
+**Límite de esta verificación:** el renderizado en navegador no se pudo comprobar. `browser-use`
+agotó sus timeouts (`navigate_page`, `take_screenshot`, `take_snapshot`, `evaluate_script`) aunque
+la página respondía. Lo que sí se ejecutó fue el cliente real contra el servidor en un DOM mínimo:
+46 marcas (núcleo + 12 nodos + 24 expertos + 9 subsistemas), 12 chips accesibles, 19 ítems de
+leyenda y la rama de error. Ese arnés no cuenta los trazos de `fillText`, así que la calidad visual
+(siguiendo tipografía, solapamientos) **queda sin verificar**.
+
+### 5.4 Lo que sigue sin ser cierto (no declarar como hecho)
+
+1. `HotPathExecutor.verifyResult()` devuelve `true` siempre («In production, would call verification
+   callback»): `metadata.verified` y el evento `speculative:verified` **no** son evidencia de
+   verificación. No se tocó: cambiarlo exige decidir qué se verifica.
+2. El árbol React `src/components/**` es código muerto: no lo compila esbuild (que sólo empaqueta
+   `src/server.ts`), no lo sirve Express y está excluido de `tsconfig.json` y de `eslint.config.mjs`.
+   Ahí vive el mock data restante —`VideoEngineXDashboard.tsx:736-739` inventa workers `ONLINE` con
+   VRAM fija, `RScoreGauge.tsx:14` mueve sus dimensiones con `Math.random()`— y tiene imports a
+   módulos inexistentes (`Cockpit.tsx:16` y `QuantumReflectionCard.tsx:4` referencian
+   `../../lib/atlas.functions`, que no existe en `src/lib`). La decisión (borrar el árbol o darle
+   bundler y datos reales) es arbitraje humano y no se tomó aquí.
+3. Espejos duplicados sin dueño: `src/lib/lib/**`, `src/components/isabella/isabella/**`,
+   `src/components/ui/ui/**`. Ninguno es importado desde el servidor.
+4. El typecheck no cubre todo el árbol: `src/lib`, `src/components`, `src/hooks`, `src/core`,
+   `src/authz-runtime` y `src/hypercore-runtime` no pasan por `tsc` ni por eslint en ninguna puerta.
+   `src/observability`, `src/pipeline/hyper-turbo` y `src/security/pqc` sí se typecheckean, pero sólo
+   en `typecheck:layers`.
+
