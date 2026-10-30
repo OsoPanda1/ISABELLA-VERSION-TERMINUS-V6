@@ -31,7 +31,7 @@ export interface MarketplaceRouteDeps {
     bucket: string
   ) => boolean;
   readonly rateLimiter: FixedWindowRateLimiter;
-  /** Admin gate. When omitted, no token is required (development). */
+  /** Admin gate. Required for planning mutations; absence fails closed. */
   readonly authorizeAdmin?: (req: Request, res: Response) => boolean;
 }
 
@@ -84,7 +84,7 @@ export function registerMarketplaceRoutes(deps: MarketplaceRouteDeps): void {
   });
 
   app.post('/api/v1/marketplace/plan', (req, res) => {
-    if (deps.authorizeAdmin && !deps.authorizeAdmin(req, res)) return;
+    if (!deps.authorizeAdmin) {\n      res.status(503).json({ success: false, error: 'MARKETPLACE_ADMIN_GATE_UNAVAILABLE' });\n      return;\n    }\n    if (!deps.authorizeAdmin(req, res)) return;
     if (!deps.enforceRateLimit(req, res, deps.rateLimiter, 'marketplace-plan')) return;
     const body = (req.body ?? {}) as Record<string, unknown>;
     const packId = typeof body.packId === 'string' ? body.packId.trim() : '';
