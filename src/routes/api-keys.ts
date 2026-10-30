@@ -6,6 +6,10 @@
  * - Only the digest is persisted; the secret is returned exactly once.
  * - Keys carry explicit scopes and an optional expiry.
  * - The raw secret is never logged, listed or written to the audit sink.
+ * - Writes await the persistence backend because a durable store commits one row
+ *   per action; verification stays synchronous so the auth hot path never awaits.
+ * - Backend faults answer 503 with a fixed code: driver error text (host, port,
+ *   SQL) is never echoed to the client.
  */
 import type { Application, NextFunction, Request, RequestHandler, Response } from 'express';
 import type { FixedWindowRateLimiter } from '../security/rate-limit';
@@ -39,6 +43,22 @@ const SCOPE_SET: ReadonlySet<string> = new Set(API_KEY_SCOPES);
 const PROGRAM_ID = /^[a-zA-Z0-9][a-zA-Z0-9._-]{1,63}$/;
 const MAX_NAME = 80;
 
+/** Validation faults raised by the store: they are the caller's mistake, not an outage. */
+const INPUT_FAULT_CODES: ReadonlySet<string> = new Set([
+  'API_KEY_INPUT_INVALID',
+  'API_KEY_EXPIRY_INVALID',
+  'API_KEY_STORE_FULL',
+]);
+
+function storeFault(res: Response, error: unknown, outageCode: string): void {
+  const message = error instanceof Error ? error.message : '';
+  if (INPUT_FAULT_CODES.has(message)) {
+    res.status(400).json({ success: false, error: message });
+    return;
+  }
+  res.status(503).json({ success: false, error: outageCode });
+}
+
 function scopesFrom(value: unknown): ApiKeyScope[] | null {
   if (!Array.isArray(value)) return ['cognition:read', 'cognition:write'];
   const scopes = [...new Set(value.filter((entry): entry is string => typeof entry === 'string'))];
@@ -49,7 +69,7 @@ function scopesFrom(value: unknown): ApiKeyScope[] | null {
 function slug(value: string): string {
   const base = value
     .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace([\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
@@ -65,7 +85,7 @@ function keyHeader(req: Request): string {
   return match?.[1] ?? '';
 }
 
-/** Strict authenticator for programmatic surfaces. */
+/** Strict authenticator for programmatic surfaces. Verification is synchronous by design. */
 export function createApiKeyAuthenticator(
   store: IsabellaApiKeyStore,
   requiredScope?: ApiKeyScope
@@ -128,7 +148,7 @@ export function registerApiKeyRoutes(deps: ApiKeyRouteDeps): void {
     });
   });
 
-  app.post('/api/v1/admin/programs', (req, res) => {
+  app.post('/api/v1/admin/programs', async (req, res) => {
     if (!deps.authorizeAdmin(req, res)) return;
     if (!deps.enforceRateLimit(req, res, deps.rateLimiter, 'api-key-issue')) return;
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -147,10 +167,9 @@ export function registerApiKeyRoutes(deps: ApiKeyRouteDeps): void {
     const expiresAt = typeof body.expiresAt === 'string' ? body.expiresAt : null;
     let issued;
     try {
-      issued = store.issue({ tenantId, name, scopes, expiresAt });
+      issued = await store.issue({ tenantId, name, scopes, expiresAt });
     } catch (error) {
-      const code = error instanceof Error ? error.message : 'API_KEY_ISSUE_FAILED';
-      res.status(400).json({ success: false, error: code });
+      storeFault(res, error, 'API_KEY_ISSUE_UNAVAILABLE');
       return;
     }
     try {
@@ -174,10 +193,16 @@ export function registerApiKeyRoutes(deps: ApiKeyRouteDeps): void {
     res.json({ success: true, keys: store.list(tenantId), count: store.list(tenantId).length });
   });
 
-  app.post('/api/v1/admin/api-keys/:id/rotate', (req, res) => {
+  app.post('/api/v1/admin/api-keys/:id/rotate', async (req, res) => {
     if (!deps.authorizeAdmin(req, res)) return;
     if (!deps.enforceRateLimit(req, res, deps.rateLimiter, 'api-key-rotate')) return;
-    const rotated = store.rotate(req.params.id);
+    let rotated;
+    try {
+      rotated = await store.rotate(req.params.id);
+    } catch (error) {
+      storeFault(res, error, 'API_KEY_ROTATE_UNAVAILABLE');
+      return;
+    }
     if (!rotated) {
       res.status(404).json({ success: false, error: 'API_KEY_NOT_FOUND_OR_INACTIVE' });
       return;
@@ -198,11 +223,22 @@ export function registerApiKeyRoutes(deps: ApiKeyRouteDeps): void {
     });
   });
 
-  app.delete('/api/v1/admin/api-keys/:id', (req, res) => {
+  app.delete('/api/v1/admin/api-keys/:id', async (req, res) => {
     if (!deps.authorizeAdmin(req, res)) return;
     if (!deps.enforceRateLimit(req, res, deps.rateLimiter, 'api-key-revoke')) return;
     const record = store.get(req.params.id);
-    if (!record || !store.revoke(record.id)) {
+    if (!record) {
+      res.status(404).json({ success: false, error: 'API_KEY_NOT_FOUND_OR_REVOKED' });
+      return;
+    }
+    let revoked: boolean;
+    try {
+      revoked = await store.revoke(record.id);
+    } catch (error) {
+      storeFault(res, error, 'API_KEY_REVOKE_UNAVAILABLE');
+      return;
+    }
+    if (!revoked) {
       res.status(404).json({ success: false, error: 'API_KEY_NOT_FOUND_OR_REVOKED' });
       return;
     }
