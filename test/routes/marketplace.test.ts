@@ -38,7 +38,7 @@ const INVENTORY: MarketplaceInventory = {
   capabilities: 0,
 };
 
-function harness(options: { denyAdmin?: boolean; denyRate?: boolean } = {}) {
+function harness(options: { denyAdmin?: boolean; denyRate?: boolean; omitAdmin?: boolean } = {}) {
   const handlers = new Map<string, Handler>();
   const app = {
     get: (path: string, handler: Handler) => handlers.set(`GET ${path}`, handler),
@@ -62,7 +62,7 @@ function harness(options: { denyAdmin?: boolean; denyRate?: boolean } = {}) {
     },
     enforceRateLimit: () => !options.denyRate,
     rateLimiter: {} as FixedWindowRateLimiter,
-    ...(options.denyAdmin ? { authorizeAdmin: () => false } : {}),
+    ...(!options.omitAdmin ? { authorizeAdmin: () => !options.denyAdmin } : {}),
   });
   return handlers;
 }
