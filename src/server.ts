@@ -3867,6 +3867,19 @@ app.get('/api/v1/memory/snapshot', (req, res) => {
   res.json({ success: true, entries: hierarchicalMemory.list(scope as any) });
 });
 
+app.get('/api/v1/isabella/full-status', (_req, res) => {
+  res.json({
+    success: true,
+    engine: runtime.isabella.snapshot(),
+    providers: runtime.inference.list(),
+    memory: hierarchicalMemory.list(),
+    ragSize: sovereignRag.size(),
+    threatIntel: 'active',
+    i18n: getLocaleFromEnv(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.get('/api/v1/isabella/status', (_req, res) => {
   res.json({
     success: true,
