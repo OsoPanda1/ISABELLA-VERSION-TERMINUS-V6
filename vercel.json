@@ -20,7 +20,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 60,
-      "includeFiles": "{dist/**,src/ui/**,src/assets/video/**}"
+      "includeFiles": "{dist/**,src/**,src/ui/**,src/assets/video/**}"
     }
   },
   "rewrites": [{
