@@ -63,3 +63,8 @@ granularidad por fichero queda en el historial de git.
   [`architecture/SSOT.md`](architecture/SSOT.md).
 - `spec/`, `evolution/`, `api/`, `runbooks/`, `security/` y los artefactos generados se conservaron
   intactos en sus rutas (load-bearing para las pruebas y gates).
+
+## RFCs (sanitización documental)
+
+- [RFC Index](rfc/README.md)
+- Capa unificada en docs/rfc/; documentos narrativos redundantes archivados en docs/history/archive/.
