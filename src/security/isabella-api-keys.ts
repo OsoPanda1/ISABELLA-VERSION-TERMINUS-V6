@@ -3,7 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { envFlag } from '../lib/env-flags';
 import { isPostgresStoreMode } from '../database/postgres-store-mode';
-import { createPostgresApiKeyPersistence } from './postgres-api-key-persistence';
+import {
+  createPostgresApiKeyPersistence,
+  PostgresApiKeyPersistence,
+} from './postgres-api-key-persistence';
 
 export const API_KEY_SCOPES = [
   'cognition:read',
@@ -40,10 +43,10 @@ export type ApiKeyVerification =
   | { ok: false; reason: 'invalid' | 'expired' | 'revoked' | 'scope' };
 
 /**
- * Read side is synchronous by design: verify() runs on every authenticated
+ * The read side is synchronous by design: verify() runs on every authenticated
  * request and must never await. Backends that cannot serve a synchronous read
- * implement hydrate() instead, and row-level backends implement saveRecord()
- * so a single key never rewrites the collection.
+ * implement hydrate(), and row-level backends implement saveRecord() so one key
+ * never rewrites the collection.
  */
 export interface ApiKeyPersistence {
   load(): StoredKey[];
@@ -272,13 +275,14 @@ export class IsabellaApiKeyStore {
     if (!record || record.revokedAt) return null;
     if (record.expiresAt && Date.parse(record.expiresAt) <= this.now()) return null;
     const issuedValue = `${PREFIX}${randomBytes(32).toString('base64url')}`;
+    const previous: StoredKey = { ...record, scopes: [...record.scopes] };
     record.prefix = issuedValue.slice(0, 16);
     record.lastUsedAt = null;
     record.digest = this.digest(issuedValue);
     try {
       await this.writeRecord(record);
     } catch (error) {
-      this.keys.set(id, { ...record });
+      this.keys.set(id, previous);
       throw error;
     }
     return { secret: issuedValue, record: publicRecord(record) };
@@ -322,8 +326,8 @@ export class IsabellaApiKeyStore {
 
 /**
  * Selects persistence from the environment. Serverless filesystems are
- * ephemeral, so they fail closed to memory unless a durable adapter is
- * selected. Postgres is that adapter: hydrate() once, then verify synchronously.
+ * ephemeral, so they fail closed to memory unless a durable backend is selected.
+ * Postgres is that backend: hydrate once, then verify synchronously forever.
  * The file backend writes digests only and never the raw key.
  */
 export function createDefaultApiKeyStore(
@@ -355,12 +359,12 @@ export function createDefaultApiKeyStore(
       return store;
     }
     console.warn(
-      '[Isabella] ISABELLA_API_KEY_STORE requests Postgres but no usable DATABASE_URL / POSTGRES_URL exists; using the previous non-durable backend.'
+      '[Isabella] ISABELLA_API_KEY_STORE requests Postgres without a usable DATABASE_URL / POSTGRES_URL; falling back to the previous backend.'
     );
   }
 
-  // No durable adapter is reachable: refuse to serve production with ephemeral
-  // credentials rather than silently losing keys across cold starts.
+  // No reachable durable adapter: refuse to serve production with ephemeral
+  // credentials rather than silently losing or replacing keys across cold starts.
   if (isProductionServerless) {
     console.warn(
       '[Isabella] API key store is ephemeral on serverless; configure a durable adapter for production-grade key persistence.'
