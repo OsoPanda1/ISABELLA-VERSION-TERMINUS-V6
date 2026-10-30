@@ -1,7 +1,11 @@
 import { buildPricingCatalog } from './commerce/catalog';
 
 import { envFlag } from './lib/env-flags';
-import { OllamaAdapter, GratisAPIAdapter, HuggingFaceFreeAdapter } from './inference/free-providers';
+import {
+  OllamaAdapter,
+  GratisAPIAdapter,
+  HuggingFaceFreeAdapter,
+} from './inference/free-providers';
 import { createFoundationalLLM } from './inference/foundational-llm';
 import { createLocalEngine } from './inference/local-engine';
 import { hierarchicalMemory } from './memory/hierarchical';
@@ -14,7 +18,15 @@ import { sovereignRag } from './inference/rag';
 import { boundedBudgetMs, DeadlineBudget, hedgedFirst } from './inference/deadline';
 import { buildAsset, contentHash, serveAsset, type StaticAsset } from './http/static-assets';
 import express, { type Application, type NextFunction, type Request, type Response } from 'express';
-import { createPublicKey, randomUUID, timingSafeEqual, generateKeyPairSync, sign, verify, type KeyObject } from 'node:crypto';
+import {
+  createPublicKey,
+  randomUUID,
+  timingSafeEqual,
+  generateKeyPairSync,
+  sign,
+  verify,
+  type KeyObject,
+} from 'node:crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'node:url';
@@ -3518,7 +3530,8 @@ app.post('/api/v1/cognitive/request', async (req, res) => {
           knowledgeContext: verifiedKnowledgeContext,
         });
         generativeNarrative = foundational.text;
-        responseEngine = foundational.engine === 'foundational' ? 'foundational' : 'sovereign-fallback';
+        responseEngine =
+          foundational.engine === 'foundational' ? 'foundational' : 'sovereign-fallback';
       } catch {
         // Same disclosure contract as /cognition/route: the deterministic local answer
         // is never presented as model output.
@@ -3705,7 +3718,9 @@ app.get('/api/v1/isabella/rag/search', (req, res) => {
 
 app.post('/api/v1/domains/search', async (req, res) => {
   const body = (req.body ?? {}) as Record<string, unknown>;
-  const domains = Array.isArray(body.domains) ? body.domains.filter((d): d is string => typeof d === 'string') : [];
+  const domains = Array.isArray(body.domains)
+    ? body.domains.filter((d): d is string => typeof d === 'string')
+    : [];
   if (domains.length === 0) {
     res.status(400).json({ success: false, error: 'domains array required' });
     return;
@@ -3714,7 +3729,9 @@ app.post('/api/v1/domains/search', async (req, res) => {
     const results = await searchDomains(domains);
     res.json({ success: true, results });
   } catch (error) {
-    res.status(502).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+    res
+      .status(502)
+      .json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -3745,9 +3762,29 @@ app.post('/api/mcp', async (req, res) => {
   if (method === 'tools/list') {
     reply({
       tools: [
-        { name: 'isabella_status', description: 'Estado del runtime de Isabella', inputSchema: { type: 'object', properties: {} } },
-        { name: 'isabella_foundational', description: 'Genera respuesta con el LLM fundacional', inputSchema: { type: 'object', properties: { input: { type: 'string' } }, required: ['input'] } },
-        { name: 'isabella_rag_search', description: 'Busca en el RAG soberano', inputSchema: { type: 'object', properties: { q: { type: 'string' }, k: { type: 'number' } }, required: ['q'] } },
+        {
+          name: 'isabella_status',
+          description: 'Estado del runtime de Isabella',
+          inputSchema: { type: 'object', properties: {} },
+        },
+        {
+          name: 'isabella_foundational',
+          description: 'Genera respuesta con el LLM fundacional',
+          inputSchema: {
+            type: 'object',
+            properties: { input: { type: 'string' } },
+            required: ['input'],
+          },
+        },
+        {
+          name: 'isabella_rag_search',
+          description: 'Busca en el RAG soberano',
+          inputSchema: {
+            type: 'object',
+            properties: { q: { type: 'string' }, k: { type: 'number' } },
+            required: ['q'],
+          },
+        },
       ],
     });
     return;
@@ -3759,12 +3796,26 @@ app.post('/api/mcp', async (req, res) => {
     const args = (params.arguments ?? {}) as Record<string, unknown>;
     try {
       if (name === 'isabella_status') {
-        reply({ content: [{ type: 'text', text: JSON.stringify({ engine: runtime.isabella.snapshot(), providers: runtime.inference.list() }) }] });
+        reply({
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                engine: runtime.isabella.snapshot(),
+                providers: runtime.inference.list(),
+              }),
+            },
+          ],
+        });
         return;
       }
       if (name === 'isabella_foundational') {
         const input = typeof args.input === 'string' ? args.input : '';
-        const result = await foundationalLLM.generate({ input, systemPrompt: 'Eres Isabella Villaseñor AI.', maxTokens: 512 });
+        const result = await foundationalLLM.generate({
+          input,
+          systemPrompt: 'Eres Isabella Villaseñor AI.',
+          maxTokens: 512,
+        });
         reply({ content: [{ type: 'text', text: result.text }] });
         return;
       }
@@ -3786,7 +3837,12 @@ app.post('/api/mcp', async (req, res) => {
 
 app.get('/api/v1/i18n/locale', (_req, res) => {
   const locale = getLocaleFromEnv();
-  res.json({ success: true, locale, greeting: t('greeting', locale), identity: t('identity', locale) });
+  res.json({
+    success: true,
+    locale,
+    greeting: t('greeting', locale),
+    identity: t('identity', locale),
+  });
 });
 
 app.post('/api/isabella/chat', async (req, res) => {
@@ -3799,12 +3855,21 @@ app.post('/api/isabella/chat', async (req, res) => {
   try {
     const result = await foundationalLLM.generate({
       input,
-      systemPrompt: 'Eres Isabella Villaseñor AI, LLM fundacional soberano de TAMV. Responde en español latinoamericano mexicano.',
+      systemPrompt:
+        'Eres Isabella Villaseñor AI, LLM fundacional soberano de TAMV. Responde en español latinoamericano mexicano.',
       maxTokens: typeof body.maxTokens === 'number' ? body.maxTokens : 512,
     });
-    res.json({ success: true, output: result.text, engine: result.engine, modelId: result.modelId, timestamp: new Date().toISOString() });
+    res.json({
+      success: true,
+      output: result.text,
+      engine: result.engine,
+      modelId: result.modelId,
+      timestamp: new Date().toISOString(),
+    });
   } catch (error) {
-    res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+    res
+      .status(500)
+      .json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -3817,14 +3882,28 @@ app.post('/api/isabella/isa/reason', (req, res) => {
   }
   const engine = createLocalEngine();
   const analysis = engine.analyze(input);
-  res.json({ success: true, traceId: `trace-${randomUUID()}`, analysis, timestamp: new Date().toISOString() });
+  res.json({
+    success: true,
+    traceId: `trace-${randomUUID()}`,
+    analysis,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 app.post('/api/isabella/crypto/sign', (req, res) => {
   const body = (req.body ?? {}) as Record<string, unknown>;
-  const payload = typeof body.payload === 'string' ? body.payload : JSON.stringify(body.payload ?? {});
-  const signature = sign(null, Buffer.from(payload, 'utf8'), isabellaSigningPrivateKey).toString('base64');
-  res.json({ success: true, payload, signature, publicKey: isabellaSigningPublicKey, algorithm: 'Ed25519' });
+  const payload =
+    typeof body.payload === 'string' ? body.payload : JSON.stringify(body.payload ?? {});
+  const signature = sign(null, Buffer.from(payload, 'utf8'), isabellaSigningPrivateKey).toString(
+    'base64'
+  );
+  res.json({
+    success: true,
+    payload,
+    signature,
+    publicKey: isabellaSigningPublicKey,
+    algorithm: 'Ed25519',
+  });
 });
 
 app.post('/api/isabella/crypto/verify', (req, res) => {
@@ -3850,7 +3929,12 @@ app.post('/api/v1/memory/store', (req, res) => {
     res.status(400).json({ success: false, error: 'key es requerido' });
     return;
   }
-  hierarchicalMemory.set(scope, key, body.value, typeof body.ttlMs === 'number' ? body.ttlMs : undefined);
+  hierarchicalMemory.set(
+    scope,
+    key,
+    body.value,
+    typeof body.ttlMs === 'number' ? body.ttlMs : undefined
+  );
   res.json({ success: true });
 });
 
@@ -3886,12 +3970,20 @@ app.get('/api/v1/isabella/eval', async (_req, res) => {
   let total = 0;
   for (const q of DEFAULT_BENCHMARK) {
     try {
-      const r = await foundationalLLM.generate({ input: q.prompt, systemPrompt: 'Eres Isabella.', maxTokens: 256 });
+      const r = await foundationalLLM.generate({
+        input: q.prompt,
+        systemPrompt: 'Eres Isabella.',
+        maxTokens: 256,
+      });
       const score = scoreAnswer(r.text, q.expectedKeywords);
       total += score;
       results.push({ id: q.id, score, engine: r.engine });
     } catch (error) {
-      results.push({ id: q.id, score: 0, error: error instanceof Error ? error.message : String(error) });
+      results.push({
+        id: q.id,
+        score: 0,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
   res.json({ success: true, avgScore: results.length ? total / results.length : 0, results });
@@ -6673,7 +6765,9 @@ app.post('/api/v1/monetization/profit-price', (req, res) => {
     });
     res.json({ success: true, price, guard: profitGuard.snapshot() });
   } catch (error) {
-    res.status(400).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+    res
+      .status(400)
+      .json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 

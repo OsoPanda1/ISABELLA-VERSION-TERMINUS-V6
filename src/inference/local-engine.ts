@@ -239,7 +239,9 @@ const PARTIAL_KEYWORDS: Readonly<Record<string, string>> = {
 const EXTRA_INTENTS = [
   {
     intent: 'monetization',
-    patterns: [/monetizaci.n|monetizacion|precio|pricing|ganancia|profit|ingreso|revenue|stripe|suscripci.n|suscripcion/i],
+    patterns: [
+      /monetizaci.n|monetizacion|precio|pricing|ganancia|profit|ingreso|revenue|stripe|suscripci.n|suscripcion/i,
+    ],
     responses: [
       'La monetización de Isabella opera con Profit Guard: ningún precio puede ser inferior al costo + margen mínimo (25% por defecto). Se usa dynamic pricing por demanda/carga/valor y split 75/25 de soberanía. Endpoint: POST /api/v1/monetization/profit-price.',
     ],
@@ -368,9 +370,17 @@ export class LocalInferenceEngine {
     return best;
   }
 
-  analyze(prompt: string): { intent: string; confidence: 'HIGH' | 'MEDIUM' | 'LOW'; matchedTerms: readonly string[] } {
+  analyze(prompt: string): {
+    intent: string;
+    confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+    matchedTerms: readonly string[];
+  } {
     const result = this.matchIntent(prompt.trim());
-    return { intent: result.intent, confidence: result.confidence, matchedTerms: result.matchedTerms };
+    return {
+      intent: result.intent,
+      confidence: result.confidence,
+      matchedTerms: result.matchedTerms,
+    };
   }
 
   getSnapshot(): LocalEngineConfig {

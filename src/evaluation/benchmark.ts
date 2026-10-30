@@ -5,8 +5,16 @@ export interface BenchmarkQuestion {
 }
 
 export const DEFAULT_BENCHMARK: BenchmarkQuestion[] = [
-  { id: 'q1', prompt: '¿Cuál es el invariante supremo de Isabella?', expectedKeywords: ['CAPABILITY', 'AUTHORITY', 'EXECUTION', 'EVIDENCE'] },
-  { id: 'q2', prompt: '¿Dónde está el Nodo Cero?', expectedKeywords: ['Real del Monte', 'Hidalgo'] },
+  {
+    id: 'q1',
+    prompt: '¿Cuál es el invariante supremo de Isabella?',
+    expectedKeywords: ['CAPABILITY', 'AUTHORITY', 'EXECUTION', 'EVIDENCE'],
+  },
+  {
+    id: 'q2',
+    prompt: '¿Dónde está el Nodo Cero?',
+    expectedKeywords: ['Real del Monte', 'Hidalgo'],
+  },
   { id: 'q3', prompt: '¿Qué es BookPI?', expectedKeywords: ['hash', 'SHA', 'ledger'] },
 ];
 

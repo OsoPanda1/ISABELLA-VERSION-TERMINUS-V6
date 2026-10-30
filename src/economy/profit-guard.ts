@@ -12,13 +12,15 @@ export interface ProfitContext {
 
 export function minimumProfitablePrice(cost: number, marginBps: number): number {
   if (!Number.isFinite(cost) || cost < 0) throw new RangeError('PROFIT: cost must be >= 0');
-  if (!Number.isFinite(marginBps) || marginBps < 0) throw new RangeError('PROFIT: marginBps must be >= 0');
+  if (!Number.isFinite(marginBps) || marginBps < 0)
+    throw new RangeError('PROFIT: marginBps must be >= 0');
   return Math.round(cost * (1 + marginBps / 10_000) * 100) / 100;
 }
 
 export function profitablePrice(ctx: ProfitContext): number {
   const min = minimumProfitablePrice(ctx.cost, ctx.marginBps);
-  const dynamic = ctx.cost * (ctx.demandFactor ?? 1) * (ctx.loadFactor ?? 1) * (ctx.valueFactor ?? 1);
+  const dynamic =
+    ctx.cost * (ctx.demandFactor ?? 1) * (ctx.loadFactor ?? 1) * (ctx.valueFactor ?? 1);
   const candidate = Math.max(min, dynamic);
   // Fail-closed: nunca por debajo del mínimo.
   return Math.max(min, Math.round(candidate * 100) / 100);

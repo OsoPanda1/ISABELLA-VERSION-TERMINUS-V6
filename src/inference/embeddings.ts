@@ -14,11 +14,12 @@ function hashToken(token: string, seed: number): number {
 
 export function embed(text: string): Float32Array {
   const vec = new Float32Array(DIM);
-  const tokens = text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .match(/[\p{L}\p{N}]{3,}/gu) ?? [];
+  const tokens =
+    text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .match(/[\p{L}\p{N}]{3,}/gu) ?? [];
   if (tokens.length === 0) return vec;
   for (const t of tokens) {
     for (let s = 0; s < 3; s++) {

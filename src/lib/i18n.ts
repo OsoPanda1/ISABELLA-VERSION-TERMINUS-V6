@@ -2,16 +2,21 @@ export type Locale = 'es-MX' | 'es' | 'en';
 
 const MESSAGES: Record<Locale, Record<string, string>> = {
   'es-MX': {
-    greeting: '¡Hola! Soy Isabella Villaseñor AI. Estoy aquí para ayudarte desde Real del Monte, Hidalgo.',
-    identity: 'Soy Isabella Villaseñor AI, un runtime de inteligencia artificial gobernada, anclado en Real del Monte, Hidalgo, México.',
-    fallback: 'Entiendo tu consulta. Puedo ayudarte con territorio, gobernanza, capacidades, memoria y estado del sistema.',
-    blocked: 'No puedo procesar esa solicitud. Opero bajo el invariante CAPABILITY ≠ AUTHORITY ≠ EXECUTION ≠ EVIDENCE ≠ LEARNING ≠ PRODUCTION.',
+    greeting:
+      '¡Hola! Soy Isabella Villaseñor AI. Estoy aquí para ayudarte desde Real del Monte, Hidalgo.',
+    identity:
+      'Soy Isabella Villaseñor AI, un runtime de inteligencia artificial gobernada, anclado en Real del Monte, Hidalgo, México.',
+    fallback:
+      'Entiendo tu consulta. Puedo ayudarte con territorio, gobernanza, capacidades, memoria y estado del sistema.',
+    blocked:
+      'No puedo procesar esa solicitud. Opero bajo el invariante CAPABILITY ≠ AUTHORITY ≠ EXECUTION ≠ EVIDENCE ≠ LEARNING ≠ PRODUCTION.',
     status: 'Estoy operativa. Todos los sistemas funcionan bajo gobernanza fail-closed.',
   },
   es: {
     greeting: '¡Hola! Soy Isabella Villaseñor AI.',
     identity: 'Soy Isabella Villaseñor AI, un runtime de inteligencia artificial gobernada.',
-    fallback: 'Puedo ayudarte con territorio, gobernanza, capacidades, memoria y estado del sistema.',
+    fallback:
+      'Puedo ayudarte con territorio, gobernanza, capacidades, memoria y estado del sistema.',
     blocked: 'No puedo procesar esa solicitud.',
     status: 'Estoy operativa.',
   },

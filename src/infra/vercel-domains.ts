@@ -12,7 +12,9 @@ export async function searchDomains(domains: string[]): Promise<DomainSearchResu
     body: JSON.stringify({ domains: domains.slice(0, 200) }),
   });
   if (!res.ok) throw new Error(`VERCEL_DOMAIN_SEARCH_${res.status}`);
-  const data = (await res.json()) as { results?: Array<{ domain: string; available: boolean; price?: number; renewalPrice?: number }> };
+  const data = (await res.json()) as {
+    results?: Array<{ domain: string; available: boolean; price?: number; renewalPrice?: number }>;
+  };
   return (data.results ?? []).map((r) => ({
     domain: r.domain,
     available: r.available,
