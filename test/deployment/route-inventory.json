@@ -129,6 +129,7 @@
   "GET /ui/platform-chat.js",
   "GET /ui/platform.js",
   "GET /ui/platform/logo-isav6.jpeg",
+  "GET /ui/universe-map.js",
   "GET /v1/models",
   "POST /api/v1/admin/api-keys/:id/rotate",
   "POST /api/v1/admin/programs",
