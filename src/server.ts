@@ -3767,6 +3767,14 @@ app.get('/api/v1/isabella/providers', (_req, res) => {
 
 // Minimal MCP-compatible JSON-RPC endpoint (tools/list, tools/call).
 app.post('/api/mcp', async (req, res) => {
+  const mcpToken = process.env.MCP_SERVER_TOKEN;
+  if (mcpToken) {
+    const auth = req.get('authorization') ?? '';
+    if (auth !== `Bearer ${mcpToken}`) {
+      res.status(401).json({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unauthorized' } });
+      return;
+    }
+  }
   const body = (req.body ?? {}) as Record<string, unknown>;
   const id = body.id ?? null;
   const method = typeof body.method === 'string' ? body.method : '';
