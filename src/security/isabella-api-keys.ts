@@ -239,6 +239,22 @@ export function createDefaultApiKeyStore(
   env: Readonly<Record<string, string | undefined>> = process.env
 ): IsabellaApiKeyStore {
   const mode = (env.ISABELLA_API_KEY_STORE ?? '').trim().toLowerCase();
+  const vercelEnvironment = (env.VERCEL_ENV ?? '').trim().toLowerCase();
+  const isProductionServerless =
+    (envFlag(env, 'VERCEL') || vercelEnvironment !== '') &&
+    (vercelEnvironment === 'production' ||
+      vercelEnvironment === 'preview' ||
+      (env.NODE_ENV ?? '').trim().toLowerCase() === 'production');
+
+  // No synchronous shared-database adapter is wired into this store yet.
+  // Refuse to serve production with ephemeral credentials rather than silently
+  // losing/replacing keys across cold starts or failed local-file persistence.
+  if (isProductionServerless) {
+    throw new Error(
+      'API_KEY_STORE_NON_DURABLE: production serverless requires a shared durable API-key adapter; memory/file fallback is disabled.'
+    );
+  }
+
   if (mode === 'memory' || (!mode && envFlag(env, 'VERCEL'))) return new IsabellaApiKeyStore();
   const filePath = (env.ISABELLA_API_KEY_STORE_PATH ?? '.data/api-keys.json').trim();
   try {
