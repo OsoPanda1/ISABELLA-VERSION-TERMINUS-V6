@@ -11,6 +11,7 @@ const good = {
   DATABASE_URL: "postgresql://u:p@db.example.org:5432/isabella?sslmode=require",
   SUPABASE_URL: "https://x.supabase.co",
   SUPABASE_SERVICE_ROLE_KEY: strong("sb"),
+  SUPABASE_ANON_KEY: "eyJhbGciOi-example-anon-key",
   GROQ_API_KEY: "gsk_example",
   ALLOWED_ORIGINS: "https://isabella.example.org",
   BOOKPI_LEDGER_PATH: "/app/data/ledger.jsonl",
@@ -46,6 +47,12 @@ describe("deploy readiness", () => {
     const r = runDeployReadiness(none);
     expect(r.findings.map((f) => f.id)).toContain("DR-SUPABASE-ABSENT");
     expect(r.status).toBe("READY_WITH_WARNINGS");
+  });
+
+  it("blocks when Supabase is configured but its user-authentication key is absent", () => {
+    const { SUPABASE_ANON_KEY: _anon, ...rest } = good;
+    const ids = runDeployReadiness(rest).findings.map((f) => f.id);
+    expect(ids).toContain("DR-SUPABASE-AUTH-KEY-MISSING");
   });
 
   it("warns about a missing inference provider and localhost origins", () => {
