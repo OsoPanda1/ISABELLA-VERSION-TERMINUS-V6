@@ -1,5 +1,5 @@
 import { buildPricingCatalog } from './commerce/catalog';
-/// <reference path="./ambient.d.ts" />
+
 import { envFlag } from './lib/env-flags';
 import { OllamaAdapter, GratisAPIAdapter, HuggingFaceFreeAdapter } from './inference/free-providers';
 import { createFoundationalLLM } from './inference/foundational-llm';

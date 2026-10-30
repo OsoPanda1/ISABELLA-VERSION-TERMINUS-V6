@@ -1,4 +1,4 @@
-/// <reference path="../ambient.d.ts" />
+
 import { createLocalEngine } from './local-engine';
 import { sovereignRag } from './rag';
 import { generateText } from 'ai';

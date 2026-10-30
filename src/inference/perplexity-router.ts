@@ -7,7 +7,7 @@
  *
  * CAPABILITY ≠ AUTHORITY ≠ EXECUTION ≠ EVIDENCE ≠ LEARNING ≠ PRODUCTION.
  */
-/// <reference path="../ambient.d.ts" />
+
 import OpenAI from 'openai';
 
 export const PERPLEXITY_ROUTER_BASE_URL = 'https://api.perplexity.ai/router/v1';
