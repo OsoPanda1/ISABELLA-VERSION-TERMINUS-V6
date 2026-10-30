@@ -9,6 +9,11 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { envFlag } from '../lib/env-flags';
+import { isPostgresStoreMode } from '../database/postgres-store-mode';
+import {
+  createPostgresFederationPersistence,
+  PostgresFederationPersistence,
+} from './postgres-federation-persistence';
 
 export const CONNECTOR_KINDS = ['whatsapp', 'openwa', 'evolution', 'webhook'] as const;
 export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
@@ -32,14 +37,24 @@ export interface InboxEntry {
   readonly remoteMessageId: string | null;
 }
 
-interface FederationFile {
+export interface FederationFile {
   connectors: ConnectorRecord[];
   inbox: InboxEntry[];
 }
 
+/**
+ * Readers stay synchronous so the webhook path never blocks on a snapshot.
+ * Row-level backends implement the optional async members; snapshot backends
+ * keep using load()/save() exactly as before.
+ */
 export interface FederationPersistence {
   load(): FederationFile;
   save(file: FederationFile): void;
+  hydrate?(): Promise<FederationFile>;
+  insertConnector?(connector: ConnectorRecord): Promise<void>;
+  removeConnectorRow?(id: string): Promise<void>;
+  insertInbox?(entry: InboxEntry): Promise<void>;
+  close?(): Promise<void>;
 }
 
 export class FileFederationPersistence implements FederationPersistence {
@@ -65,10 +80,10 @@ export class FileFederationPersistence implements FederationPersistence {
   }
 }
 
-const MAX_INBOX = 200;
+export const MAX_INBOX = 200;
 const NAME_MAX = 80;
 
-function validConnector(value: unknown): value is ConnectorRecord {
+export function validConnector(value: unknown): value is ConnectorRecord {
   if (!value || typeof value !== 'object') return false;
   const entry = value as Record<string, unknown>;
   return (
@@ -82,7 +97,7 @@ function validConnector(value: unknown): value is ConnectorRecord {
   );
 }
 
-function validInbox(value: unknown): value is InboxEntry {
+export function validInbox(value: unknown): value is InboxEntry {
   if (!value || typeof value !== 'object') return false;
   const entry = value as Record<string, unknown>;
   return (
@@ -111,8 +126,59 @@ function safeTarget(raw: unknown): string | null {
 
 export class FederationRegistry {
   private state: FederationFile;
-  constructor(private readonly persistence: FederationPersistence | null = null) {
-    this.state = persistence?.load() ?? { connectors: [], inbox: [] };
+  private persistence: FederationPersistence | null;
+  private hydration: Promise<void> | null = null;
+  private degradation: string | null = null;
+
+  constructor(persistence: FederationPersistence | null = null) {
+    this.persistence = persistence ?? null;
+    this.state = this.persistence?.load() ?? { connectors: [], inbox: [] };
+  }
+
+  /** Non-null once a durable backend was abandoned; the registry stays process-local. */
+  get degradationReason(): string | null {
+    return this.degradation;
+  }
+
+  /**
+   * Async hydration for row-level backends. Runs at most once and never
+   * rejects, so an unreachable database degrades state instead of crashing.
+   */
+  hydrate(): Promise<void> {
+    if (this.hydration) return this.hydration;
+    const persistence = this.persistence;
+    if (!persistence?.hydrate) {
+      this.hydration = Promise.resolve();
+      return this.hydration;
+    }
+    this.hydration = persistence
+      .hydrate()
+      .then((file) => {
+        const knownConnectors = new Set(this.state.connectors.map((item) => item.id));
+        const knownInbox = new Set(this.state.inbox.map((item) => item.id));
+        const connectors = [
+          ...this.state.connectors,
+          ...file.connectors.filter((item) => !knownConnectors.has(item.id)),
+        ];
+        const inbox = [...this.state.inbox, ...file.inbox.filter((item) => !knownInbox.has(item.id))]
+          .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))
+          .slice(0, MAX_INBOX);
+        this.state = { connectors, inbox };
+      })
+      .catch((error: unknown) => {
+        this.releaseDurableBackend(error);
+      });
+    return this.hydration;
+  }
+
+  private releaseDurableBackend(error: unknown): void {
+    const persistence = this.persistence;
+    this.degradation = error instanceof Error ? error.message.slice(0, 180) : 'ERROR';
+    this.persistence = null;
+    console.warn('[Isabella] Durable federation store unavailable; state stays process-local', {
+      message: this.degradation,
+    });
+    if (persistence?.close) persistence.close().catch(() => undefined);
   }
 
   private persist(): void {
@@ -127,11 +193,12 @@ export class FederationRegistry {
     return this.state.connectors.find((connector) => connector.id === id) ?? null;
   }
 
-  createConnector(input: {
+  async createConnector(input: {
     name: string;
     kind: ConnectorKind;
     targetUrl?: string | null;
-  }): ConnectorRecord {
+  }): Promise<ConnectorRecord> {
+    await this.hydrate();
     const name = input.name.trim().slice(0, NAME_MAX);
     if (!name) throw new Error('CONNECTOR_NAME_REQUIRED');
     if (!CONNECTOR_KINDS.includes(input.kind)) throw new Error('CONNECTOR_KIND_INVALID');
@@ -145,16 +212,33 @@ export class FederationRegistry {
       createdAt: new Date().toISOString(),
       status: 'registered',
     };
-    this.state.connectors.push(connector);
-    this.persist();
+    const previous = this.state;
+    this.state = { connectors: [...previous.connectors, connector], inbox: previous.inbox };
+    try {
+      await this.writeConnector(connector);
+    } catch (error) {
+      this.state = previous;
+      throw error;
+    }
     return connector;
   }
 
-  removeConnector(id: string): boolean {
-    const before = this.state.connectors.length;
-    this.state.connectors = this.state.connectors.filter((connector) => connector.id !== id);
-    if (this.state.connectors.length === before) return false;
-    this.persist();
+  async removeConnector(id: string): Promise<boolean> {
+    await this.hydrate();
+    const previous = this.state;
+    const connectors = previous.connectors.filter((connector) => connector.id !== id);
+    if (connectors.length === previous.connectors.length) return false;
+    this.state = { connectors, inbox: previous.inbox };
+    try {
+      if (this.persistence?.removeConnectorRow) {
+        await this.persistence.removeConnectorRow(id);
+      } else {
+        this.persist();
+      }
+    } catch (error) {
+      this.state = previous;
+      throw error;
+    }
     return true;
   }
 
@@ -169,7 +253,8 @@ export class FederationRegistry {
     );
   }
 
-  ingest(connector: ConnectorRecord, payload: unknown): InboxEntry {
+  async ingest(connector: ConnectorRecord, payload: unknown): Promise<InboxEntry> {
+    await this.hydrate();
     const normalized = normalizeInboundPayload(payload);
     const entry: InboxEntry = {
       id: randomUUID(),
@@ -180,10 +265,34 @@ export class FederationRegistry {
       text: normalized.text.slice(0, 4_000),
       remoteMessageId: normalized.remoteMessageId,
     };
-    this.state.inbox.unshift(entry);
-    if (this.state.inbox.length > MAX_INBOX) this.state.inbox.length = MAX_INBOX;
-    this.persist();
+    const previous = this.state;
+    this.state = {
+      connectors: previous.connectors,
+      inbox: [entry, ...previous.inbox].slice(0, MAX_INBOX),
+    };
+    try {
+      await this.writeInbox(entry);
+    } catch (error) {
+      this.state = previous;
+      throw error;
+    }
     return entry;
+  }
+
+  private async writeConnector(connector: ConnectorRecord): Promise<void> {
+    if (this.persistence?.insertConnector) {
+      await this.persistence.insertConnector(connector);
+      return;
+    }
+    this.persist();
+  }
+
+  private async writeInbox(entry: InboxEntry): Promise<void> {
+    if (this.persistence?.insertInbox) {
+      await this.persistence.insertInbox(entry);
+      return;
+    }
+    this.persist();
   }
 }
 
@@ -289,10 +398,33 @@ export function verifyPayloadSignature(
   return candidate.length === expected.length && timingSafeEqual(expected, candidate);
 }
 
+/**
+ * Postgres is the durable backend for serverless: the registry hydrates once and
+ * keeps answering reads synchronously. When Postgres is not reachable the
+ * registry degrades to the previous behavior instead of throwing at module scope.
+ */
 export function createDefaultFederationRegistry(
   env: Readonly<Record<string, string | undefined>> = process.env
 ): FederationRegistry {
   const mode = (env.ISABELLA_FEDERATION_STORE ?? '').trim().toLowerCase();
+  if (isPostgresStoreMode(mode)) {
+    let persistence: PostgresFederationPersistence | null = null;
+    try {
+      persistence = createPostgresFederationPersistence(env);
+    } catch (error) {
+      console.warn('[Isabella] Postgres federation store could not be initialised', {
+        message: error instanceof Error ? error.message.slice(0, 180) : 'ERROR',
+      });
+    }
+    if (persistence) {
+      const registry = new FederationRegistry(persistence);
+      void registry.hydrate();
+      return registry;
+    }
+    console.warn(
+      '[Isabella] ISABELLA_FEDERATION_STORE requests Postgres without a usable DATABASE_URL / POSTGRES_URL; falling back to the previous backend.'
+    );
+  }
   if (mode === 'memory' || (!mode && envFlag(env, 'VERCEL'))) return new FederationRegistry();
   const filePath = (env.ISABELLA_FEDERATION_STORE_PATH ?? '.data/federation.json').trim();
   try {

@@ -75,6 +75,84 @@ describe("deploy readiness", () => {
     expect(ids).toContain("DR-SERVERLESS-NON_DURABLE_FEDERATION");
   });
 
+  it("blocks the file backend on Vercel as well", () => {
+    const r = runDeployReadiness({
+      ...good,
+      VERCEL: "1",
+      ISABELLA_API_KEY_STORE: "file",
+      ISABELLA_FEDERATION_STORE: "file",
+    });
+    const ids = r.findings.map((f) => f.id);
+    expect(ids).toContain("DR-SERVERLESS-NON_DURABLE_API_KEYS");
+    expect(ids).toContain("DR-SERVERLESS-NON_DURABLE_FEDERATION");
+    expect(r.status).toBe("BLOCKED");
+  });
+
+  it("accepts a Postgres store pair as durable on serverless", () => {
+    const r = runDeployReadiness({
+      ...good,
+      VERCEL: "1",
+      ISABELLA_API_KEY_STORE: "postgres",
+      ISABELLA_FEDERATION_STORE: "postgres",
+    });
+    const ids = r.findings.map((f) => f.id);
+    expect(ids).not.toContain("DR-SERVERLESS-NON_DURABLE_API_KEYS");
+    expect(ids).not.toContain("DR-SERVERLESS-NON_DURABLE_FEDERATION");
+    expect(r.status).toBe("READY");
+  });
+
+  it("accepts the neon alias in any case", () => {
+    const r = runDeployReadiness({
+      ...good,
+      VERCEL: "1",
+      ISABELLA_API_KEY_STORE: "neon",
+      ISABELLA_FEDERATION_STORE: "NEON",
+    });
+    expect(r.status).toBe("READY");
+  });
+
+  it("blocks a Postgres store mode that has no usable database URL", () => {
+    const { DATABASE_URL: _d, ...rest } = good;
+    const r = runDeployReadiness({
+      ...rest,
+      VERCEL: "1",
+      ISABELLA_API_KEY_STORE: "postgres",
+      ISABELLA_FEDERATION_STORE: "postgres",
+    });
+    const ids = r.findings.map((f) => f.id);
+    expect(ids).toContain("DR-SERVERLESS-API_KEYS_DB_MISSING");
+    expect(ids).toContain("DR-SERVERLESS-FEDERATION_DB_MISSING");
+    expect(r.status).toBe("BLOCKED");
+  });
+
+  it("blocks a Postgres store mode whose URL is not a postgres connection string", () => {
+    const r = runDeployReadiness({
+      ...good,
+      VERCEL: "1",
+      DATABASE_URL: "mysql://u:p@db.example.org:3306/isabella",
+      ISABELLA_API_KEY_STORE: "postgres",
+      ISABELLA_FEDERATION_STORE: "neon",
+    });
+    const ids = r.findings.map((f) => f.id);
+    expect(ids).toContain("DR-DATABASE-INVALID");
+    expect(ids).toContain("DR-SERVERLESS-API_KEYS_DB_MISSING");
+    expect(ids).toContain("DR-SERVERLESS-FEDERATION_DB_MISSING");
+  });
+
+  it("blocks an unknown store mode without echoing its value", () => {
+    const r = runDeployReadiness({
+      ...good,
+      VERCEL: "1",
+      ISABELLA_API_KEY_STORE: "shared",
+      ISABELLA_FEDERATION_STORE: "redis",
+    });
+    const ids = r.findings.map((f) => f.id);
+    expect(ids).toContain("DR-SERVERLESS-API_KEYS_MODE_UNKNOWN");
+    expect(ids).toContain("DR-SERVERLESS-FEDERATION_MODE_UNKNOWN");
+    expect(JSON.stringify(r)).not.toContain("redis");
+    expect(JSON.stringify(r)).not.toContain("shared");
+  });
+
   it("never leaks secret values in findings", () => {
     const r = runDeployReadiness({ ...good, BOOKPI_INTEGRITY_SECRET: "changeme" });
     expect(JSON.stringify(r)).not.toContain("changeme");
