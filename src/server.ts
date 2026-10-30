@@ -2,6 +2,7 @@ import { buildPricingCatalog } from './commerce/catalog';
 import { envFlag } from './lib/env-flags';
 import { OllamaAdapter, GratisAPIAdapter, HuggingFaceFreeAdapter } from './inference/free-providers';
 import { createFoundationalLLM } from './inference/foundational-llm';
+import { assessThreat } from './security/advanced-threat-intel';
 import { searchDomains } from './infra/vercel-domains';
 import { profitablePrice, profitGuard } from './economy/profit-guard';
 import { sovereignRag } from './inference/rag';
@@ -2229,6 +2230,11 @@ app.post('/api/v1/cognition/route', async (req, res) => {
       return;
     const history = sanitizePublicHistory(body.history);
     const input = typeof body.input === 'string' ? body.input.trim() : '';
+    const threat = assessThreat(input);
+    if (threat.level === 'critical') {
+      res.status(403).json({ success: false, error: 'THREAT_BLOCKED', assessment: threat });
+      return;
+    }
     const focusLens = ['territorial', 'epistemic', 'security', 'governance'].includes(
       body.focusLens
     )
@@ -3697,6 +3703,12 @@ app.post('/api/v1/domains/search', async (req, res) => {
   } catch (error) {
     res.status(502).json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
+});
+
+app.post('/api/v1/security/threat-intel', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const input = typeof body.input === 'string' ? body.input : '';
+  res.json({ success: true, assessment: assessThreat(input) });
 });
 
 app.get('/api/v1/isabella/providers', (_req, res) => {
