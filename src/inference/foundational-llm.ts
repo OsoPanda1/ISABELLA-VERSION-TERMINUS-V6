@@ -31,11 +31,16 @@ export class IsabellaFoundationalLLM {
   constructor(private readonly runtime: IsabellaGenesisRuntime) {}
 
   private cacheKey(request: FoundationalRequest): string {
-    return `${request.maxTokens ?? 512}:${request.systemPrompt.slice(0, 128)}:${request.input}`;
+    const history = (request.history ?? []).map((t) => `${t.role}:${t.content}`).join('|');
+    return `${request.maxTokens ?? 512}:${request.systemPrompt.slice(0, 128)}:${request.input}:${history}:${request.knowledgeContext ?? ''}`;
   }
 
   async generate(request: FoundationalRequest): Promise<FoundationalResult> {
     const started = Date.now();
+    // Evict expired entries.
+    for (const [k, v] of this.cache) {
+      if (v.expiresAt <= Date.now()) this.cache.delete(k);
+    }
     const key = this.cacheKey(request);
     const cached = this.cache.get(key);
     if (cached && cached.expiresAt > Date.now()) {

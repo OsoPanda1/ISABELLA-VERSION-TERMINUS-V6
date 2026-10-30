@@ -578,8 +578,8 @@ if (process.env.HF_TOKEN) {
 }
 const foundationalLLM = createFoundationalLLM(runtime);
 
-let isabellaSigningPrivateKey = process.env.ISABELLA_APPROVAL_PRIVATE_KEY_PEM ?? '';
-let isabellaSigningPublicKey = process.env.ISABELLA_APPROVAL_TRUSTED_PUBLIC_KEY_PEM ?? '';
+let isabellaSigningPrivateKey = process.env.ISABELLA_SIGNING_PRIVATE_KEY_PEM ?? '';
+let isabellaSigningPublicKey = process.env.ISABELLA_SIGNING_PUBLIC_KEY_PEM ?? '';
 if (!isabellaSigningPrivateKey || !isabellaSigningPublicKey) {
   const pair = generateKeyPairSync('ed25519');
   isabellaSigningPrivateKey = pair.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
@@ -3768,12 +3768,14 @@ app.get('/api/v1/isabella/providers', (_req, res) => {
 // Minimal MCP-compatible JSON-RPC endpoint (tools/list, tools/call).
 app.post('/api/mcp', async (req, res) => {
   const mcpToken = process.env.MCP_SERVER_TOKEN;
-  if (mcpToken) {
-    const auth = req.get('authorization') ?? '';
-    if (auth !== `Bearer ${mcpToken}`) {
-      res.status(401).json({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unauthorized' } });
-      return;
-    }
+  if (!mcpToken) {
+    res.status(503).json({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'MCP_SERVER_TOKEN not configured' } });
+    return;
+  }
+  const auth = req.get('authorization') ?? '';
+  if (!verifyBearerToken(auth, mcpToken)) {
+    res.status(401).json({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unauthorized' } });
+    return;
   }
   const body = (req.body ?? {}) as Record<string, unknown>;
   const id = body.id ?? null;
@@ -3869,6 +3871,7 @@ app.get('/api/v1/i18n/locale', (_req, res) => {
 });
 
 app.post('/api/isabella/chat', async (req, res) => {
+  if (!enforceRateLimit(req, res, publicCognitionLimiter, 'isabella-chat')) return;
   const body = (req.body ?? {}) as Record<string, unknown>;
   const input = typeof body.input === 'string' ? body.input.trim() : '';
   if (!input) {
@@ -3880,7 +3883,7 @@ app.post('/api/isabella/chat', async (req, res) => {
       input,
       systemPrompt:
         'Eres Isabella Villaseñor AI, LLM fundacional soberano de TAMV. Responde en español latinoamericano mexicano.',
-      maxTokens: typeof body.maxTokens === 'number' ? body.maxTokens : 512,
+      maxTokens: Math.min(512, typeof body.maxTokens === 'number' ? body.maxTokens : 256),
     });
     res.json({
       success: true,
@@ -3914,6 +3917,8 @@ app.post('/api/isabella/isa/reason', (req, res) => {
 });
 
 app.post('/api/isabella/crypto/sign', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  if (!enforceRateLimit(req, res, publicCognitionLimiter, 'crypto-sign')) return;
   const body = (req.body ?? {}) as Record<string, unknown>;
   const payload =
     typeof body.payload === 'string' ? body.payload : JSON.stringify(body.payload ?? {});
