@@ -510,13 +510,20 @@ export class CrossEncoderReranker {
       documents.map(({ content }) => {
         const queryTerms = new Set(this.tokenize(query));
         const terms = this.tokenize(content);
-        return queryTerms.size === 0 ? 0 : terms.filter((term) => queryTerms.has(term)).length / queryTerms.size;
+        return queryTerms.size === 0
+          ? 0
+          : terms.filter((term) => queryTerms.has(term)).length / queryTerms.size;
       })
     );
   }
 
   private tokenize(value: string): string[] {
-    return value.toLocaleLowerCase().normalize('NFC').match(/[\\p{L}\\p{N}]+/gu) ?? [];
+    return (
+      value
+        .toLocaleLowerCase()
+        .normalize('NFC')
+        .match(/[\\p{L}\\p{N}]+/gu) ?? []
+    );
   }
 }
 
@@ -545,27 +552,47 @@ export class EvidenceSynthesizer {
     confidence: number;
   }> {
     const maxTokens = config.maxTokens ?? 512;
-    const queryTerms = new Set(query.toLocaleLowerCase().normalize('NFC').match(/[\\p{L}\\p{N}]+/gu) ?? []);
+    const queryTerms = new Set(
+      query
+        .toLocaleLowerCase()
+        .normalize('NFC')
+        .match(/[\\p{L}\\p{N}]+/gu) ?? []
+    );
     const ranked = documents
       .map((doc) => {
         const sentences = doc.content.split(/(?<=[.!?])\\s+/).filter(Boolean);
-        const sentence = sentences
-          .map((value) => ({ value, score: (value.toLocaleLowerCase().match(/[\\p{L}\\p{N}]+/gu) ?? []).filter((term) => queryTerms.has(term)).length }))
-          .sort((left, right) => right.score - left.score)[0]?.value ?? doc.content;
+        const sentence =
+          sentences
+            .map((value) => ({
+              value,
+              score: (value.toLocaleLowerCase().match(/[\\p{L}\\p{N}]+/gu) ?? []).filter((term) =>
+                queryTerms.has(term)
+              ).length,
+            }))
+            .sort((left, right) => right.score - left.score)[0]?.value ?? doc.content;
         return { doc, sentence: sentence.slice(0, Math.max(80, maxTokens * 4)) };
       })
       .slice(0, 5);
-    const citations = config.includeCitations === false ? [] : ranked.map(({ doc, sentence }) => ({
-      docId: doc.id,
-      text: sentence,
-      start: Math.max(0, doc.content.indexOf(sentence)),
-      end: Math.max(0, doc.content.indexOf(sentence)) + sentence.length,
-    }));
+    const citations =
+      config.includeCitations === false
+        ? []
+        : ranked.map(({ doc, sentence }) => ({
+            docId: doc.id,
+            text: sentence,
+            start: Math.max(0, doc.content.indexOf(sentence)),
+            end: Math.max(0, doc.content.indexOf(sentence)) + sentence.length,
+          }));
     const prefix = config.style === 'bullet_points' ? '• ' : '';
-    const answer = ranked.length === 0
-      ? 'No se encontró evidencia suficiente para responder.'
-      : ranked.map(({ sentence }) => `${prefix}${sentence}`).join(config.style === 'bullet_points' ? '\\n' : ' ');
-    const confidence = ranked.length === 0 ? 0 : Math.min(0.95, 0.45 + ranked.length * 0.1 + (queryTerms.size > 0 ? 0.1 : 0));
+    const answer =
+      ranked.length === 0
+        ? 'No se encontró evidencia suficiente para responder.'
+        : ranked
+            .map(({ sentence }) => `${prefix}${sentence}`)
+            .join(config.style === 'bullet_points' ? '\\n' : ' ');
+    const confidence =
+      ranked.length === 0
+        ? 0
+        : Math.min(0.95, 0.45 + ranked.length * 0.1 + (queryTerms.size > 0 ? 0.1 : 0));
     return { answer, citations, confidence };
   }
 

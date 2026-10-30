@@ -296,7 +296,11 @@ export class IsabellaEngine {
     preconditions?: readonly string[];
     postconditions?: readonly string[];
     confidence?: number;
-  }): { program: SkillProgram; validation: ReturnType<typeof validateSkillProgram>; ledger: IsabellaLedgerEntry } {
+  }): {
+    program: SkillProgram;
+    validation: ReturnType<typeof validateSkillProgram>;
+    ledger: IsabellaLedgerEntry;
+  } {
     const program = compileSkillProgram(input);
     const validation = validateSkillProgram(program);
     const ledger = this.appendLedger('skill-program', 'general', {
