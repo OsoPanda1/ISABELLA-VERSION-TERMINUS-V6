@@ -235,6 +235,34 @@ const PARTIAL_KEYWORDS: Readonly<Record<string, string>> = {
   hola: '¡Hola! Soy Isabella Villaseñor AI. ¿En qué puedo asistirte?',
 };
 
+// Additional intents appended for foundational evolution
+const EXTRA_INTENTS = [
+  {
+    intent: 'monetization',
+    patterns: [/monetizaci.n|monetizacion|precio|pricing|ganancia|profit|ingreso|revenue|stripe|suscripci.n|suscripcion/i],
+    responses: [
+      'La monetización de Isabella opera con Profit Guard: ningún precio puede ser inferior al costo + margen mínimo (25% por defecto). Se usa dynamic pricing por demanda/carga/valor y split 75/25 de soberanía. Endpoint: POST /api/v1/monetization/profit-price.',
+    ],
+  },
+  {
+    intent: 'api',
+    patterns: [/api|endpoint|ruta|rest|mcp|openai compatible|gateway/i],
+    responses: [
+      'Isabella expone /api/v1/healthz, /readyz, /status, /isabella/foundational, /isabella/rag/*, /isabella/providers, /mcp, cognition/route, cognition/stream, agents/run, monetization/* y más.',
+    ],
+  },
+  {
+    intent: 'code',
+    patterns: [/c.digo|codigo|implementa|funci.n|function|typescript|rust|deploy|vercel/i],
+    responses: [
+      'Isabella es TypeScript/Node 24 con Express, Prisma/PostgreSQL, Rust IGE-Ω, Vercel serverless. El build usa tsc + esbuild. Los gates son typecheck, lint, format, test, smoke, build, deploy:readiness.',
+    ],
+  },
+];
+
+// Merge extra intents into INTENT_PATTERNS at runtime by pushing into the readonly array via cast.
+(INTENT_PATTERNS as any).push(...EXTRA_INTENTS);
+
 const FALLBACK_RESPONSES = [
   'Entiendo tu consulta. Como Isabella Villaseñor AI, opero con rigor académico y sobriedad. No tengo suficiente contexto para responder con precisión, pero puedo ayudarte con:\n\n- Territorio de Real del Monte\n- Gobernanza y invariante operativo\n- Capacidades del ecosistema TAMV\n- Memoria epistemológica IKES\n\n¿Te gustaría explorar alguno de estos temas?',
   'Recibido. Mi arquitectura me distingue entre hechos, inferencias y especulación. Para responder con mayor precisión, podrías especificar si tu consulta se relaciona con el patrimonio territorial, la gobernanza cognitiva, las capacidades técnicas o la memoria epistemológica del ecosistema.',
