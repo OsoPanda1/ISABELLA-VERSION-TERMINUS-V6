@@ -1,6 +1,6 @@
-# Isabella Villaseñor AI · Genesis TINA V6
+# Isabella Villaseñor AI — Genesis TINA V6
 
-Isabella es un runtime web operativo para conversación, memoria de sesión, herramientas allowlisted, habilidades ejecutables y gobernanza humana visible. El producto separa capacidad, autoridad, ejecución, evidencia y producción: una prueba automatizada demuestra comportamiento computacional, no aprobación humana ni certificación productiva.
+Isabella es un runtime web operativo para conversación, memoria de sesión, herramientas allowlisted, habilidades ejecutables, RAG soberano y gobernanza humana visible. El producto separa capacidad, autoridad, ejecución, evidencia y producción: una prueba automatizada demuestra comportamiento computacional, no aprobación humana ni certificación productiva.
 
 > Estado del repositorio: `draft | engine-generated` hasta revisión humana nominal. No se declara conciencia, autonomía jurídica ni autoridad propia.
 
@@ -10,12 +10,16 @@ Isabella es un runtime web operativo para conversación, memoria de sesión, her
 - Workspace web interactivo en `src/ui/` con chat, intro, Studio, Tools, Skills, Governance y Nexus.
 - API de conversación JSON y SSE.
 - Runtime local determinista con herramientas allowlisted.
+- **LLM fundacional propio** (`src/inference/foundational-llm.ts`) con orquestación de proveedores open source/free (Hugging Face, Ollama, Gratis) y fallback soberano garantizado.
+- Memoria conversacional inyectada en el prompt.
+- **RAG soberano** (`src/inference/rag.ts`) con recuperación por similitud coseno sobre base de conocimiento local.
 - Selección de proveedores externos y carril local compatible.
 - Memoria de sesión y persistencia opcional.
 - BookPI y evidencia con hash-chain cuando existe almacenamiento durable.
 - IsabellaEngine con habilidades ejecutables, validación fail-closed y arbitraje híbrido.
 - Fallback `PROGRAM → ACTION_CHUNK → HUMAN_REVIEW`.
 - Voz, pagos, federación y proveedores de IA detrás de configuración y controles explícitos.
+- Hardening HTTP (X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, HSTS condicional).
 
 ## Arquitectura
 
@@ -25,7 +29,7 @@ src/ui/                       Interfaz web servida por el runtime
 src/isabella/                 Engine, biblioteca y programas de habilidades
 src/cognition/                Ruteo cognitivo, evaluación y contexto
 src/agents/                   Agente local determinista y herramientas
-src/inference/                Proveedores de IA, presupuestos y voz
+src/inference/                Proveedores de IA, LLM fundacional, RAG, presupuestos y voz
 src/memory/                   Memoria de sesión, IKES y adaptadores
 src/bookpi/                   Ledger, evidencia, Merkle y almacenamiento
 src/genesis/                  Runtime y gobernanza Genesis
@@ -40,7 +44,7 @@ test/                         Tests unitarios, integración y smoke
 - Node.js `24.x`
 - Corepack
 - pnpm `10.28.0`
-- Un proveedor de IA si se desea inferencia externa
+- Un proveedor de IA si se desea inferencia externa (o LLM fundacional local)
 - PostgreSQL/Supabase si se necesita persistencia durable
 
 ## Instalación
@@ -72,60 +76,21 @@ El servidor escucha en `http://localhost:8080` salvo que `PORT` defina otro puer
 6. Usa `Tools`, `Skills` y `Governance` para inspeccionar capacidades, ejecución y evidencia.
 7. Usa `Ctrl/Cmd + K` para abrir la paleta de acciones.
 
-La interfaz no presenta una respuesta local determinista como inferencia de un modelo externo. El estado operativo y los límites se muestran explícitamente.
-
 ## API principal
 
 ```text
 GET  /api/v1/healthz
 GET  /api/v1/readyz
 GET  /api/v1/status
+GET  /api/v1/isabella/providers
+POST /api/v1/isabella/foundational
+POST /api/v1/isabella/rag/add
+GET  /api/v1/isabella/rag/search?q=...
 POST /api/v1/cognition/route
 POST /api/v1/cognition/stream
 GET  /api/v1/agents
 POST /api/v1/agents/run
 ```
-
-Ejemplo:
-
-```bash
-curl -sS http://localhost:8080/api/v1/healthz
-curl -sS http://localhost:8080/api/v1/cognition/route \
-  -H 'content-type: application/json' \
-  -d '{"input":"Explica tus capacidades y límites.","modelEngine":"auto","focusLens":"general","history":[]}'
-```
-
-`healthz` indica salud del proceso. `readyz` puede devolver `503` de forma correcta cuando falta evidencia crítica, almacenamiento durable, firma o configuración de proveedor. No se debe interpretar un `200` como certificación humana.
-
-## Habilidades ejecutables
-
-`IsabellaEngine` expone APIs nativas para compilar y arbitrar habilidades:
-
-```ts
-const { program, validation } = engine.compilarHabilidad({
-  goal: 'entregar expediente',
-  steps: [
-    { primitive: 'observe', expectedObservation: 'expediente visible' },
-    { primitive: 'pick', target: 'expediente' },
-    { primitive: 'place', target: 'bandeja' },
-    { primitive: 'verify', expectedObservation: 'expediente en bandeja' },
-  ],
-  postconditions: ['expediente en bandeja'],
-  confidence: 0.9,
-});
-
-const { decision } = engine.decidirEjecucion({
-  program,
-  actionChunkAvailable: true,
-  observationConfident: true,
-  progressConfirmed: true,
-  highImpact: false,
-});
-```
-
-Primitivas disponibles: `observe`, `pick`, `place`, `move`, `rotate`, `handover`, `release`, `wait`, `verify`.
-
-Toda habilidad debe incluir verificación. Las habilidades de alto impacto siempre terminan en `HUMAN_REVIEW`. La compilación y la decisión se registran en el ledger del engine.
 
 ## Variables relevantes
 
@@ -156,44 +121,8 @@ corepack pnpm run build
 corepack pnpm run deploy:readiness
 ```
 
-Para una comprobación rápida:
-
-```bash
-corepack pnpm run typecheck
-corepack pnpm exec vitest run test/isabella-agentic-world.test.ts test/isabella-engine-skills.test.ts
-corepack pnpm run smoke:ui
-```
-
-## Persistencia y degradación
-
-La memoria en proceso es volátil. Si Supabase responde `IKES_SUPABASE_HTTP_404`, el runtime continúa de forma explícita en modo volátil y solicita aplicar/exponer la migración de IKES; no se presenta como persistencia durable.
-
-El almacenamiento económico PostgreSQL mantiene TLS. En desarrollo, la wiring tolera la cadena autofirmada del proxy local sin relajar la validación en producción. La migración y la conectividad deben verificarse antes de habilitar cobros reales.
-
-## Seguridad y gobernanza
-
-- No usar `service_role` en navegador.
-- Validar y limitar toda entrada.
-- No confiar en `x-user-id` como autenticación.
-- Mantener RLS en tablas Supabase expuestas.
-- Separar autorización humana de ejecución automática.
-- No ejecutar acciones de alto impacto sin revisión.
-- No declarar un test verde como aprobación humana.
-- No afirmar producción certificada sin evidencia reproducible en el SHA desplegado.
-
 ## Estado de producción
 
 Avance global de implementación: no publicado como porcentaje único. Mientras no exista un denominador de requisitos ponderados y reproducible, una cifra agregada sería especulación y no se presenta como hecho.
 
 La aplicación puede ejecutarse y mostrar el workspace hoy, pero la certificación productiva depende de configuración, conectividad, almacenamiento durable, firma, pruebas E2E y aprobación humana. El estado correcto se consulta en `/api/v1/readyz`, en los logs del runtime y en los gates del repositorio.
-
-## Contribuir
-
-1. Declara la intención y el control afectado.
-2. Haz la implementación mínima verificable.
-3. Añade o actualiza pruebas.
-4. Ejecuta los gates requeridos.
-5. Marca el cambio como `draft` hasta revisión humana.
-6. Usa una rama de trabajo y un commit descriptivo.
-
-Consulta `AGENTS.md`, `docs/STATUS.md`, `docs/api/route-inventory.json` y `docs/spec/` antes de modificar contratos.

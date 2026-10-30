@@ -2,6 +2,7 @@ import { buildPricingCatalog } from './commerce/catalog';
 import { envFlag } from './lib/env-flags';
 import { OllamaAdapter, GratisAPIAdapter, HuggingFaceFreeAdapter } from './inference/free-providers';
 import { createFoundationalLLM } from './inference/foundational-llm';
+import { sovereignRag } from './inference/rag';
 import { boundedBudgetMs, DeadlineBudget, hedgedFirst } from './inference/deadline';
 import { buildAsset, contentHash, serveAsset, type StaticAsset } from './http/static-assets';
 import express, { type Application, type NextFunction, type Request, type Response } from 'express';
@@ -3660,6 +3661,25 @@ app.post('/api/v1/isabella/entropy', (req, res) => {
       .status(400)
       .json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
+});
+
+app.post('/api/v1/isabella/rag/add', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const id = typeof body.id === 'string' ? body.id.trim() : '';
+  const text = typeof body.text === 'string' ? body.text.trim() : '';
+  if (!id || !text) {
+    res.status(400).json({ success: false, error: 'id y text son requeridos' });
+    return;
+  }
+  sovereignRag.add(id, text);
+  res.json({ success: true, size: sovereignRag.size() });
+});
+
+app.get('/api/v1/isabella/rag/search', (req, res) => {
+  const q = typeof req.query.q === 'string' ? req.query.q : '';
+  const k = Number(req.query.k ?? 3);
+  res.json({ success: true, hits: sovereignRag.search(q, Number.isFinite(k) ? k : 3) });
 });
 
 app.get('/api/v1/isabella/providers', (_req, res) => {

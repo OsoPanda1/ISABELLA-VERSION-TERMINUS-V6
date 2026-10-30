@@ -1,4 +1,5 @@
 import { createLocalEngine } from './local-engine';
+import { sovereignRag } from './rag';
 import type { IsabellaGenesisRuntime } from '../genesis/runtime';
 import type { GenerationResult } from './types';
 
@@ -47,9 +48,14 @@ export class IsabellaFoundationalLLM {
     const knowledgeBlock = request.knowledgeContext?.trim()
       ? `Contexto verificado:\n${request.knowledgeContext.trim()}`
       : '';
+    const ragHits = sovereignRag.search(request.input, 3).filter((h) => h.score > 0.05);
+    const ragBlock = ragHits.length
+      ? `Contexto recuperado (RAG soberano):\n${ragHits.map((h) => `- ${h.text}`).join('\n')}`
+      : '';
     const prompt = [
       request.systemPrompt,
       knowledgeBlock,
+      ragBlock,
       historyBlock ? `Historial reciente:\n${historyBlock}` : '',
       `Solicitud del usuario:\n${request.input}`,
     ]
