@@ -3513,7 +3513,8 @@ app.post('/api/v1/cognitive/request', async (req, res) => {
   } catch (error) {
     // Isabella must always answer the user, even on unexpected runtime errors.
     // The failure is disclosed as a local fallback, never as model inference.
-    const fallback = generateSovereignFallback(input, [], 'general');
+    const fallbackInput = typeof req.body?.input === 'string' ? req.body.input : '';
+    const fallback = generateSovereignFallback(fallbackInput, [], 'general');
     res.status(200).json({
       success: true,
       output: fallback,
