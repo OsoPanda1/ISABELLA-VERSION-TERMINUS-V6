@@ -16,6 +16,8 @@ export interface ProfitContext {
 const MAX_MARGIN_BPS = 9_900;
 const MAX_DYNAMIC_FACTOR = 10;
 const cents = (amount: number): number => Math.round((amount + Number.EPSILON) * 100) / 100;
+// Floor pricing must round UP, otherwise currency rounding can undercut the promised margin.
+const centsCeiling = (amount: number): number => Math.ceil((amount - Number.EPSILON) * 100) / 100;
 
 function assertFiniteNonNegative(value: number, name: string): void {
   if (!Number.isFinite(value) || value < 0) {
@@ -37,7 +39,7 @@ export function minimumProfitablePrice(cost: number, marginBps: number): number 
     throw new RangeError(`PROFIT: marginBps must be an integer between 0 and ${MAX_MARGIN_BPS}`);
   }
   if (cost === 0) return 0;
-  return cents(cost / (1 - marginBps / 10_000));
+  return centsCeiling(cost / (1 - marginBps / 10_000));
 }
 
 export function profitablePrice(ctx: ProfitContext): number {
