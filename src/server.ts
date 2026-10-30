@@ -3832,7 +3832,7 @@ app.post('/api/isabella/crypto/verify', (req, res) => {
   const publicKey = typeof body.publicKey === 'string' ? body.publicKey : isabellaSigningPublicKey;
   let ok = false;
   try {
-    ok = verify(null, Buffer.from(payload, 'utf8'), Buffer.from(signature, 'base64'), publicKey);
+    ok = verify(null, Buffer.from(payload, 'utf8'), publicKey, Buffer.from(signature, 'base64'));
   } catch {
     ok = false;
   }
