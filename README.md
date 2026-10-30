@@ -86,6 +86,13 @@ GET  /api/v1/status
 GET  /api/v1/isabella/providers
 POST /api/v1/isabella/foundational
 POST /api/isabella/chat
+POST /api/v1/memory/store
+POST /api/v1/memory/recall
+GET  /api/v1/memory/snapshot
+POST /api/v1/security/threat-intel
+POST /api/mcp
+POST /api/v1/domains/search
+GET  /api/v1/i18n/locale
 POST /api/isabella/isa/reason
 POST /api/isabella/crypto/sign
 POST /api/isabella/crypto/verify
