@@ -26,65 +26,7 @@ function descriptor(overrides: Partial<AasSkillDescriptor> = {}): AasSkillDescri
   };
 }
 
-describe('AAS frontmatter parser', () => {
-  it('lee el frontmatter real de una skill segura', () => {
-    const result = parseAssFrontmatterSafe();
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.descriptor).toEqual({
-      name: 'jq',
-      description: 'Expert jq usage for JSON querying, filtering, transformation.',
-      category: 'development',
-      risk: 'safe',
-      source: 'community',
-      sourceRepo: null,
-      license: null,
-    });
-  });
-
-  it('plega una descripción multilínea `>`', () => {
-    const parsed = parseAasFrontmatter(
-      ['---', 'name: moyu', 'description: >', '  Anti-over-engineering guardrail that activates', '  when an agent expands scope.', 'risk: safe', 'source: community', '---', 'body'].join(
-        '
-'
-      )
-    );
-    if (!parsed.ok) throw new Error('unexpected parse failure');
-    expect(parsed.descriptor.name).toBe('moyu');
-    expect(parsed.descriptor.description).toBe(
-      'Anti-over-engineering guardrail that activates when an agent expands scope.'
-    );
-  });
-
-  it('no aplana mapas anidados y conserva la licencia upstream', () => {
-    const parsed = parseAasFrontmatter(
-      ['---', 'name: cirq', 'description: Quantum circuits.', 'license: Apache-2.0 license', 'metadata:', '    skill-author: K-Dense Inc.', 'risk: critical', '---'].join('\n')
-    );
-    if (!parsed.ok) throw new Error('unexpected parse failure');
-    expect(parsed.descriptor.license).toBe('Apache-2.0 license');
-    expect(parsed.descriptor.risk).toBe('critical');
-    expect(parsed.descriptor.category).toBeNull();
-  });
-
-  it('falla cerrado sin frontmatter, sin nombre o sin descripción', () => {
-    expect(parseAasFrontmatter('sin frontmatter')).toEqual({
-      ok: false,
-      error: 'AAS_FRONTMATTER_MISSING',
-    });
-    expect(parseAasFrontmatter('---\nrisk: safe\n---\n').error).toBe('AAS_NAME_MISSING');
-    expect(parseAasFrontmatter('---\nname: x\n---\n').error).toBe('AAS_DESCRIPTION_MISSING');
-  });
-
-  it('marca como unknown un riesgo ausente o ilegible', () => {
-    const parsed = parseAasFrontmatter('---\nname: x\ndescription: y\nrisk: maybe\n---\n');
-    if (!parsed.ok) throw new Error('unexpected parse failure');
-    expect(parsed.descriptor.risk).toBe('unknown');
-    expect(aasRiskToCriticality(parsed.descriptor.risk)).toBe('CRITICAL');
-    expect(aasRiskToCriticality('safe')).toBe('LOW');
-  });
-});
-
-function parseAssFrontmatterSafe() {
+function parseSafeSkillFrontmatter() {
   return parseAasFrontmatter(
     [
       '---',
@@ -100,8 +42,81 @@ function parseAssFrontmatterSafe() {
   );
 }
 
+describe('AAS frontmatter parser', () => {
+  it('lee el frontmatter real de una skill segura', () => {
+    const parsed = parseSafeSkillFrontmatter();
+    if (!parsed.ok) throw new Error(`unexpected parse failure: ${parsed.error}`);
+    expect(parsed.descriptor).toEqual({
+      name: 'jq',
+      description: 'Expert jq usage for JSON querying, filtering, transformation.',
+      category: 'development',
+      risk: 'safe',
+      source: 'community',
+      sourceRepo: null,
+      license: null,
+    });
+  });
+
+  it('plega una descripción multilínea con `>`', () => {
+    const parsed = parseAasFrontmatter(
+      [
+        '---',
+        'name: moyu',
+        'description: >',
+        '  Anti-over-engineering guardrail that activates',
+        '  when an agent expands scope.',
+        'risk: safe',
+        'source: community',
+        '---',
+        'body',
+      ].join('\n')
+    );
+    if (!parsed.ok) throw new Error(`unexpected parse failure: ${parsed.error}`);
+    expect(parsed.descriptor.name).toBe('moyu');
+    expect(parsed.descriptor.description).toBe(
+      'Anti-over-engineering guardrail that activates when an agent expands scope.'
+    );
+  });
+
+  it('no aplana mapas anidados y conserva la licencia upstream', () => {
+    const parsed = parseAasFrontmatter(
+      [
+        '---',
+        'name: cirq',
+        'description: Quantum circuits.',
+        'license: Apache-2.0 license',
+        'metadata:',
+        '    skill-author: K-Dense Inc.',
+        'risk: critical',
+        '---',
+      ].join('\n')
+    );
+    if (!parsed.ok) throw new Error(`unexpected parse failure: ${parsed.error}`);
+    expect(parsed.descriptor.license).toBe('Apache-2.0 license');
+    expect(parsed.descriptor.risk).toBe('critical');
+    expect(parsed.descriptor.category).toBeNull();
+  });
+
+  it('falla cerrado sin frontmatter, sin nombre o sin descripción', () => {
+    expect(parseAasFrontmatter('sin frontmatter')).toEqual({
+      ok: false,
+      error: 'AAS_FRONTMATTER_MISSING',
+    });
+    expect(parseAasFrontmatter('---\nrisk: safe\n---\n').error).toBe('AAS_NAME_MISSING');
+    expect(parseAasFrontmatter('---\nname: x\n---\n').error).toBe('AAS_DESCRIPTION_MISSING');
+  });
+
+  it('trata un riesgo ausente o ilegible como no seguro', () => {
+    const parsed = parseAasFrontmatter('---\nname: x\ndescription: y\nrisk: maybe\n---\n');
+    if (!parsed.ok) throw new Error(`unexpected parse failure: ${parsed.error}`);
+    expect(parsed.descriptor.risk).toBe('unknown');
+    expect(aasRiskToCriticality(parsed.descriptor.risk)).toBe('CRITICAL');
+    expect(aasRiskToCriticality('safe')).toBe('LOW');
+  });
+});
+
 describe('AAS identifiers', () => {
-  it('normaliza nombres a ids válidos de SkillId', () => {
+  it('normaliza nombres a ids admisibles por SkillId', () => {
     expect(aasSkillId('jq')).toBe('aas:jq');
     expect(aasSkillId('007')).toBe('aas:007');
     expect(aasSkillId('Foo Bar!')).toBe('aas:foo-bar');
@@ -114,10 +129,10 @@ describe('AAS identifiers', () => {
   });
 });
 
-describe('AAS → IsabellaSkill', () => {
+describe('AAS a IsabellaSkill', () => {
   it('registra la skill externa como capacidad declarada y no operativa', () => {
-    const parsed = parseAssFrontmatterSafe();
-    if (!parsed.ok) throw new Error('unexpected parse failure');
+    const parsed = parseSafeSkillFrontmatter();
+    if (!parsed.ok) throw new Error(`unexpected parse failure: ${parsed.error}`);
     const skill = toIsabellaSkill(parsed.descriptor);
     if (!skill) throw new Error('unexpected id rejection');
     expect(skill.id).toBe('aas:jq');
@@ -154,7 +169,7 @@ describe('buildAasCatalog', () => {
     ]);
   });
 
-  it('rechaza duplicados, ids inválidos y respeta el tope', () => {
+  it('rechaza duplicados e ids inválidos y respeta el tope', () => {
     const catalog = buildAasCatalog(
       [descriptor(), descriptor(), descriptor({ name: '日本語' }), descriptor({ name: 'tmux' })],
       { maxEntries: 1 }
@@ -169,16 +184,16 @@ describe('buildAasCatalog', () => {
 });
 
 describe('resolveCatalogSkill', () => {
-  const entry = toIsabellaSkill(descriptor());
-  const catalog: readonly AasCatalogEntry[] = entry
-    ? [{ skill: entry, descriptor: descriptor(), criticality: 'LOW' }]
+  const built = toIsabellaSkill(descriptor());
+  const catalog: readonly AasCatalogEntry[] = built
+    ? [{ skill: built, descriptor: descriptor(), criticality: 'LOW' }]
     : [];
 
   it('una skill externa declarada jamás se ejecuta', () => {
     expect(resolveCatalogSkill('@aas:jq filtra este json', catalog).code).toBe('SKILL_UNAVAILABLE');
   });
 
-  it('distingue desconocida de invocación inválida', () => {
+  it('distingue skill desconocida de invocación inválida', () => {
     expect(resolveCatalogSkill('@aas:inexistente', catalog).code).toBe('SKILL_NOT_FOUND');
     expect(resolveCatalogSkill('sin trigger', catalog).code).toBe('AAS_INVOCATION_INVALID');
   });

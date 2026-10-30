@@ -7,11 +7,11 @@ import { SkillId, parseSkillInvocation, type IsabellaSkill } from './skill-regis
  *
  * Un `SKILL.md` importado es una CAPACIDAD DECLARADA, nunca una autoridad ni un
  * ejecutor: se registra con una capacidad no alta en el capabilityRegistry y estado
- * `unavailable`, para que toda invocación falle cerrado. CAPABILITY ≠ AUTHORITY ≠ EXECUTION.
+ * `unavailable`, para que toda invocación falle cerrado.
+ * CAPABILITY ≠ AUTHORITY ≠ EXECUTION.
  *
- * El contenido no se vendoriza en este repositorio: se analiza en tiempo de ejecución
- * desde el árbol que el operador instale aparte (MIT + `LICENSE-CONTENT` y licencias
- * propias por skill). Los upstream con `AGPL-3.0`/`Apache-2.0` conservan su aviso.
+ * El contenido no se vendoriza en este repositorio: se analiza desde el árbol que el
+ * operador instale aparte (MIT + `LICENSE-CONTENT`, y licencias propias por skill).
  */
 
 export const AAS_ID_PREFIX = 'aas:';
@@ -20,8 +20,7 @@ export const AAS_CATALOG_CAPABILITY = 'catalog';
 
 const AAS_FOLDER = 'Externos';
 const AAS_SUBFOLDER = 'AAS';
-/** Reutiliza el scope de lectura existente; no se inventa un scope sin语义 de puertas.
- */
+/** Reutiliza el scope de lectura ya existente; no se inventa un scope sin puertas que lo respalde. */
 const AAS_READ_SCOPE = 'isabella:chat';
 const MAX_ID_CHARS = 80;
 const MAX_NAME_CHARS = 120;
@@ -77,6 +76,7 @@ export interface AasCatalogResult {
 
 const FRONTMATTER_PATTERN = /^\uFEFF?---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
 const KEY_LINE_PATTERN = /^[ \t]*([A-Za-z0-9_-]+):[ \t]*(.*)$/;
+const INDENT_PATTERN = /^[ \t]/;
 
 function unquote(raw: string): string {
   const value = raw.trim();
@@ -89,7 +89,7 @@ function unquote(raw: string): string {
 }
 
 /**
- * Extrae los campos de primer nivel. Las líneas indentadas que no continúan un valor
+ * Extrae los campos de primer nivel. Las líneas indentadas que no continúan un escalar
  * plegado (`>`, `|`) son mapas anidados (`metadata:`) y se descartan: aplanarlas
  * fabricaría campos que el catálogo nunca declaró.
  */
@@ -105,21 +105,21 @@ export function parseAasFrontmatter(raw: string): ParseFrontmatterResult {
       foldingKey = null;
       continue;
     }
+    // La continuación de un escalar plegado no tiene dos puntos: se resuelve antes
+    // de intentar casar una clave, o el bloque se cortaría contra el primer renglón.
+    if (foldingKey !== null && INDENT_PATTERN.test(line)) {
+      fields.set(foldingKey, `${fields.get(foldingKey) ?? ''} ${line.trim()}`.trim());
+      continue;
+    }
     const match = KEY_LINE_PATTERN.exec(line);
     if (!match) {
       foldingKey = null;
       continue;
     }
-    const [, key, rest] = match;
-    const indented = /^[ \t]/.test(line);
-
-    if (indented && foldingKey === null) continue;
-    if (indented && foldingKey !== null) {
-      fields.set(foldingKey, `${fields.get(foldingKey) ?? ''} ${rest.trim()}`.trim());
-      continue;
-    }
-    const value = rest.trim();
-    if (value === '' || value.startsWith('>') || value.startsWith('|')) {
+    if (INDENT_PATTERN.test(line)) continue;
+    const [, key, rawValue] = match;
+    const value = rawValue.trim();
+    if (value.startsWith('>') || value.startsWith('|')) {
       foldingKey = key;
       fields.set(key, '');
     } else {
@@ -140,7 +140,7 @@ export function parseAasFrontmatter(raw: string): ParseFrontmatterResult {
       name,
       description,
       category: fields.get('category') ?? null,
-      // `unknown` se trata como crítico aguas abajo: la ausencia de aviso no es un aviso de seguridad.
+      // La ausencia de aviso no es un aviso de seguridad: `unknown` se trata como crítico.
       risk: declared === 'safe' ? 'safe' : declared === 'critical' ? 'critical' : 'unknown',
       source: fields.get('source') ?? null,
       sourceRepo: fields.get('source_repo') ?? null,
@@ -219,11 +219,7 @@ export function buildAasCatalog(
       continue;
     }
     seen.add(id);
-    entries.push({
-      skill,
-      descriptor,
-      criticality: aasRiskToCriticality(descriptor.risk),
-    });
+    entries.push({ skill, descriptor, criticality: aasRiskToCriticality(descriptor.risk) });
   }
 
   return { entries, rejected };
@@ -241,11 +237,7 @@ export function resolveCatalogSkill(
   const parsed = parseSkillInvocation(input);
   if (!parsed) return { code: 'AAS_INVOCATION_INVALID', error: 'Invocación de skill no válida.' };
   const entry = entries.find((item) => item.skill.id === parsed.requestedId);
-  if (!entry)
-    return {
-      code: 'SKILL_NOT_FOUND',
-      error: `Skill no registrado: @${parsed.requestedId}`,
-    };
+  if (!entry) return { code: 'SKILL_NOT_FOUND', error: `Skill no registrado: @${parsed.requestedId}` };
   return {
     code: 'SKILL_UNAVAILABLE',
     error: `Capacidad externa declarada, no ejecutable: @${entry.skill.id}`,
