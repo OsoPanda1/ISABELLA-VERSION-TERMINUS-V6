@@ -8,13 +8,13 @@ describe('isAuthenticatedCreatorPrincipal', () => {
     expect(isAuthenticatedCreatorPrincipal(principal, 'auth0|creator-123')).toBe(true);
   });
 
-  it('recognizes a server-assigned creator role on a human principal', () => {
+  it('does not grant creator recognition from a role alone without the verified ID binding', () => {
     const principal = createPrincipal({
       id: 'verified-user-7',
       kind: 'human',
       roles: ['user', 'isabella:creator'],
     });
-    expect(isAuthenticatedCreatorPrincipal(principal, undefined)).toBe(true);
+    expect(isAuthenticatedCreatorPrincipal(principal, undefined)).toBe(false);
   });
 
   it('does not authenticate by display name, alias or configured ID mismatch', () => {
@@ -22,6 +22,7 @@ describe('isAuthenticatedCreatorPrincipal', () => {
       id: 'ordinary-user',
       kind: 'human',
       displayName: 'Edwin Oswaldo Castillo Trejo (Anubis Villaseñor)',
+      roles: ['isabella:creator'],
     });
     expect(isAuthenticatedCreatorPrincipal(principal, 'auth0|creator-123')).toBe(false);
   });
