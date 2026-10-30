@@ -2,6 +2,7 @@ import { buildPricingCatalog } from './commerce/catalog';
 import { envFlag } from './lib/env-flags';
 import { OllamaAdapter, GratisAPIAdapter, HuggingFaceFreeAdapter } from './inference/free-providers';
 import { createFoundationalLLM } from './inference/foundational-llm';
+import { searchDomains } from './infra/vercel-domains';
 import { profitablePrice, profitGuard } from './economy/profit-guard';
 import { sovereignRag } from './inference/rag';
 import { boundedBudgetMs, DeadlineBudget, hedgedFirst } from './inference/deadline';
@@ -3681,6 +3682,21 @@ app.get('/api/v1/isabella/rag/search', (req, res) => {
   const q = typeof req.query.q === 'string' ? req.query.q : '';
   const k = Number(req.query.k ?? 3);
   res.json({ success: true, hits: sovereignRag.search(q, Number.isFinite(k) ? k : 3) });
+});
+
+app.post('/api/v1/domains/search', async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const domains = Array.isArray(body.domains) ? body.domains.filter((d): d is string => typeof d === 'string') : [];
+  if (domains.length === 0) {
+    res.status(400).json({ success: false, error: 'domains array required' });
+    return;
+  }
+  try {
+    const results = await searchDomains(domains);
+    res.json({ success: true, results });
+  } catch (error) {
+    res.status(502).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 app.get('/api/v1/isabella/providers', (_req, res) => {
