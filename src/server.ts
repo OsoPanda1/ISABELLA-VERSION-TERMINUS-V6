@@ -3490,6 +3490,10 @@ app.post('/api/v1/cognitive/request', async (req, res) => {
           input,
           systemPrompt,
           maxTokens: 512,
+          history: sessionMemory
+            .getSessionHistory(sessionId)
+            .map((turn) => ({ role: turn.role as 'user' | 'assistant', content: turn.content })),
+          knowledgeContext: verifiedKnowledgeContext,
         });
         generativeNarrative = foundational.text;
         responseEngine = foundational.engine === 'foundational' ? 'foundational' : 'sovereign-fallback';

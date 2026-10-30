@@ -6,6 +6,8 @@ export interface FoundationalRequest {
   input: string;
   systemPrompt: string;
   maxTokens?: number;
+  history?: ReadonlyArray<{ role: 'user' | 'assistant'; content: string }>;
+  knowledgeContext?: string;
 }
 
 export interface FoundationalResult {
@@ -38,7 +40,21 @@ export class IsabellaFoundationalLLM {
     }
 
     const maxTokens = request.maxTokens ?? 512;
-    const prompt = `${request.systemPrompt}\n\nSolicitud del usuario:\n${request.input}`;
+    const historyBlock = (request.history ?? [])
+      .slice(-8)
+      .map((turn) => `${turn.role === 'user' ? 'Usuario' : 'Isabella'}: ${turn.content}`)
+      .join('\n');
+    const knowledgeBlock = request.knowledgeContext?.trim()
+      ? `Contexto verificado:\n${request.knowledgeContext.trim()}`
+      : '';
+    const prompt = [
+      request.systemPrompt,
+      knowledgeBlock,
+      historyBlock ? `Historial reciente:\n${historyBlock}` : '',
+      `Solicitud del usuario:\n${request.input}`,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
 
     // 1. Intentar proveedores reales registrados (Ollama, HF, Gratis, etc.)
     try {
