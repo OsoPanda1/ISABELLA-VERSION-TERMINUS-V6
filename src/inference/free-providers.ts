@@ -310,7 +310,7 @@ export class HuggingFaceFreeAdapter implements InferenceAdapter {
       .map((m) => m.trim())
       .filter(Boolean)[0] ?? 'google/gemma-2-2b-it';
     this.config = {
-      baseUrl: config.baseUrl ?? process.env.HF_INFERENCE_URL ?? 'https://api-inference.huggingface.co/models',
+      baseUrl: config.baseUrl ?? process.env.HF_INFERENCE_URL ?? 'https://router.huggingface.co/hf-inference/models',
       apiKey: config.apiKey ?? process.env.HF_TOKEN,
       model: config.model ?? defaultModel,
       timeoutMs: config.timeoutMs ?? 45_000,
