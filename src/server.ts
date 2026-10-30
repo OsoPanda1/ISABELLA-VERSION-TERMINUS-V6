@@ -3,6 +3,7 @@ import { envFlag } from './lib/env-flags';
 import { OllamaAdapter, GratisAPIAdapter, HuggingFaceFreeAdapter } from './inference/free-providers';
 import { createFoundationalLLM } from './inference/foundational-llm';
 import { assessThreat } from './security/advanced-threat-intel';
+import { t, getLocaleFromEnv } from './lib/i18n';
 import { searchDomains } from './infra/vercel-domains';
 import { profitablePrice, profitGuard } from './economy/profit-guard';
 import { sovereignRag } from './inference/rag';
@@ -3769,6 +3770,11 @@ app.post('/api/mcp', async (req, res) => {
   }
 
   fail(-32601, 'Method not found');
+});
+
+app.get('/api/v1/i18n/locale', (_req, res) => {
+  const locale = getLocaleFromEnv();
+  res.json({ success: true, locale, greeting: t('greeting', locale), identity: t('identity', locale) });
 });
 
 app.get('/api/v1/isabella/status', (_req, res) => {

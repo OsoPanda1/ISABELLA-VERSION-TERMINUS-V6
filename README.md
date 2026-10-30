@@ -19,6 +19,7 @@ Isabella es un runtime web operativo para conversación, memoria de sesión, her
 - IsabellaEngine con habilidades ejecutables, validación fail-closed y arbitraje híbrido.
 - Fallback `PROGRAM → ACTION_CHUNK → HUMAN_REVIEW`.
 - Voz, pagos, federación y proveedores de IA detrás de configuración y controles explícitos.
+- Idioma nativo: español latinoamericano mexicano (es-MX) con módulo i18n (`src/lib/i18n.ts`) y endpoint `/api/v1/i18n/locale`.
 - Hardening HTTP (X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, HSTS condicional).
 
 ## Arquitectura
