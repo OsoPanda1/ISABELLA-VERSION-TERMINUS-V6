@@ -2,6 +2,7 @@ import { buildPricingCatalog } from './commerce/catalog';
 import { envFlag } from './lib/env-flags';
 import { OllamaAdapter, GratisAPIAdapter, HuggingFaceFreeAdapter } from './inference/free-providers';
 import { createFoundationalLLM } from './inference/foundational-llm';
+import { profitablePrice, profitGuard } from './economy/profit-guard';
 import { sovereignRag } from './inference/rag';
 import { boundedBudgetMs, DeadlineBudget, hedgedFirst } from './inference/deadline';
 import { buildAsset, contentHash, serveAsset, type StaticAsset } from './http/static-assets';
@@ -6452,6 +6453,23 @@ app.get('/api/v1/monetization/stats', (req, res) => {
     stats: monetizationEngine.stats(),
     pricing: dynamicPricingEngine.stats(),
   });
+});
+
+app.post('/api/v1/monetization/profit-price', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const price = profitablePrice({
+      cost: Number(body.cost ?? 0),
+      marginBps: Number(body.marginBps ?? 2500),
+      demandFactor: typeof body.demandFactor === 'number' ? body.demandFactor : undefined,
+      loadFactor: typeof body.loadFactor === 'number' ? body.loadFactor : undefined,
+      valueFactor: typeof body.valueFactor === 'number' ? body.valueFactor : undefined,
+    });
+    res.json({ success: true, price, guard: profitGuard.snapshot() });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 // Preflight de configuración (calidad de secretos y coherencia). Nunca devuelve valores de secretos.
