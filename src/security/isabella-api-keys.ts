@@ -2,6 +2,11 @@ import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from
 import fs from 'node:fs';
 import path from 'node:path';
 import { envFlag } from '../lib/env-flags';
+import { isPostgresStoreMode } from '../database/postgres-store-mode';
+import {
+  createPostgresApiKeyPersistence,
+  PostgresApiKeyPersistence,
+} from './postgres-api-key-persistence';
 
 export const API_KEY_SCOPES = [
   'cognition:read',
@@ -23,7 +28,7 @@ export type IsabellaApiKeyRecord = {
   lastUsedAt: string | null;
 };
 
-type StoredKey = IsabellaApiKeyRecord & { digest: Buffer };
+export type StoredKey = IsabellaApiKeyRecord & { digest: Buffer };
 
 export type CreateApiKeyInput = {
   tenantId: string;
@@ -37,9 +42,19 @@ export type ApiKeyVerification =
   | { ok: true; record: IsabellaApiKeyRecord }
   | { ok: false; reason: 'invalid' | 'expired' | 'revoked' | 'scope' };
 
+/**
+ * The read side is synchronous by design: verify() runs on every authenticated
+ * request and must never await. Backends that cannot serve a synchronous read
+ * implement hydrate(), and row-level backends implement saveRecord() so one key
+ * never rewrites the collection.
+ */
 export interface ApiKeyPersistence {
   load(): StoredKey[];
   save(records: readonly StoredKey[]): void;
+  hydrate?(): Promise<StoredKey[]>;
+  saveRecord?(record: StoredKey): Promise<void>;
+  markUsed?(record: StoredKey): void;
+  close?(): Promise<void>;
 }
 
 export interface ApiKeyStoreOptions {
@@ -51,10 +66,10 @@ export interface ApiKeyStoreOptions {
 const PREFIX = 'isa_live_';
 const TENANT_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{1,63}$/;
 const NAME_MAX = 80;
-const MAX_KEYS = 5_000;
+export const MAX_KEYS = 5_000;
 
 const publicRecord = ({ digest: _digest, ...record }: StoredKey): IsabellaApiKeyRecord => record;
-const validScope = (scope: string): scope is ApiKeyScope =>
+export const validScope = (scope: string): scope is ApiKeyScope =>
   (API_KEY_SCOPES as readonly string[]).includes(scope);
 
 function validIso(value: unknown): value is string {
@@ -119,9 +134,11 @@ export class FileApiKeyPersistence implements ApiKeyPersistence {
 
 export class IsabellaApiKeyStore {
   private readonly keys = new Map<string, StoredKey>();
-  private readonly persistence: ApiKeyPersistence | null;
+  private persistence: ApiKeyPersistence | null;
   private readonly pepper: string | null;
   private readonly now: () => number;
+  private hydration: Promise<void> | null = null;
+  private degradation: string | null = null;
 
   constructor(options: ApiKeyStoreOptions = {}) {
     this.persistence = options.persistence ?? null;
@@ -131,6 +148,46 @@ export class IsabellaApiKeyStore {
       if (this.keys.size >= MAX_KEYS) break;
       if (!this.keys.has(record.id)) this.keys.set(record.id, record);
     }
+  }
+
+  /** Non-null once a durable backend was abandoned; the store stays process-local. */
+  get degradationReason(): string | null {
+    return this.degradation;
+  }
+
+  /**
+   * Async hydration for backends without a synchronous read path. Runs at most
+   * once per store and never rejects: a cold start must not crash the runtime.
+   */
+  hydrate(): Promise<void> {
+    if (this.hydration) return this.hydration;
+    const persistence = this.persistence;
+    if (!persistence?.hydrate) {
+      this.hydration = Promise.resolve();
+      return this.hydration;
+    }
+    this.hydration = persistence
+      .hydrate()
+      .then((records) => {
+        for (const record of records) {
+          if (this.keys.size >= MAX_KEYS) break;
+          if (!this.keys.has(record.id)) this.keys.set(record.id, record);
+        }
+      })
+      .catch((error: unknown) => {
+        this.releaseDurableBackend(error);
+      });
+    return this.hydration;
+  }
+
+  private releaseDurableBackend(error: unknown): void {
+    const persistence = this.persistence;
+    this.degradation = error instanceof Error ? error.message.slice(0, 180) : 'ERROR';
+    this.persistence = null;
+    console.warn('[Isabella] Durable API key store unavailable; keys stay process-local', {
+      message: this.degradation,
+    });
+    if (persistence?.close) persistence.close().catch(() => undefined);
   }
 
   private digest(secret: string): Buffer {
@@ -143,7 +200,17 @@ export class IsabellaApiKeyStore {
     this.persistence?.save([...this.keys.values()]);
   }
 
-  issue(input: CreateApiKeyInput): IssuedApiKey {
+  /** Row-level backends write one row; snapshot backends keep rewriting the file. */
+  private async writeRecord(record: StoredKey): Promise<void> {
+    if (this.persistence?.saveRecord) {
+      await this.persistence.saveRecord(record);
+      return;
+    }
+    this.persist();
+  }
+
+  async issue(input: CreateApiKeyInput): Promise<IssuedApiKey> {
+    await this.hydrate();
     const tenantId = input.tenantId.trim();
     const name = input.name.trim().slice(0, NAME_MAX);
     const scopes = [...new Set(input.scopes)];
@@ -173,9 +240,21 @@ export class IsabellaApiKeyStore {
       lastUsedAt: null,
       digest: this.digest(issuedValue),
     };
-    this.keys.set(record.id, record);
-    this.persist();
+    await this.writeCommitted(record);
     return { secret: issuedValue, record: publicRecord(record) };
+  }
+
+  /** Applies the record to memory and persists it, rolling back if the write fails. */
+  private async writeCommitted(record: StoredKey): Promise<void> {
+    const previous = this.keys.get(record.id);
+    this.keys.set(record.id, record);
+    try {
+      await this.writeRecord(record);
+    } catch (error) {
+      if (previous) this.keys.set(record.id, previous);
+      else this.keys.delete(record.id);
+      throw error;
+    }
   }
 
   list(tenantId?: string): IsabellaApiKeyRecord[] {
@@ -190,23 +269,37 @@ export class IsabellaApiKeyStore {
     return record ? publicRecord(record) : null;
   }
 
-  rotate(id: string): IssuedApiKey | null {
+  async rotate(id: string): Promise<IssuedApiKey | null> {
+    await this.hydrate();
     const record = this.keys.get(id);
     if (!record || record.revokedAt) return null;
     if (record.expiresAt && Date.parse(record.expiresAt) <= this.now()) return null;
     const issuedValue = `${PREFIX}${randomBytes(32).toString('base64url')}`;
+    const previous: StoredKey = { ...record, scopes: [...record.scopes] };
     record.prefix = issuedValue.slice(0, 16);
     record.lastUsedAt = null;
     record.digest = this.digest(issuedValue);
-    this.persist();
+    try {
+      await this.writeRecord(record);
+    } catch (error) {
+      this.keys.set(id, previous);
+      throw error;
+    }
     return { secret: issuedValue, record: publicRecord(record) };
   }
 
-  revoke(id: string): boolean {
+  async revoke(id: string): Promise<boolean> {
+    await this.hydrate();
     const record = this.keys.get(id);
     if (!record || record.revokedAt) return false;
+    const previousRevokedAt = record.revokedAt;
     record.revokedAt = new Date(this.now()).toISOString();
-    this.persist();
+    try {
+      await this.writeRecord(record);
+    } catch (error) {
+      record.revokedAt = previousRevokedAt;
+      throw error;
+    }
     return true;
   }
 
@@ -224,6 +317,7 @@ export class IsabellaApiKeyStore {
       if (requiredScope && !record.scopes.includes(requiredScope))
         return { ok: false, reason: 'scope' };
       record.lastUsedAt = new Date(this.now()).toISOString();
+      this.persistence?.markUsed?.(record);
       return { ok: true, record: publicRecord(record) };
     }
     return { ok: false, reason: 'invalid' };
@@ -232,13 +326,52 @@ export class IsabellaApiKeyStore {
 
 /**
  * Selects persistence from the environment. Serverless filesystems are
- * ephemeral, so they fail closed to memory unless an explicit durable store is
- * supplied. The file backend writes digests only and never the raw key.
+ * ephemeral, so they fail closed to memory unless a durable backend is selected.
+ * Postgres is that backend: hydrate once, then verify synchronously forever.
+ * The file backend writes digests only and never the raw key.
  */
 export function createDefaultApiKeyStore(
   env: Readonly<Record<string, string | undefined>> = process.env
 ): IsabellaApiKeyStore {
   const mode = (env.ISABELLA_API_KEY_STORE ?? '').trim().toLowerCase();
+  const vercelEnvironment = (env.VERCEL_ENV ?? '').trim().toLowerCase();
+  const isProductionServerless =
+    (envFlag(env, 'VERCEL') || vercelEnvironment !== '') &&
+    (vercelEnvironment === 'production' ||
+      vercelEnvironment === 'preview' ||
+      (env.NODE_ENV ?? '').trim().toLowerCase() === 'production');
+
+  if (isPostgresStoreMode(mode)) {
+    let persistence: PostgresApiKeyPersistence | null = null;
+    try {
+      persistence = createPostgresApiKeyPersistence(env);
+    } catch (error) {
+      console.warn('[Isabella] Postgres API key store could not be initialised', {
+        message: error instanceof Error ? error.message.slice(0, 180) : 'ERROR',
+      });
+    }
+    if (persistence) {
+      const store = new IsabellaApiKeyStore({
+        persistence,
+        pepper: env.ISABELLA_API_KEY_PEPPER ?? null,
+      });
+      void store.hydrate();
+      return store;
+    }
+    console.warn(
+      '[Isabella] ISABELLA_API_KEY_STORE requests Postgres without a usable DATABASE_URL / POSTGRES_URL; falling back to the previous backend.'
+    );
+  }
+
+  // No reachable durable adapter: refuse to serve production with ephemeral
+  // credentials rather than silently losing or replacing keys across cold starts.
+  if (isProductionServerless) {
+    console.warn(
+      '[Isabella] API key store is ephemeral on serverless; configure a durable adapter for production-grade key persistence.'
+    );
+    return new IsabellaApiKeyStore();
+  }
+
   if (mode === 'memory' || (!mode && envFlag(env, 'VERCEL'))) return new IsabellaApiKeyStore();
   const filePath = (env.ISABELLA_API_KEY_STORE_PATH ?? '.data/api-keys.json').trim();
   try {

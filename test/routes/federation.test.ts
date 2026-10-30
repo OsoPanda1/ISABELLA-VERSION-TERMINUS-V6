@@ -93,6 +93,7 @@ async function call(
     },
     setHeader(name: string, value: string) {
       out.headers[name.toLowerCase()] = value;
+      return this;
     },
   } as unknown as Response;
   const req = {
@@ -113,7 +114,7 @@ async function call(
 describe('federation routes', () => {
   it('publishes status, catalog and runtime connectivity without secrets', async () => {
     const { handlers, registry } = harness();
-    registry.createConnector({ name: 'principal', kind: 'whatsapp' });
+    await registry.createConnector({ name: 'principal', kind: 'whatsapp' });
 
     const status = await call(handlers, 'GET /api/v1/federation/node');
     expect(status.status).toBe(200);
@@ -134,7 +135,7 @@ describe('federation routes', () => {
 
   it('accepts a signed webhook once and rejects tampering or replay', async () => {
     const { handlers, registry, evidence } = harness();
-    const connector = registry.createConnector({ name: 'evolution', kind: 'evolution' });
+    const connector = await registry.createConnector({ name: 'evolution', kind: 'evolution' });
     const payload = {
       data: {
         messages: [
@@ -196,5 +197,39 @@ describe('federation routes', () => {
     });
     expect(created.status).toBe(201);
     expect(allowed.registry.listConnectors()).toHaveLength(1);
+  });
+
+  it('answers 503 with a fixed code when the durable store rejects a write', async () => {
+    const handlers = new Map<string, Handler>();
+    const reg =
+      (method: string) =>
+      (path: string, handler: Handler): void => {
+        handlers.set(`${method} ${path}`, handler);
+      };
+    const app = { get: reg('GET'), post: reg('POST'), delete: reg('DELETE') } as unknown as Application;
+    const failing: FederationPersistence = {
+      load: () => ({ connectors: [], inbox: [] }),
+      save: () => undefined,
+      insertConnector: async () => {
+        throw new Error('connection to db:5432 failed: password=leaked');
+      },
+    };
+    const registry = new FederationRegistry(failing);
+    registerFederationRoutes({
+      app,
+      registry,
+      env: { ISABELLA_FEDERATION_SECRET: SECRET },
+      enforceRateLimit: () => true,
+      rateLimiter: {} as FixedWindowRateLimiter,
+      authorizeAdmin: () => true,
+      readRawBody: () => undefined,
+    });
+    const created = await call(handlers, 'POST /api/v1/federation/connectors', {
+      body: { name: 'duradero', kind: 'webhook' },
+    });
+    expect(created.status).toBe(503);
+    expect(created.body).toEqual({ success: false, error: 'CONNECTOR_CREATE_UNAVAILABLE' });
+    expect(JSON.stringify(created.body)).not.toContain('leaked');
+    expect(registry.listConnectors()).toHaveLength(0);
   });
 });

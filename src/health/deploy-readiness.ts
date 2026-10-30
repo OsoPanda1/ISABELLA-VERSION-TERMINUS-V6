@@ -1,11 +1,12 @@
 /**
- * Deploy readiness (state: engine-generated).
+ * Deploy readiness (state: draft | engine-generated).
  *
  * `runPreflight` validates the *quality* of the settings that exist. This module answers a different
  * question — "is every setting a production deployment cannot work without actually present?" — and is
  * what `pnpm deploy:readiness` runs before a release. Values are never included in the report.
  * It does not verify network reachability of the dependencies: that is the job of readyz / smoke.
  */
+import { isPostgresStoreMode } from '../database/postgres-store-mode';
 import { runPreflight, weakSecretReason, type PreflightFinding } from './preflight';
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -17,6 +18,8 @@ export interface DeployReadinessReport {
 
 const has = (env: Env, name: string): boolean => (env[name]?.trim() ?? '') !== '';
 
+const POSTGRES_URL_PATTERN = /^postgres(?:ql)?:\/\//i;
+
 const PROVIDER_VARS = [
   'GROQ_API_KEY',
   'OPENROUTER_API_KEY',
@@ -26,6 +29,42 @@ const PROVIDER_VARS = [
   'VERCEL_OIDC_TOKEN',
   'OLLAMA_BASE_URL',
 ] as const;
+
+interface DurableStoreContract {
+  readonly variable: string;
+  readonly mode: string;
+  readonly ephemeralId: string;
+  readonly ephemeralMessage: string;
+  readonly missingDbId: string;
+  readonly missingDbMessage: string;
+  readonly unknownId: string;
+}
+
+/**
+ * Only a Postgres mode with a usable connection string is durable across
+ * serverless instances. Messages name the variable, never its value.
+ */
+function checkDurableStore(
+  contract: DurableStoreContract,
+  dbUrl: string | undefined,
+  add: (id: string, severity: 'ERROR' | 'WARN', message: string) => void
+): void {
+  if (contract.mode === 'memory' || contract.mode === 'file') {
+    add(contract.ephemeralId, 'ERROR', contract.ephemeralMessage);
+    return;
+  }
+  if (isPostgresStoreMode(contract.mode)) {
+    if (!dbUrl || !POSTGRES_URL_PATTERN.test(dbUrl)) {
+      add(contract.missingDbId, 'ERROR', contract.missingDbMessage);
+    }
+    return;
+  }
+  add(
+    contract.unknownId,
+    'ERROR',
+    `${contract.variable} must be one of memory, file, postgres or neon.`
+  );
+}
 
 export function runDeployReadiness(env: Env): DeployReadinessReport {
   const findings: PreflightFinding[] = [
@@ -50,7 +89,10 @@ export function runDeployReadiness(env: Env): DeployReadinessReport {
   }
 
   const dbUrl =
-    env.DATABASE_URL?.trim() || env.POSTGRES_URL?.trim() || env.POSTGRES_URL_NON_POOLING?.trim();
+    env.DATABASE_URL?.trim() ||
+    env.POSTGRES_URL?.trim() ||
+    env.POSTGRES_PRISMA_URL?.trim() ||
+    env.POSTGRES_URL_NON_POOLING?.trim();
   if (!dbUrl) {
     add(
       'DR-DATABASE-MISSING',
@@ -90,6 +132,16 @@ export function runDeployReadiness(env: Env): DeployReadinessReport {
       'Supabase is not configured: Atlas/IKES probes keep /api/v1/readyz degraded.'
     );
 
+  // Supabase user identity resolution calls /auth/v1/user with the anon/publishable key.
+  // The service-role key is for server-side data access and is not a substitute for that key.
+  if (sbUrl && !has(env, 'SUPABASE_ANON_KEY') && !has(env, 'SUPABASE_PUBLISHABLE_KEY')) {
+    add(
+      'DR-SUPABASE-AUTH-KEY-MISSING',
+      'ERROR',
+      'Supabase is configured, but the anon/publishable key required for authenticated user resolution is missing.'
+    );
+  }
+
   // Generative inference: without a provider the chat answers from the local deterministic engine only.
   if (!PROVIDER_VARS.some((n) => has(env, n)) && !has(env, 'ISABELLA_KEYLESS_FREE_PROVIDER')) {
     add(
@@ -105,15 +157,39 @@ export function runDeployReadiness(env: Env): DeployReadinessReport {
     add('DR-ORIGINS-LOCAL', 'WARN', 'ALLOWED_ORIGINS is empty or points at localhost.');
   }
 
-  // Serverless with process-local stores loses state on every cold start.
+  // Serverless instances are ephemeral. Neither process memory nor local files are
+  // a durable credential store; production must not pass readiness with either backend.
   if (has(env, 'VERCEL') || has(env, 'VERCEL_ENV')) {
-    if ((env.ISABELLA_API_KEY_STORE ?? 'memory') === 'memory') {
-      add(
-        'DR-SERVERLESS-MEMORY-KEYS',
-        'WARN',
-        'API keys are stored in memory on serverless: they are lost on cold start.'
-      );
-    }
+    checkDurableStore(
+      {
+        variable: 'ISABELLA_API_KEY_STORE',
+        mode: (env.ISABELLA_API_KEY_STORE ?? 'memory').trim().toLowerCase(),
+        ephemeralId: 'DR-SERVERLESS-NON_DURABLE_API_KEYS',
+        ephemeralMessage:
+          'API key storage is process-local or filesystem-local on serverless. Configure a shared durable adapter before production.',
+        missingDbId: 'DR-SERVERLESS-API_KEYS_DB_MISSING',
+        missingDbMessage:
+          'ISABELLA_API_KEY_STORE selects Postgres, but no usable DATABASE_URL / POSTGRES_URL exists: keys would fall back to process memory.',
+        unknownId: 'DR-SERVERLESS-API_KEYS_MODE_UNKNOWN',
+      },
+      dbUrl,
+      add
+    );
+    checkDurableStore(
+      {
+        variable: 'ISABELLA_FEDERATION_STORE',
+        mode: (env.ISABELLA_FEDERATION_STORE ?? 'memory').trim().toLowerCase(),
+        ephemeralId: 'DR-SERVERLESS-NON_DURABLE_FEDERATION',
+        ephemeralMessage:
+          'Federation connector and inbox state is not durable across serverless instances. Configure a shared durable adapter before production.',
+        missingDbId: 'DR-SERVERLESS-FEDERATION_DB_MISSING',
+        missingDbMessage:
+          'ISABELLA_FEDERATION_STORE selects Postgres, but no usable DATABASE_URL / POSTGRES_URL exists: connector and inbox state would fall back to process memory.',
+        unknownId: 'DR-SERVERLESS-FEDERATION_MODE_UNKNOWN',
+      },
+      dbUrl,
+      add
+    );
   }
 
   const status = findings.some((f) => f.severity === 'ERROR')

@@ -167,7 +167,6 @@
       <button type="button" class="workspace-mode" data-layout="split-3">CHAT + DISEÑO + CONTROL</button>
     </section>
     <section class="hero hero-product" aria-labelledby="hero-title">
-      <canvas id="quantumMesh" class="quantum-mesh" aria-hidden="true"></canvas>
       <div class="hero-copy">
         <div class="hero-kicker"><span class="eyebrow">TINA · INTELIGENCIA SOBERANA LATINOAMERICANA</span><span class="hero-code">GENESIS V6 / TERMINUS Ω</span></div>
         <div class="hero-product-title"><span class="hero-product-index">01</span><h1 id="hero-title">Intelligence<br><em>with memory.</em></h1></div>
@@ -177,7 +176,17 @@
           <div class="system-item"><span class="system-label">RUNTIME</span><strong>OBSERVABLE</strong><small>salud y estado del nodo</small></div>
           <div class="system-item"><span class="system-label">GOBERNANZA</span><strong>HUMAN-GATED</strong><small>autoridad separada de capacidad</small></div>
           <div class="system-item"><span class="system-label">EVIDENCIA</span><strong>BOOKPI</strong><small>trazabilidad de decisiones</small></div>
-          <div class="system-item"><span class="system-label">STORAGE</span><strong>6 + 3</strong><small>redundancia en Terminus</small></div>
+          <div class="system-item"><span class="system-label">STORAGE</span><strong>6 + 3</strong><small>Reed–Solomon GF(2⁸) · RS_GF256_6_9_V1</small></div>
+        </div>
+        <div id="universeBoard" class="universe-board" aria-label="Mapa del universo operativo derivado de los registros reales">
+          <div class="universe-map-frame">
+            <canvas id="quantumMesh" class="quantum-mesh" role="img" aria-label="Mapa del universo: nodos CROWN por federación, módulos expertos por techo de riesgo y conteos de los registros del proceso. La leyenda reproduce los mismos datos en texto."></canvas>
+          </div>
+          <div class="universe-side">
+            <p id="universeReadout" class="universe-readout" role="status">LEYENDO REGISTROS REALES DE /api/v1/status…</p>
+            <div id="universeLegend" class="universe-legend"></div>
+            <p class="universe-provenance">Los nodos CROWN aparecen como DECLARED mientras no existan sondas independientes; el mapa no pinta datos que el servidor no devuelva.</p>
+          </div>
         </div>
       </div>
       <div class="orbital" aria-label="Visualización del núcleo Isabella">
@@ -389,6 +398,7 @@
   <script src="/ui/app.js?v=enterprise-3" defer></script>
   <script src="/ui/chat-plus.js?v=enterprise-3" defer></script>
   <script src="/ui/nexus.js?v=nexus-1" defer></script>
+  <script src="/ui/universe-map.js?v=universe-1" defer></script>
   <script>
     window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
   </script>

@@ -33,7 +33,7 @@
     "production:evidence": "node scripts/production-evidence.mjs",
     "smoke:runtime": "node scripts/runtime-smoke.mjs",
     "smoke:ivcc": "node scripts/ivcc-runtime-smoke.mjs",
-    "smoke:ui": "node --check src/ui/app.js && node scripts/ui-smoke.mjs",
+    "smoke:ui": "node --check src/ui/app.js && node --check src/ui/universe-map.js && node scripts/ui-smoke.mjs",
     "smoke:production": "tsx scripts/production-smoke.ts",
     "postgres:e2e": "corepack pnpm run build:dist && node scripts/postgres-e2e.mjs",
     "deploy:verify": "docker build --tag isabella-genesisai:verify . && corepack pnpm run smoke:runtime && kubectl apply --dry-run=server -k k8s/",

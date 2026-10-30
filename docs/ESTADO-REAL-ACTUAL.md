@@ -8,7 +8,7 @@
 
 ## Readiness reportada y l铆mites
 
-**61.0% ponderado de preparaci贸n para producci贸n** (misma cifra y misma r煤brica que `README.md`, secci贸n 芦Medici贸n del avance real禄; una prueba de consistencia, `test/deployment/readiness-consistency.test.ts`, falla si ambos documentos divergen). Es una evaluaci贸n de gates, no una m茅trica cient铆fica ni un porcentaje de funcionalidades. No sube por el mero aumento del n煤mero de pruebas ni por cambios posteriores al SHA validado: siguen abiertos CI de GitHub con ejecuci贸n v谩lida, persistencia remota sana (Atlas/IKES), `BOOKPI_INTEGRITY_SECRET` en el entorno desplegado, inferencia externa verificada, telemetr铆a exportada y despliegue/rollback reales.
+**Avance global de implementaci髇: no publicado como porcentaje 鷑ico.** Mientras no exista un denominador de requisitos ponderados y reproducible, una cifra agregada ser韆 especulaci髇 y no se presenta como hecho.
 
 > Hist贸rico: la versi贸n de 12 de octubre de 2026 estimaba 46.25% con otra r煤brica (runtime 20, pruebas 20, seguridad 15, inferencia 15, persistencia 10, CI/Rust 10, operaci贸n 10). Se reemplaz贸 para no mantener dos cifras contradictorias.
 

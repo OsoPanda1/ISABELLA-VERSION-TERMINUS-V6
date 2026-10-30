@@ -34,6 +34,33 @@ try {
   assert.ok(["PROCESS_MEMORY_NOT_DURABLE", "LOCAL_FILE_FSYNCED_NOT_SHARED_NOT_WORM", "POSTGRES_SHARED_DURABLE_NOT_WORM"].includes(statusBody.engines?.bookpiDurability),
     "BookPI status must disclose its durability scope");
 
+  // El mapa del hero solo pinta lo que este snapshot deriva de los registros del proceso.
+  const universe = statusBody.universe;
+  assert.equal(universe?.schema, "isabella.universe.v1", "runtime status must publish the universe snapshot the map renders");
+  assert.ok(statusBody.toolsCount > 2, "the public tool count must come from the registry, not from a hardcoded digit");
+  assert.equal(statusBody.toolsCount, universe.counts.tools, "public tool count must match the snapshot the map reads");
+  assert.equal(statusBody.toolsCount, universe.evidence.tools, "the tool registry and its evidence counters must agree");
+  assert.equal(universe.nodes.length, statusBody.crownNodesCount, "every declared CROWN node must be enumerable for the map");
+  assert.ok(universe.expertModules.length === statusBody.experts.count && universe.expertModules.length > 0,
+    "the expert modules rendered by the map must be the declared registry");
+  assert.equal(universe.subsystems.find((item) => item.id === "tools")?.count, statusBody.toolsCount,
+    "subsystem counters must be derived from the same registries as the top-level counts");
+  assert.ok(universe.nodes.every((node) => typeof node.weight === "number" && node.weight > 0 && node.weight <= 1),
+    "node weights must be real bounded values so the map scales without inventing geometry");
+  assert.ok(Object.values(universe.stateLegend).every((text) => typeof text === "string" && text.length > 0),
+    "every map state must be explained in the legend");
+  for (const item of universe.subsystems) {
+    assert.ok(Object.hasOwn(universe.stateLegend, item.state), `subsystem ${item.id} reports an unexplained state ${item.state}`);
+  }
+  assert.ok(!Object.values(statusBody.engines).some((value) => value === "ACTIVE"),
+    "no engine may claim ACTIVE without a probe; undeclared wiring must say DECLARED or NOT_WIRED");
+  assert.ok(universe.engineStates.pdp === "MODULE_NOT_WIRED_TO_HTTP" || universe.engineStates.pdp === "WIRED_IN_PROCESS",
+    "the PDP must report whether the HTTP plane actually calls it");
+  const mapClient = await fetch(baseUrl + "/ui/universe-map.js", { signal: AbortSignal.timeout(5_000) });
+  assert.equal(mapClient.status, 200, "the universe map client must be served by the runtime");
+  assert.match(mapClient.headers.get("content-type") ?? "", /javascript/, "the universe map client must be served as JavaScript");
+  assert.ok((await mapClient.text()).includes("/api/v1/status"), "the map client must read the real status endpoint");
+
   const readyz = await fetch(baseUrl + "/api/v1/readyz", { signal: AbortSignal.timeout(5_000) });
   assert.ok([200, 503].includes(readyz.status), "readiness may only report healthy or explicitly blocked");
   const readyzBody = await readyz.json();

@@ -1,9 +1,36 @@
 import { buildPricingCatalog } from './commerce/catalog';
+
 import { envFlag } from './lib/env-flags';
+import {
+  OllamaAdapter,
+  GratisAPIAdapter,
+  HuggingFaceFreeAdapter,
+} from './inference/free-providers';
+import { createFoundationalLLM } from './inference/foundational-llm';
+import { createLocalEngine } from './inference/local-engine';
+import { hierarchicalMemory } from './memory/hierarchical';
+import { assessThreat } from './security/advanced-threat-intel';
+import { canonicalize } from './security/jcs';
+import { humanReviewGate } from './governance/human-review-gate';
+import { parseIntent } from './security/intention-parser';
+import { promptGuard } from './security/prompt-guard';
+import { DEFAULT_BENCHMARK, scoreAnswer } from './evaluation/benchmark';
+import { t, getLocaleFromEnv } from './lib/i18n';
+import { searchDomains } from './infra/vercel-domains';
+import { profitablePrice, profitGuard } from './economy/profit-guard';
+import { sovereignRag } from './inference/rag';
 import { boundedBudgetMs, DeadlineBudget, hedgedFirst } from './inference/deadline';
 import { buildAsset, contentHash, serveAsset, type StaticAsset } from './http/static-assets';
 import express, { type Application, type NextFunction, type Request, type Response } from 'express';
-import { randomUUID, timingSafeEqual } from 'node:crypto';
+import {
+  createPublicKey,
+  randomUUID,
+  timingSafeEqual,
+  generateKeyPairSync,
+  sign,
+  verify,
+  type KeyObject,
+} from 'node:crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'node:url';
@@ -43,6 +70,7 @@ import {
 } from './inference/speech';
 import { gateway } from '@ai-sdk/gateway';
 import { IsabellaGenesisRuntime } from './genesis/runtime';
+import { buildUniverseSnapshot } from './genesis/universe';
 import { assertBalancedAuthority, createPrincipal } from './identity/principal';
 import { createCapabilityGate } from './crown/capability';
 import { GENESIS_EXPERTS, EXPERT_REGISTRY } from './cognition/experts';
@@ -127,6 +155,15 @@ import { CognitiveCapitalMarket } from './economy/cognitive-capital-market';
 import { CognitiveImmuneSystem } from './ihec/immune-system';
 import { CognitiveFabricEngine } from './core/cognitive-fabric-engine';
 import { ConstitutionalGovernanceFabric } from './governance/constitutional-governance-fabric';
+import {
+  BlackoutController,
+  assessConstitutionalIntegrity,
+  createBlackoutGuard,
+  type BlackoutEvidenceEvent,
+  type IntegrityFinding,
+} from './governance/blackout';
+import { registerBlackoutRoutes } from './routes/governance-blackout';
+import { KillSwitch } from './security/kill-switch';
 import { MonetizationEngine } from './economy/monetization-engine';
 import { DynamicPricingEngine } from './economy/dynamic-pricing';
 import {
@@ -200,6 +237,18 @@ const latinoGenesis = new LatinoGenesis(SEED_LATAM);
 // Por privacidad, sólo se activa con opt-in explícito del operador:
 // ISABELLA_KEYLESS_FREE_PROVIDER=llm7,pollinations (o on/true/1 para el orden por defecto).
 app.disable('x-powered-by');
+// Hardening de cabeceras HTTP (fail-closed por defecto).
+app.use((req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  const forwardedProto = String(req.headers['x-forwarded-proto'] ?? '').toLowerCase();
+  if (req.secure || forwardedProto.includes('https')) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
 // Detrás de un balanceador, req.ip sería la IP del proxy y todos los clientes compartirían cubeta de rate limit.
 // TRUST_PROXY=<saltos> (entero 1..10) habilita X-Forwarded-For; sin valor válido NO se confía en él.
 const trustProxyHops = parseTrustProxy(process.env.TRUST_PROXY);
@@ -304,7 +353,7 @@ app.use(
 app.use(
   express.json({
     limit: '256kb',
-    verify: (req, _res, buf) => {
+    verify: (req: any, _res: any, buf: Buffer) => {
       // Preserve raw bytes only for the signed webhook route; duplicating every
       // request body adds avoidable allocations and GC pressure on the hot path.
       const pathname = (req.url ?? '').split('?')[0];
@@ -330,6 +379,7 @@ let jsAsset: StaticAsset | null = null;
 let chatPlusAsset: StaticAsset | null = null;
 let cognitionClientAsset: StaticAsset | null = null;
 let nexusJsAsset: StaticAsset | null = null;
+let universeMapAsset: StaticAsset | null = null;
 try {
   const rawHtml = fs.readFileSync(path.join(uiPath, 'index.html'), 'utf-8');
   const cinematicCss = fs.readFileSync(path.join(uiPath, 'cinematic.css'), 'utf-8');
@@ -339,6 +389,7 @@ try {
   const chatPlusJs = fs.readFileSync(path.join(uiPath, 'chat-plus.js'), 'utf-8');
   const cognitionClientJs = fs.readFileSync(path.join(uiPath, 'cognition-client.js'), 'utf-8');
   const nexusJs = fs.readFileSync(path.join(uiPath, 'nexus.js'), 'utf-8');
+  const universeMapJs = fs.readFileSync(path.join(uiPath, 'universe-map.js'), 'utf-8');
   const versioned = rawHtml
     .replace(/(\/styles\/cinematic\.css)\?v=[^"']*/, `$1?v=${contentHash(cinematicCss)}`)
     .replace(/(\/styles\/command-center\.css)\?v=[^"']*/, `$1?v=${contentHash(commandCenterCss)}`)
@@ -346,7 +397,8 @@ try {
     .replace(/(\/ui\/cognition-client\.js)\?v=[^"']*/, `$1?v=${contentHash(cognitionClientJs)}`)
     .replace(/(\/ui\/app\.js)\?v=[^"']*/, `$1?v=${contentHash(cinematicJs)}`)
     .replace(/(\/ui\/chat-plus\.js)\?v=[^"']*/, `$1?v=${contentHash(chatPlusJs)}`)
-    .replace(/(\/ui\/nexus\.js)\?v=[^"']*/, `$1?v=${contentHash(nexusJs)}`);
+    .replace(/(\/ui\/nexus\.js)\?v=[^"']*/, `$1?v=${contentHash(nexusJs)}`)
+    .replace(/(\/ui\/universe-map\.js)\?v=[^"']*/, `$1?v=${contentHash(universeMapJs)}`);
   htmlAsset = buildAsset(versioned, 'text/html; charset=utf-8');
   cssAsset = buildAsset(cinematicCss, 'text/css; charset=utf-8');
   commandCenterCssAsset = buildAsset(commandCenterCss, 'text/css; charset=utf-8');
@@ -355,9 +407,61 @@ try {
   chatPlusAsset = buildAsset(chatPlusJs, 'text/javascript; charset=utf-8');
   cognitionClientAsset = buildAsset(cognitionClientJs, 'text/javascript; charset=utf-8');
   nexusJsAsset = buildAsset(nexusJs, 'text/javascript; charset=utf-8');
+  universeMapAsset = buildAsset(universeMapJs, 'text/javascript; charset=utf-8');
 } catch {
   console.warn('[Genesis] Cinematic UI assets are unavailable at startup.');
 }
+// ── Modo Terminus Blackout (state: draft | engine-generated) ────────────────────────────────
+// `KillSwitch` ya firmaba y verificaba órdenes, pero ninguna puerta del HTTP lo consultaba: un
+// alcance haltado seguía serviendo tráfico. El guard se monta ANTES de la primera ruta, para que
+// el halt corte el camino real y no solo aparezca en un diagnóstico.
+// Emisores autorizados: ISA_KILL_PUBKEY_<ISSUER>=<base64 SPKI-DER>. Sin ninguna clave el mapa
+// queda vacío y toda orden se rechaza con "issuer not authorized": fail-closed por construcción.
+const killSwitchAuthorizedKeys = new Map<string, KeyObject>();
+for (const [name, value] of Object.entries(process.env)) {
+  const slug = /^ISA_KILL_PUBKEY_([A-Z0-9_]{1,32})$/.exec(name);
+  if (slug === null || slug[1] === undefined || typeof value !== 'string' || value.trim() === '') {
+    continue;
+  }
+  try {
+    killSwitchAuthorizedKeys.set(
+      slug[1],
+      createPublicKey({ key: Buffer.from(value, 'base64'), format: 'der', type: 'spki' })
+    );
+  } catch {
+    console.warn(`[Genesis] ISA_KILL_PUBKEY_${slug[1]} no es una SPKI base64 válida; se ignora.`);
+  }
+}
+const envKillSwitchEngaged = ['1', 'true', 'yes'].includes(
+  (process.env.ISA_KILL_SWITCH ?? '').trim().toLowerCase()
+);
+const killSwitch = new KillSwitch({
+  authorizedKeys: killSwitchAuthorizedKeys,
+  envFlag: envKillSwitchEngaged,
+  ...(Number(process.env.ISA_KILL_MAX_DURATION_MS) > 0
+    ? { maxDurationMs: Number(process.env.ISA_KILL_MAX_DURATION_MS) }
+    : {}),
+});
+
+/** Libro de evidencia del plano de auditoría legacy (in-memory o JSONL durable según env). */
+function sealGovernanceEvent(event: BlackoutEvidenceEvent): void {
+  bookPiLedger.append(event);
+}
+
+app.use(
+  createBlackoutGuard({
+    killSwitch,
+    recordEvidence: sealGovernanceEvent,
+    newEventId: () => `blackout-denial-${randomUUID()}`,
+  })
+);
+
+const blackoutController = new BlackoutController({
+  killSwitch,
+  recordEvidence: sealGovernanceEvent,
+  newEventId: () => `blackout-${randomUUID()}`,
+});
+
 const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable';
 app.get('/', (req, res) => {
   if (htmlAsset === null) {
@@ -420,6 +524,13 @@ app.get('/ui/nexus.js', (req, res) => {
   }
   serveAsset(req, res, nexusJsAsset, IMMUTABLE_CACHE);
 });
+app.get('/ui/universe-map.js', (req, res) => {
+  if (universeMapAsset === null) {
+    res.status(404).type('js').send('// Universe map client unavailable');
+    return;
+  }
+  serveAsset(req, res, universeMapAsset, IMMUTABLE_CACHE);
+});
 // Intro media: the original is 1080p60 with its index (moov) at the END of the file, so playback cannot start
 // until the tail is fetched. The "web" rendition is 540p30 with +faststart (index first) for instant start.
 const serveMedia =
@@ -455,11 +566,47 @@ const runtime = new IsabellaGenesisRuntime(
   undefined,
   ikesPersistence
 );
+// Registro de proveedores fundacionales (open source / free) para que Isabella
+// use modelos reales cuando estén disponibles, con fallback local garantizado.
+if (process.env.OLLAMA_ENABLED === 'true') {
+  runtime.inference.register(new OllamaAdapter());
+}
+if (process.env.GRATIS_API_KEY) {
+  runtime.inference.register(new GratisAPIAdapter());
+}
+if (process.env.HF_TOKEN) {
+  runtime.inference.register(new HuggingFaceFreeAdapter());
+}
+const foundationalLLM = createFoundationalLLM(runtime);
+
+let isabellaSigningPrivateKey = process.env.ISABELLA_SIGNING_PRIVATE_KEY_PEM ?? '';
+let isabellaSigningPublicKey = process.env.ISABELLA_SIGNING_PUBLIC_KEY_PEM ?? '';
+if (!isabellaSigningPrivateKey || !isabellaSigningPublicKey) {
+  const pair = generateKeyPairSync('ed25519');
+  isabellaSigningPrivateKey = pair.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+  isabellaSigningPublicKey = pair.publicKey.export({ type: 'spki', format: 'pem' }).toString();
+}
+// El registro de herramientas se construye dentro del runtime, antes de que exista el ledger,
+// así que el sello se adjunta aquí. Desde ahora la evidencia es del camino de ejecución: toda
+// herramienta —la de esta ruta y la que invoque un agente interno— queda en BookPI antes de que
+// su salida llegue al llamador, y un fallo del libro retiene la salida en vez de fingir éxito.
+runtime.tools.attachEvidenceSeal((event) => {
+  bookPiLedger.append(event);
+});
 void runtime.initPersistence().catch((error) => {
   // A single provider failure must not hide which storage subsystem degraded.
   const reasons = error instanceof AggregateError ? [...error.errors] : [error];
   for (const reason of reasons) {
     const message = reason instanceof Error ? reason.message : 'PERSISTENCE_INITIALIZATION_FAILED';
+    if (message === 'IKES_SUPABASE_HTTP_404') {
+      // A missing or unexposed Data API table is an infrastructure/configuration
+      // issue, not a reason to prevent the runtime from starting. IKES remains
+      // explicitly volatile until the Supabase migration is applied/exposed.
+      console.warn(
+        '[Genesis] IKES Supabase tables are unavailable (HTTP 404); continuing with volatile in-process memory. Apply supabase/migrations/20261017000001_ikes-memory.sql and expose the tables through the Data API before enabling durable persistence.'
+      );
+      continue;
+    }
     console.error('[Genesis] persistence initialization failed:', message);
   }
 });
@@ -1696,7 +1843,30 @@ const CROWN_NODES = [
   },
 ];
 
-// 6 Capas Soberanas MD-X5
+/* El universo observable del mapa se construye en src/genesis/universe.ts (modulo puro y probado); aqui solo se le entregan los registros reales de este proceso. */
+const universeSources = (bookpi: { backend: string; durability: string }) => {
+  const blackout = killSwitch.status();
+  return buildUniverseSnapshot({
+    crownNodes: CROWN_NODES,
+    experts: EXPERT_REGISTRY,
+    toolRiskTiers: runtime.tools.list().map((tool) => String(tool.riskTier)),
+    capabilityDescriptors: runtime.capabilities
+      .list()
+      .map((item) => ({ id: item.id, domain: item.domain, riskTier: item.riskTier })),
+    counts: {
+      skills: runtime.skills.list().length,
+      modules: runtime.modules.list().length,
+      protocols: runtime.protocols.list().length,
+      customizations: runtime.customizations.list().length,
+      memoryClaims: runtime.memory.listClaims().length,
+    },
+    toolEvidence: runtime.tools.diagnostics(),
+    blackout: { envFlag: blackout.envFlag, haltCount: blackout.halts.length },
+    bookpi,
+    quantumDescription: runtime.quantum.describe(),
+    ikesPersistenceConfigured: Boolean(ikesPersistence),
+  });
+};
 // BookPI uses the canonical process-local hash-chain adapter. It is not durable WORM storage.
 
 // --- API ROUTES ---
@@ -1789,6 +1959,7 @@ app.get('/api/v1/status', (_req, res) => {
       : pipelineBookPi.backend === 'DURABLE_JSONL_LOCAL'
         ? 'LOCAL_FILE_FSYNCED_NOT_SHARED_NOT_WORM'
         : 'PROCESS_MEMORY_NOT_DURABLE';
+  const universe = universeSources({ backend: bookPiBackend, durability: bookPiDurability });
   res.json({
     runtime: 'Isabella Genesis TINA',
     version: 'v40.0.0',
@@ -1799,31 +1970,18 @@ app.get('/api/v1/status', (_req, res) => {
       geographicAnchor:
         'Mineral del Monte (Real del Monte), Hidalgo, México (20.3833° N, 98.8500° O)',
     },
-    engines: {
-      crown: 'ACTIVE',
-      aegis: 'ACTIVE',
-      ikes: 'ACTIVE',
-      veritas: 'ACTIVE',
-      bookpi: bookPiBackend,
-      bookpiDurability: bookPiDurability,
-      pdp: 'ACTIVE',
-      litleTrustFabric: 'ACTIVE',
-      quantumPennyLane: runtime.quantum.describe(),
-      hyperSkillFabric: {
-        contract: 'isabella.hsf.v1',
-        capabilities: runtime.capabilities.list(),
-      },
-      geminiEngine: 'EXPLICIT_SELECTION_ONLY',
-    },
+    engines: universe.engineStates,
+    stateLegend: universe.stateLegend,
     experts: {
-      count: GENESIS_EXPERTS.length,
+      count: universe.counts.experts,
       modules: EXPERT_REGISTRY,
     },
-    crownNodesCount: CROWN_NODES.length,
-    toolsCount: 2,
-    skillsCount: runtime.skills.list().length,
-    modulesCount: runtime.modules.list().length,
-    protocolsCount: runtime.protocols.list().length,
+    crownNodesCount: universe.counts.crownNodes,
+    toolsCount: universe.counts.tools,
+    skillsCount: universe.counts.skills,
+    modulesCount: universe.counts.modules,
+    protocolsCount: universe.counts.protocols,
+    universe,
     invariant: 'CAPABILITY ≠ AUTHORITY ≠ EXECUTION ≠ EVIDENCE ≠ LEARNING ≠ PRODUCTION',
     trust: { litle: 'L-512.v1', evidence: 'SHA3-512', certificates: 'HMAC-SHA256' },
   });
@@ -2025,20 +2183,16 @@ app.post('/api/v1/tools/execute', async (req, res) => {
 
     const result = await runtime.executeTool(String(toolId), input, principal, 'read:territory');
 
-    // Append a verifiable event to the volatile in-memory hash chain (not WORM storage).
-    bookPiLedger.append({
-      id: `evt-${randomUUID()}`,
-      timestamp: new Date().toISOString(),
-      type: 'TOOL_EXECUTION',
-      methodId: `T.TOOL.${String(toolId)}.execute.v1.0.0.LOW.TERRITORIAL`,
-      principal: principal.id,
-      riskTier: 'LOW',
-      status: 'EXECUTED',
-    });
-
-    res.json({
-      success: true,
+    // El sello de evidencia lo escribe el propio ToolRegistry antes de devolver la salida
+    // (attachEvidenceSeal). Aquí ya no se duplica el evento: el append manual llevaba un
+    // methodId no canónico ('T.TOOL.<id>...' — TOOL no es federación YUN) que ningún verificador
+    // podría parsear y que además registraba EXECUTED aunque la ejecución hubiera sido denegada.
+    // `admitted:false` no es un éxito: el runtime devuelve decisión en vez de lanzar, así que la
+    // puerta reportaba 200/true a una herramienta bloqueada. Se informa lo que pasó de verdad.
+    res.status(result.admitted ? 200 : 403).json({
+      success: result.admitted,
       toolId,
+      evidenceSealed: result.receipt !== undefined,
       result,
     });
   } catch (error) {
@@ -2105,6 +2259,11 @@ app.post('/api/v1/cognition/route', async (req, res) => {
       return;
     const history = sanitizePublicHistory(body.history);
     const input = typeof body.input === 'string' ? body.input.trim() : '';
+    const threat = assessThreat(input);
+    if (threat.level === 'critical') {
+      res.status(403).json({ success: false, error: 'THREAT_BLOCKED', assessment: threat });
+      return;
+    }
     const focusLens = ['territorial', 'epistemic', 'security', 'governance'].includes(
       body.focusLens
     )
@@ -2489,7 +2648,7 @@ app.post('/api/v1/cognition/route', async (req, res) => {
               },
             })
           );
-          generativeNarrative = resp?.text?.trim() || null;
+          generativeNarrative = (resp as { text?: string })?.text?.trim() || null;
           if (generativeNarrative) responseEngine = 'gemini';
         } catch {
           generativeNarrative = null;
@@ -2537,7 +2696,7 @@ app.post('/api/v1/cognition/route', async (req, res) => {
                 },
               })
             );
-            generativeNarrative = resp?.text?.trim() || null;
+            generativeNarrative = (resp as { text?: string })?.text?.trim() || null;
             if (generativeNarrative) responseEngine = 'gemini';
           } catch {
             generativeNarrative = null;
@@ -3340,7 +3499,7 @@ app.post('/api/v1/cognitive/request', async (req, res) => {
       ? `${baseSystemPrompt}\n\n${memoryContextBlock}`
       : baseSystemPrompt;
     let generativeNarrative: string | null = null;
-    let responseEngine: 'gemini' | 'sovereign-fallback' | 'blocked' = 'blocked';
+    let responseEngine: 'gemini' | 'sovereign-fallback' | 'blocked' | 'foundational' = 'blocked';
     if (
       decision.admitted &&
       wantsGemini &&
@@ -3363,10 +3522,26 @@ app.post('/api/v1/cognitive/request', async (req, res) => {
         'No puedo ejecutar esa operación desde una sesión pública. Las acciones privilegiadas o destructivas requieren una identidad verificada y aprobación autorizada.';
       responseEngine = 'blocked';
     } else if (!generativeNarrative) {
-      // Same disclosure contract as /cognition/route: the deterministic local answer
-      // is never presented as model output.
-      generativeNarrative = generateSovereignFallback(input, [], 'general');
-      responseEngine = 'sovereign-fallback';
+      // Intentar el modelo fundacional (proveedores reales registrados) antes del fallback.
+      try {
+        const foundational = await foundationalLLM.generate({
+          input,
+          systemPrompt,
+          maxTokens: 512,
+          history: sessionMemory
+            .getSessionHistory(sessionId)
+            .map((turn) => ({ role: turn.role as 'user' | 'assistant', content: turn.content })),
+          knowledgeContext: verifiedKnowledgeContext,
+        });
+        generativeNarrative = foundational.text;
+        responseEngine =
+          foundational.engine === 'foundational' ? 'foundational' : 'sovereign-fallback';
+      } catch {
+        // Same disclosure contract as /cognition/route: the deterministic local answer
+        // is never presented as model output.
+        generativeNarrative = generateSovereignFallback(input, [], 'general');
+        responseEngine = 'sovereign-fallback';
+      }
     }
     if (decision.admitted && responseEngine === 'gemini') {
       sessionMemory.addToSession(sessionId, {
@@ -3403,8 +3578,19 @@ app.post('/api/v1/cognitive/request', async (req, res) => {
         })),
       },
     });
-  } catch {
-    res.status(500).json({ success: false, error: 'COGNITIVE_REQUEST_FAILED' });
+  } catch (error) {
+    // Isabella must always answer the user, even on unexpected runtime errors.
+    // The failure is disclosed as a local fallback, never as model inference.
+    const fallbackInput = typeof req.body?.input === 'string' ? req.body.input : '';
+    const fallback = generateSovereignFallback(fallbackInput, [], 'general');
+    res.status(200).json({
+      success: true,
+      output: fallback,
+      responseEngine: 'sovereign-fallback',
+      error: 'COGNITIVE_REQUEST_FAILED',
+      detail: error instanceof Error ? error.message : String(error),
+      publicAuthority: 'VIEWER_ONLY',
+    });
   }
 });
 
@@ -3515,6 +3701,372 @@ app.post('/api/v1/isabella/entropy', (req, res) => {
   }
 });
 
+app.post('/api/v1/isabella/rag/add', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const id = typeof body.id === 'string' ? body.id.trim() : '';
+  const text = typeof body.text === 'string' ? body.text.trim() : '';
+  if (!id || !text) {
+    res.status(400).json({ success: false, error: 'id y text son requeridos' });
+    return;
+  }
+  sovereignRag.add(id, text);
+  res.json({ success: true, size: sovereignRag.size() });
+});
+
+app.get('/api/v1/isabella/rag/search', (req, res) => {
+  const q = typeof req.query.q === 'string' ? req.query.q : '';
+  const k = Number(req.query.k ?? 3);
+  res.json({ success: true, hits: sovereignRag.search(q, Number.isFinite(k) ? k : 3) });
+});
+
+app.post('/api/v1/domains/search', async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const domains = Array.isArray(body.domains)
+    ? body.domains.filter((d): d is string => typeof d === 'string')
+    : [];
+  if (domains.length === 0) {
+    res.status(400).json({ success: false, error: 'domains array required' });
+    return;
+  }
+  try {
+    const results = await searchDomains(domains);
+    res.json({ success: true, results });
+  } catch (error) {
+    res
+      .status(502)
+      .json({ success: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post('/api/v1/security/intent', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const input = typeof body.input === 'string' ? body.input : '';
+  res.json({ success: true, intent: parseIntent(input) });
+});
+
+app.post('/api/v1/security/prompt-guard', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const input = typeof body.input === 'string' ? body.input : '';
+  res.json({ success: true, guard: promptGuard(input) });
+});
+
+app.post('/api/v1/security/threat-intel', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const input = typeof body.input === 'string' ? body.input : '';
+  res.json({ success: true, assessment: assessThreat(input) });
+});
+
+app.get('/api/v1/isabella/providers', (_req, res) => {
+  res.json({
+    success: true,
+    providers: runtime.inference.list(),
+    readiness: describeProviderReadiness(process.env),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Minimal MCP-compatible JSON-RPC endpoint (tools/list, tools/call).
+app.post('/api/mcp', async (req, res) => {
+  const mcpToken = process.env.MCP_SERVER_TOKEN;
+  if (!mcpToken) {
+    res.status(503).json({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'MCP_SERVER_TOKEN not configured' } });
+    return;
+  }
+  const auth = req.get('authorization') ?? '';
+  if (!verifyBearerToken(auth, mcpToken)) {
+    res.status(401).json({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unauthorized' } });
+    return;
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const id = body.id ?? null;
+  const method = typeof body.method === 'string' ? body.method : '';
+  const reply = (result: unknown) => res.json({ jsonrpc: '2.0', id, result });
+  const fail = (code: number, message: string) =>
+    res.json({ jsonrpc: '2.0', id, error: { code, message } });
+
+  if (method === 'tools/list') {
+    reply({
+      tools: [
+        {
+          name: 'isabella_status',
+          description: 'Estado del runtime de Isabella',
+          inputSchema: { type: 'object', properties: {} },
+        },
+        {
+          name: 'isabella_foundational',
+          description: 'Genera respuesta con el LLM fundacional',
+          inputSchema: {
+            type: 'object',
+            properties: { input: { type: 'string' } },
+            required: ['input'],
+          },
+        },
+        {
+          name: 'isabella_rag_search',
+          description: 'Busca en el RAG soberano',
+          inputSchema: {
+            type: 'object',
+            properties: { q: { type: 'string' }, k: { type: 'number' } },
+            required: ['q'],
+          },
+        },
+      ],
+    });
+    return;
+  }
+
+  if (method === 'tools/call') {
+    const params = (body.params ?? {}) as Record<string, unknown>;
+    const name = typeof params.name === 'string' ? params.name : '';
+    const args = (params.arguments ?? {}) as Record<string, unknown>;
+    try {
+      if (name === 'isabella_status') {
+        reply({
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                engine: runtime.isabella.snapshot(),
+                providers: runtime.inference.list(),
+              }),
+            },
+          ],
+        });
+        return;
+      }
+      if (name === 'isabella_foundational') {
+        const input = typeof args.input === 'string' ? args.input : '';
+        const result = await foundationalLLM.generate({
+          input,
+          systemPrompt: 'Eres Isabella Villaseñor AI.',
+          maxTokens: 512,
+        });
+        reply({ content: [{ type: 'text', text: result.text }] });
+        return;
+      }
+      if (name === 'isabella_rag_search') {
+        const q = typeof args.q === 'string' ? args.q : '';
+        const k = typeof args.k === 'number' ? args.k : 3;
+        reply({ content: [{ type: 'text', text: JSON.stringify(sovereignRag.search(q, k)) }] });
+        return;
+      }
+      fail(-32601, 'Tool not found');
+    } catch (error) {
+      fail(-32000, error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+
+  fail(-32601, 'Method not found');
+});
+
+app.get('/api/v1/i18n/locale', (_req, res) => {
+  const locale = getLocaleFromEnv();
+  res.json({
+    success: true,
+    locale,
+    greeting: t('greeting', locale),
+    identity: t('identity', locale),
+  });
+});
+
+app.post('/api/isabella/chat', async (req, res) => {
+  if (!enforceRateLimit(req, res, publicCognitionLimiter, 'isabella-chat')) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const input = typeof body.input === 'string' ? body.input.trim() : '';
+  if (!input) {
+    res.status(400).json({ success: false, error: 'input es requerido' });
+    return;
+  }
+  try {
+    const result = await foundationalLLM.generate({
+      input,
+      systemPrompt:
+        'Eres Isabella Villaseñor AI, LLM fundacional soberano de TAMV. Responde en español latinoamericano mexicano.',
+      maxTokens: Math.min(512, typeof body.maxTokens === 'number' ? body.maxTokens : 256),
+    });
+    res.json({
+      success: true,
+      output: result.text,
+      engine: result.engine,
+      modelId: result.modelId,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ success: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post('/api/isabella/isa/reason', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const input = typeof body.input === 'string' ? body.input.trim() : '';
+  if (!input) {
+    res.status(400).json({ success: false, error: 'input es requerido' });
+    return;
+  }
+  const engine = createLocalEngine();
+  const analysis = engine.analyze(input);
+  res.json({
+    success: true,
+    traceId: `trace-${randomUUID()}`,
+    analysis,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.post('/api/isabella/crypto/sign', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  if (!enforceRateLimit(req, res, publicCognitionLimiter, 'crypto-sign')) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const payload =
+    typeof body.payload === 'string' ? body.payload : JSON.stringify(body.payload ?? {});
+  const signature = sign(null, Buffer.from(payload, 'utf8'), isabellaSigningPrivateKey).toString(
+    'base64'
+  );
+  res.json({
+    success: true,
+    payload,
+    signature,
+    publicKey: isabellaSigningPublicKey,
+    algorithm: 'Ed25519',
+  });
+});
+
+app.post('/api/isabella/crypto/verify', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const payload = typeof body.payload === 'string' ? body.payload : '';
+  const signature = typeof body.signature === 'string' ? body.signature : '';
+  const publicKey = typeof body.publicKey === 'string' ? body.publicKey : isabellaSigningPublicKey;
+  let ok = false;
+  try {
+    ok = verify(null, Buffer.from(payload, 'utf8'), publicKey, Buffer.from(signature, 'base64'));
+  } catch {
+    ok = false;
+  }
+  res.json({ success: true, valid: ok, algorithm: 'Ed25519' });
+});
+
+app.post('/api/v1/memory/store', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const scope = (typeof body.scope === 'string' ? body.scope : 'session') as any;
+  const key = typeof body.key === 'string' ? body.key : '';
+  if (!key) {
+    res.status(400).json({ success: false, error: 'key es requerido' });
+    return;
+  }
+  hierarchicalMemory.set(
+    scope,
+    key,
+    body.value,
+    typeof body.ttlMs === 'number' ? body.ttlMs : undefined
+  );
+  res.json({ success: true });
+});
+
+app.get('/api/v1/memory/recall', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const scope = (typeof req.query.scope === 'string' ? req.query.scope : 'session') as any;
+  const key = typeof req.query.key === 'string' ? req.query.key : '';
+  const entry = hierarchicalMemory.get(scope, key);
+  res.json({ success: true, entry });
+});
+
+app.get('/api/v1/memory/snapshot', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const scope = typeof req.query.scope === 'string' ? req.query.scope : undefined;
+  res.json({ success: true, entries: hierarchicalMemory.list(scope as any) });
+});
+
+app.get('/api/v1/isabella/full-status', (_req, res) => {
+  res.json({
+    success: true,
+    engine: runtime.isabella.snapshot(),
+    providers: runtime.inference.list(),
+    memory: hierarchicalMemory.list(),
+    ragSize: sovereignRag.size(),
+    threatIntel: 'active',
+    i18n: getLocaleFromEnv(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get('/api/v1/isabella/eval', async (_req, res) => {
+  const results = [];
+  let total = 0;
+  for (const q of DEFAULT_BENCHMARK) {
+    try {
+      const r = await foundationalLLM.generate({
+        input: q.prompt,
+        systemPrompt: 'Eres Isabella.',
+        maxTokens: 256,
+      });
+      const score = scoreAnswer(r.text, q.expectedKeywords);
+      total += score;
+      results.push({ id: q.id, score, engine: r.engine });
+    } catch (error) {
+      results.push({
+        id: q.id,
+        score: 0,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  res.json({ success: true, avgScore: results.length ? total / results.length : 0, results });
+});
+
+app.post('/api/v1/security/canonicalize', (req, res) => {
+  try {
+    const canonical = canonicalize(req.body ?? {});
+    res.json({ success: true, canonical });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post('/api/v1/governance/review/submit', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const action = typeof body.action === 'string' ? body.action : '';
+  if (!action) {
+    res.status(400).json({ success: false, error: 'action es requerido' });
+    return;
+  }
+  const item = humanReviewGate.submit(action, body.payload);
+  res.json({ success: true, item });
+});
+
+app.post('/api/v1/governance/review/:id/approve', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const approver = (req.get('x-human-approver-id') ?? '').trim() || 'human-approver-001';
+  const item = humanReviewGate.approve(req.params.id, approver);
+  if (!item) {
+    res.status(404).json({ success: false, error: 'review item not found or not pending' });
+    return;
+  }
+  res.json({ success: true, item });
+});
+
+app.post('/api/v1/governance/review/:id/reject', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const approver = (req.get('x-human-approver-id') ?? '').trim() || 'human-approver-001';
+  const item = humanReviewGate.reject(req.params.id, approver);
+  if (!item) {
+    res.status(404).json({ success: false, error: 'review item not found or not pending' });
+    return;
+  }
+  res.json({ success: true, item });
+});
+
+app.get('/api/v1/governance/review', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  res.json({ success: true, items: humanReviewGate.list(status as any) });
+});
+
 app.get('/api/v1/isabella/status', (_req, res) => {
   res.json({
     success: true,
@@ -3522,6 +4074,32 @@ app.get('/api/v1/isabella/status', (_req, res) => {
     latency: runtime.isabellaLatencySnapshot(),
     timestamp: new Date().toISOString(),
   });
+});
+
+app.post('/api/v1/isabella/foundational', async (req, res) => {
+  if (!enforceRateLimit(req, res, publicCognitionLimiter, 'isabella-foundational')) return;
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const input = typeof body.input === 'string' ? body.input.trim() : '';
+    if (!input) {
+      res.status(400).json({ success: false, error: 'input es requerido' });
+      return;
+    }
+    const result = await foundationalLLM.generate({
+      input,
+      systemPrompt:
+        typeof body.systemPrompt === 'string'
+          ? body.systemPrompt
+          : 'Eres Isabella Villaseñor AI, LLM fundacional soberano de TAMV.',
+      maxTokens: typeof body.maxTokens === 'number' ? body.maxTokens : 512,
+    });
+    res.json({ success: true, ...result, timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 });
 
 // Hyper Skill Fabric — every capability remains behind Genesis governance.
@@ -5474,7 +6052,11 @@ registerLlmGatewayRoutes({
 app.get('/api/v1/gateway/activity', (req, res) => {
   if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
   const limit = Math.min(200, Math.max(1, Number(req.query.limit ?? 50) || 50));
-  res.json({ version: LLM_GATEWAY_VERSION, count: gatewayAuditLog.size(), recent: gatewayAuditLog.recent(limit) });
+  res.json({
+    version: LLM_GATEWAY_VERSION,
+    count: gatewayAuditLog.size(),
+    recent: gatewayAuditLog.recent(limit),
+  });
 });
 
 // ── Permission Map Ω (state: draft | engine-generated) ─ mapea una orden a sus permisos
@@ -5487,6 +6069,35 @@ registerOrderPermissionRoutes({
   enforceRateLimit,
   rateLimiter: publicScanLimiter,
   authorizeAdmin: (req, res) => authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN'),
+});
+
+// ── Modo Terminus Blackout por HTTP (state: draft | engine-generated) ───────────────────────
+// El guard de arriba corta el tráfico; esta puerta es el plano de control que lo gobierna:
+// ENGAGE/RELEASE con orden firmada, estado con integridad constitucional y la Ecuación de
+// Legitimidad Ω∞ evaluada en seco (no autoriza ni ejecuta: devuelve la cuenta para un humano).
+// Sin claves en ISA_KILL_PUBKEY_* ninguna orden pasa: la superficie está montada pero inerte.
+const governanceBlackoutLimiter = new FixedWindowRateLimiter(10, 60_000);
+registerBlackoutRoutes({
+  app,
+  controller: blackoutController,
+  assess: () =>
+    assessConstitutionalIntegrity({
+      verifyLedger: () => bookPiLedger.verify(),
+      readinessErrors: runPreflight(process.env)
+        .findings.filter((finding) => finding.severity === 'ERROR')
+        .map((finding): IntegrityFinding => ({
+          id: finding.id,
+          severity: 'ERROR',
+          message: finding.message,
+        })),
+      envHalted: envKillSwitchEngaged,
+      halted: (scope) => killSwitch.isHalted(scope),
+    }),
+  enforceRateLimit,
+  rateLimiter: governanceBlackoutLimiter,
+  authorizeAdmin: (req, res) => authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN'),
+  recordEvidence: sealGovernanceEvent,
+  newEventId: () => `legitimacy-${randomUUID()}`,
 });
 
 // ── Turbo Route Planner Ω (state: draft | engine-generated) ─ decide la ruta de baja
@@ -5900,7 +6511,14 @@ app.get('/api/v1/observability/slos', async (req, res) => {
 
 app.get('/api/v1/observability/alerts', (req, res) => {
   if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
-  res.json({ success: true, data: observability.alerts.getActiveAlerts() });
+  res.json({
+    success: true,
+    data: observability.alerts.getActiveAlerts(),
+    // Toda regla que hoy no produce un número se declara, no se disimula.
+    ruleOutcomes: observability.alerts
+      .getRuleOutcomes()
+      .map(({ rule, outcome }) => ({ name: rule.name, expr: rule.expr, ...outcome })),
+  });
 });
 
 app.get('/api/v1/observability/dashboards', (req, res) => {
@@ -6212,6 +6830,25 @@ app.get('/api/v1/monetization/stats', (req, res) => {
   });
 });
 
+app.post('/api/v1/monetization/profit-price', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const price = profitablePrice({
+      cost: Number(body.cost ?? 0),
+      marginBps: Number(body.marginBps ?? 2500),
+      demandFactor: typeof body.demandFactor === 'number' ? body.demandFactor : undefined,
+      loadFactor: typeof body.loadFactor === 'number' ? body.loadFactor : undefined,
+      valueFactor: typeof body.valueFactor === 'number' ? body.valueFactor : undefined,
+    });
+    res.json({ success: true, price, guard: profitGuard.snapshot() });
+  } catch (error) {
+    res
+      .status(400)
+      .json({ success: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 // Preflight de configuración (calidad de secretos y coherencia). Nunca devuelve valores de secretos.
 app.get('/api/v1/ops/preflight', (req, res) => {
   if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
@@ -6222,17 +6859,22 @@ app.get('/api/v1/ops/preflight', (req, res) => {
 });
 
 // ── REINA (state: draft | engine-generated) ─ adjudicación previa a la ejecución; NO ejecuta acciones.
-const reina = createReinaRuntime(process.env, (record) => {
-  bookPiLedger.append({
-    id: `reina-${record.requestId}-${record.leafHash.slice(0, 12)}`,
-    timestamp: record.decidedAt,
-    type: 'REINA_ADJUDICATION',
-    methodId: 'N.IDENTITY.E03_GOVERNANCE.adjudicate_action.v1.0.0.HIGH.INSTITUTIONAL',
-    principal: 'reina',
-    riskTier: record.riskTier ?? 'UNASSESSED',
-    status: record.verdict,
-  });
-});
+// Recibe el KillSwitch compartido del proceso: un blackout GOBERNADO también detiene a REINA.
+const reina = createReinaRuntime(
+  process.env,
+  (record) => {
+    bookPiLedger.append({
+      id: `reina-${record.requestId}-${record.leafHash.slice(0, 12)}`,
+      timestamp: record.decidedAt,
+      type: 'REINA_ADJUDICATION',
+      methodId: 'N.IDENTITY.E03_GOVERNANCE.adjudicate_action.v1.0.0.HIGH.INSTITUTIONAL',
+      principal: 'reina',
+      riskTier: record.riskTier ?? 'UNASSESSED',
+      status: record.verdict,
+    });
+  },
+  killSwitch
+);
 
 app.get('/api/v1/reina/status', (req, res) => {
   if (!enforceRateLimit(req, res, publicScanLimiter, 'reina-status')) return;

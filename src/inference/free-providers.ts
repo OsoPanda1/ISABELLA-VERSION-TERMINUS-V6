@@ -300,6 +300,115 @@ export class GratisAPIAdapter implements InferenceAdapter {
   }
 }
 
+export class HuggingFaceFreeAdapter implements InferenceAdapter {
+  readonly descriptor: ModelDescriptor;
+  private readonly config: FreeProviderConfig;
+
+  constructor(config: Partial<FreeProviderConfig> = {}) {
+    const defaultModel =
+      (process.env.HF_FREE_MODELS ?? 'google/gemma-2-2b-it')
+        .split(',')
+        .map((m) => m.trim())
+        .filter(Boolean)[0] ?? 'google/gemma-2-2b-it';
+    this.config = {
+      baseUrl:
+        config.baseUrl ??
+        process.env.HF_INFERENCE_URL ??
+        'https://router.huggingface.co/hf-inference/models',
+      apiKey: config.apiKey ?? process.env.HF_TOKEN,
+      model: config.model ?? defaultModel,
+      timeoutMs: config.timeoutMs ?? 45_000,
+      maxRetries: config.maxRetries ?? 2,
+      retryBaseDelayMs: config.retryBaseDelayMs ?? 1_000,
+    };
+    this.descriptor = {
+      id: `hf-${this.config.model.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+      version: 'external',
+      provider: 'huggingface-free',
+      capabilities: ['chat'],
+      contextWindow: 8_192,
+      maxOutputTokens: 1_024,
+      latencyClass: 'BALANCED',
+    };
+  }
+
+  async healthCheck(): Promise<boolean> {
+    if (!this.config.apiKey) return false;
+    try {
+      const response = await fetchWithTimeout(
+        `${this.config.baseUrl.replace(/\/$/, '')}/${this.config.model}`,
+        { method: 'GET', headers: { Authorization: `Bearer ${this.config.apiKey}` } },
+        5_000
+      );
+      return response.ok || response.status === 503; // 503 = model loading, still reachable
+    } catch {
+      return false;
+    }
+  }
+
+  async generate(request: GenerationRequest): Promise<GenerationResult> {
+    if (!this.config.apiKey) throw new Error('HF_TOKEN_MISSING');
+    const started = Date.now();
+    const url = `${this.config.baseUrl.replace(/\/$/, '')}/${this.config.model}`;
+
+    const result = await retryWithBackoff(
+      async (attemptTimeoutMs) => {
+        const response = await fetchWithTimeout(
+          url,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${this.config.apiKey}`,
+            },
+            body: JSON.stringify({
+              inputs: request.prompt,
+              parameters: {
+                max_new_tokens: Math.min(request.maxTokens, this.descriptor.maxOutputTokens),
+                temperature: request.temperature ?? 0.35,
+                return_full_text: false,
+              },
+            }),
+          },
+          Math.min(this.config.timeoutMs, attemptTimeoutMs)
+        );
+        if (!response.ok) {
+          throw new Error(`HF_HTTP_${response.status}: ${response.statusText}`);
+        }
+        const data = (await response.json()) as unknown;
+        let text = '';
+        if (Array.isArray(data)) {
+          const first = data[0] as { generated_text?: string } | undefined;
+          text = first?.generated_text ?? '';
+        } else if (data && typeof data === 'object') {
+          const obj = data as { generated_text?: string; error?: string };
+          if (obj.error) throw new Error(`HF_ERROR: ${obj.error}`);
+          text = obj.generated_text ?? '';
+        }
+        if (!text) throw new Error('HF_EMPTY_RESPONSE');
+        // Strip the echoed prompt if the provider returned full text.
+        if (text.startsWith(request.prompt)) text = text.slice(request.prompt.length).trim();
+        return text;
+      },
+      {
+        maxRetries: this.config.maxRetries,
+        baseDelayMs: this.config.retryBaseDelayMs,
+        timeoutMs: this.config.timeoutMs,
+      },
+      'HuggingFaceFreeAdapter'
+    );
+
+    return {
+      modelId: this.descriptor.id,
+      text: result,
+      inputTokens: Math.ceil(request.prompt.length / 4),
+      outputTokens: Math.ceil(result.length / 4),
+      latencyMs: Date.now() - started,
+      finishReason: 'stop',
+    };
+  }
+}
+
 export class FreeProviderRouter {
   private readonly adapters: InferenceAdapter[] = [];
 
@@ -354,6 +463,14 @@ export function createDefaultFreeProviderRouter(): FreeProviderRouter {
     router.register(gratis);
   } else {
     log('info', 'GRATIS_API_KEY not set, skipping GratisAPIAdapter');
+  }
+
+  if (process.env.HF_TOKEN) {
+    const hf = new HuggingFaceFreeAdapter();
+    router.register(hf);
+    log('info', 'HF_TOKEN set, registered HuggingFaceFreeAdapter', { model: hf.descriptor.id });
+  } else {
+    log('info', 'HF_TOKEN not set, skipping HuggingFaceFreeAdapter');
   }
 
   return router;

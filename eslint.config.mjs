@@ -61,7 +61,12 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/ui/platform/**/*.js', 'src/ui/cognition-client.js', 'src/ui/nexus.js'],
+    files: [
+      'src/ui/platform/**/*.js',
+      'src/ui/cognition-client.js',
+      'src/ui/nexus.js',
+      'src/ui/universe-map.js',
+    ],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',

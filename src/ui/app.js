@@ -1572,6 +1572,7 @@ const mountMeshCanvas = (host, canvas, options = {}) => {
 };
 
 const mountAmbientMesh = () => {
+  // #quantumMesh ya no se pinta aquí: universe-map.js lo gobierna con los registros de /api/v1/status.
   const chat = byId('chat');
   if (!chat) return;
   const compact = window.innerWidth < 700;
@@ -1585,17 +1586,6 @@ const mountAmbientMesh = () => {
     lineAlpha: 0.13,
     nodeAlpha: 0.48,
   });
-  const hero = document.querySelector('.hero.hero-product');
-  const heroCanvas = byId('quantumMesh');
-  if (hero && heroCanvas) {
-    mountMeshCanvas(hero, heroCanvas, {
-      nodeCount: compact ? 18 : 34,
-      linkDistance: 172,
-      lineAlpha: 0.1,
-      nodeAlpha: 0.4,
-      drift: 0.0002,
-    });
-  }
 };
 mountAmbientMesh();
 

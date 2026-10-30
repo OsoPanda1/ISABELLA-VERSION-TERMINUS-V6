@@ -102,7 +102,7 @@ import {
 import type { KnowledgeClaim } from '../memory/ikes';
 import { ProtocolRegistry, PROTOCOL_CATALOG } from '../protocols';
 import { GenesisModuleRegistry } from '../modules';
-import { CANONICAL_TOOLS, PROTOCOL_TOOLS } from '../tools';
+import { CANONICAL_TOOLS, DETERMINISTIC_TOOLS, PROTOCOL_TOOLS } from '../tools';
 import { CANONICAL_SKILLS, FOUNDATIONAL_SKILLS } from '../skills';
 import {
   assessEpistemicState,
@@ -320,7 +320,7 @@ export class IsabellaGenesisRuntime {
 
   /** Registra los catálogos canónicos de tools, skills y protocolos. */
   private registerCanonicalCatalogs(): void {
-    for (const tool of [...CANONICAL_TOOLS, ...PROTOCOL_TOOLS]) {
+    for (const tool of [...CANONICAL_TOOLS, ...PROTOCOL_TOOLS, ...DETERMINISTIC_TOOLS]) {
       if (this.tools.list().some((t) => t.id === tool.id)) continue;
       this.tools.register(tool);
     }
@@ -1844,7 +1844,7 @@ export class IsabellaGenesisRuntime {
     return assessProductionReadiness(dependencies);
   }
 
-  /** Snapshot operativo coherente (readiness + mantenimiento + correlación). */
+  /** Snapshot operativo coherente (readiness + mantenimiento + correlaci��n). */
   opsSnapshot(
     dependencies: readonly DependencyHealth[],
     windows: readonly MaintenanceWindow[] = []

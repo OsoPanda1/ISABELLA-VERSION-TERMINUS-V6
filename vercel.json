@@ -2,24 +2,28 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "corepack pnpm install --frozen-lockfile",
   "buildCommand": "corepack pnpm run build:dist",
-  "env": {
-    "ISABELLA_KEYLESS_FREE_PROVIDER": "llm7,pollinations",
-    "KEYLESS_FREE_PROVIDER_TIMEOUT_MS": "30000",
-    "CHAT_CHAIN_BUDGET_MS": "45000",
-    "ISABELLA_KEYLESS_TTS": "google",
-    "ISABELLA_KEYLESS_TTS_MAX_CHARS": "1200",
-    "ISABELLA_API_KEY_STORE": "memory",
-    "ISABELLA_FEDERATION_STORE": "memory"
-  },
   "functions": {
     "api/index.js": {
-      "maxDuration": 60,
-      "includeFiles": "{dist/**,src/ui/**,src/assets/video/**}"
+      "maxDuration": 300,
+      "includeFiles": "{dist/**,src/**,src/ui/**,src/assets/video/**}"
     }
   },
-  "rewrites": [{
-    "source": "/(.*)",
-    "destination": "/api"
-  }],
-  "headers": []
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+      ]
+    }
+  ]
 }

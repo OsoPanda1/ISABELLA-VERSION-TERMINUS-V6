@@ -106,6 +106,10 @@ export function registerRevenueFabricRoutes(deps: RevenueFabricDeps): void {
       poolConfig: {
         connectionString:
           process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? process.env.POSTGRES_PRISMA_URL,
+        // Vercel's development proxy can present a self-signed chain. Keep TLS
+        // enabled locally while allowing the managed preview certificate; never
+        // relax certificate validation in production.
+        ...(process.env.NODE_ENV === 'production' ? {} : { ssl: { rejectUnauthorized: false } }),
       },
       migrationPath: '',
     });

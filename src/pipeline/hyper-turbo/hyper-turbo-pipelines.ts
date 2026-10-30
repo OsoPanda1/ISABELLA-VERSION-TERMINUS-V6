@@ -110,19 +110,42 @@ export interface Checkpoint {
   readonly size: number;
 }
 
+/**
+ * Métricas que el runtime realmente cuenta. Lo que aún no tiene instrumento se declara en
+ * `notInstrumented` en lugar de devolvido como cero, que se leería como "sin errores".
+ */
 export interface PipelineMetrics {
-  readonly totalRequests: number;
-  readonly hotPathRequests: number;
-  readonly coldPathRequests: number;
-  readonly avgLatencyMs: number;
-  readonly p99LatencyMs: number;
-  readonly errorRate: number;
-  readonly throughputRps: number;
-  readonly stageLatencies: Record<PipelineStage, number>;
-  readonly backpressureEvents: number;
+  readonly autoRoutedTotal: number;
+  readonly autoRoutedHot: number;
+  readonly autoRoutedCold: number;
+  readonly activeRequests: number;
+  readonly queueLength: number;
+  readonly stageCalls: number;
+  readonly stageErrors: number;
+  readonly errorRate: number | null;
+  readonly avgLatencyMs: number | null;
+  readonly maxLatencyMs: number | null;
+  readonly p99HotLatencyMs: number | null;
   readonly speculativeHits: number;
   readonly speculativeMisses: number;
+  readonly speculativeCacheSize: number;
+  readonly latencyWindowSamples: number;
+  readonly stages: Array<{
+    readonly name: string;
+    readonly calls: number;
+    readonly errors: number;
+    readonly avgLatencyMs: number | null;
+    readonly maxLatencyMs: number;
+  }>;
+  readonly notInstrumented: readonly string[];
 }
+
+export const PIPELINE_METRICS_NOT_INSTRUMENTED = [
+  'throughputRps',
+  'stageLatencies',
+  'backpressureEvents',
+  'coldPathLatencyPercentile',
+] as const;
 
 /**
  * Pipeline Stage Executor
@@ -268,6 +291,9 @@ export class HotPathExecutor extends EventEmitter {
   private config: HotPathConfig;
   private activeRequests: Map<string, PipelineContext> = new Map();
   private speculativeCache: Map<string, SpeculativeResult> = new Map();
+  private speculativeHits = 0;
+  private speculativeMisses = 0;
+  private latencySamples: number[] = [];
 
   constructor(executor: StageExecutor, config: HotPathConfig) {
     super();
@@ -292,11 +318,14 @@ export class HotPathExecutor extends EventEmitter {
     const speculative = this.speculativeCache.get(cacheKey);
 
     if (speculative && Date.now() - speculative.timestamp < this.config.speculativeWindowMs) {
+      const cacheLatency = Date.now() - startTime;
+      this.speculativeHits += 1;
+      this.recordLatency(cacheLatency);
       this.emit('speculative:hit', { requestId, pipelineId });
       return {
         success: true,
         data: speculative.result as T,
-        latencyMs: Date.now() - startTime,
+        latencyMs: cacheLatency,
         path: 'hot',
         stagesCompleted: stages.map((s) => s.name),
         checkpoints: [],
@@ -332,11 +361,14 @@ export class HotPathExecutor extends EventEmitter {
     const verified = await this.verifyResult(pipelineId, currentData);
 
     if (!verified) {
+      this.speculativeMisses += 1;
       this.emit('speculative:miss', { requestId, pipelineId });
       this.speculativeCache.set(cacheKey, { result: currentData, timestamp: Date.now() });
     } else {
       this.emit('speculative:verified', { requestId, pipelineId });
     }
+
+    this.recordLatency(latency);
 
     return {
       success: true,
@@ -359,6 +391,33 @@ export class HotPathExecutor extends EventEmitter {
       .update(pipelineId + JSON.stringify(input))
       .digest('hex')
       .slice(0, 32);
+  }
+
+  private recordLatency(latencyMs: number): void {
+    this.latencySamples.push(latencyMs);
+    // Ventana deslizante: el percentil se calcula sobre las últimas ejecuciones, no sobre un
+    // acumulador que suavizaría las colas.
+    if (this.latencySamples.length > 4096) this.latencySamples.shift();
+  }
+
+  /** Percentil por rango más cercano sobre las latencias realmente medidas. */
+  getLatencyPercentile(percentile: number): number | null {
+    if (this.latencySamples.length === 0) return null;
+    const sorted = [...this.latencySamples].sort((a, b) => a - b);
+    const rank = Math.max(1, Math.ceil((percentile / 100) * sorted.length));
+    return sorted[Math.min(sorted.length - 1, rank - 1)];
+  }
+
+  getLatencySampleCount(): number {
+    return this.latencySamples.length;
+  }
+
+  getSpeculativeStats(): { hits: number; misses: number; cacheSize: number } {
+    return {
+      hits: this.speculativeHits,
+      misses: this.speculativeMisses,
+      cacheSize: this.speculativeCache.size,
+    };
   }
 
   getActiveCount(): number {
@@ -588,6 +647,132 @@ interface BatchedRequest<T = unknown> {
 }
 
 /**
+ * state: engine-generated — evaluador seguro de las condiciones de ruteo automático.
+ *
+ * Antes la cadena se pasaba por `eval` después de borrarle el prefijo `input.`:
+ * `input.batchSize > 10` se convertía en `batchSize > 10`, una variable inexistente cuyo
+ * ReferenceError silenciaba el `catch` devolviendo `false`. Ninguna regla con campos se cumplía
+ * jamás y todo el tráfico "auto" caía en la ruta hot. Aquí la expresión se resuelve contra el
+ * objeto de entrada, sin ejecutar código.
+ */
+
+const GUARD_OPERATORS = ['===', '!==', '==', '!=', '>=', '<=', '>', '<'] as const;
+
+function splitOutsideQuotes(text: string, separator: '||' | '&&'): string[] {
+  const parts: string[] = [];
+  let current = '';
+  let quote = '';
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      current += char;
+      if (char === quote) quote = '';
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      current += char;
+      continue;
+    }
+    if (char === separator[0] && text[index + 1] === separator[1]) {
+      parts.push(current);
+      current = '';
+      index += 1;
+      continue;
+    }
+    current += char;
+  }
+  parts.push(current);
+  return parts;
+}
+
+function findOperatorOutsideQuotes(text: string, operator: string): number {
+  let quote = '';
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (char === quote) quote = '';
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (text.startsWith(operator, index)) return index;
+  }
+  return -1;
+}
+
+function resolveOperandPath(value: unknown, path: string): unknown {
+  let current: unknown = value;
+  for (const segment of path.split('.')) {
+    if (current === null || current === undefined) return undefined;
+    if (typeof current !== 'object') return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+}
+
+function operandValue(token: string, input: unknown): unknown {
+  const text = token.trim();
+  if (/^-?(\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?$/.test(text)) return Number(text);
+  const quoted = text.match(/^(["'])(.*)\1$/);
+  if (quoted) return quoted[2];
+  if (text === 'true') return true;
+  if (text === 'false') return false;
+  if (text === 'null') return null;
+  if (text === 'undefined') return undefined;
+  let path = text;
+  if (path === 'input') return input;
+  if (path.startsWith('input.')) path = path.slice('input.'.length);
+  if (path === '') return undefined;
+  return resolveOperandPath(input, path);
+}
+
+function evaluateGuardClause(clause: string, input: unknown): boolean {
+  const text = clause.trim();
+  if (text === '') return false;
+  for (const operator of GUARD_OPERATORS) {
+    const index = findOperatorOutsideQuotes(text, operator);
+    if (index < 0) continue;
+    const left = operandValue(text.slice(0, index), input);
+    const right = operandValue(text.slice(index + operator.length), input);
+    switch (operator) {
+      case '===':
+        return left === right;
+      case '!==':
+        return left !== right;
+      case '==':
+        // eslint-disable-next-line eqeqeq
+        return left == right;
+      case '!=':
+        // eslint-disable-next-line eqeqeq
+        return left != right;
+      case '>=':
+        return Number(left) >= Number(right);
+      case '<=':
+        return Number(left) <= Number(right);
+      case '>':
+        return Number(left) > Number(right);
+      default:
+        return Number(left) < Number(right);
+    }
+  }
+  return Boolean(operandValue(text, input));
+}
+
+export function evaluateRoutingGuard(condition: string, input: unknown): boolean {
+  for (const alternative of splitOutsideQuotes(condition, '||')) {
+    const conjuncts = splitOutsideQuotes(alternative, '&&').filter(
+      (clause) => clause.trim() !== ''
+    );
+    if (conjuncts.length === 0) continue;
+    if (conjuncts.every((clause) => evaluateGuardClause(clause, input))) return true;
+  }
+  return false;
+}
+
+/**
  * Smart Router - Routes requests to hot or cold path
  */
 export class SmartRouter extends EventEmitter {
@@ -596,6 +781,9 @@ export class SmartRouter extends EventEmitter {
   private coldExecutor: ColdPathExecutor;
   private stageExecutor: StageExecutor;
   private pipelines: Map<string, PipelineConfig> = new Map();
+  private routedTotal = 0;
+  private routedHot = 0;
+  private routedCold = 0;
 
   constructor(
     hotExecutor: HotPathExecutor,
@@ -661,23 +849,24 @@ export class SmartRouter extends EventEmitter {
 
     for (const rule of this.rules) {
       if (this.evaluateCondition(rule.condition, input)) {
+        this.countRoute(rule.path);
         return rule.path;
       }
     }
 
     // Default: hot for low-latency, cold for batch
+    this.countRoute('hot');
     return 'hot';
   }
 
+  private countRoute(path: PipelinePath): void {
+    this.routedTotal += 1;
+    if (path === 'hot') this.routedHot += 1;
+    else if (path === 'cold') this.routedCold += 1;
+  }
+
   private evaluateCondition(condition: string, input: unknown): boolean {
-    try {
-      // Simple condition evaluation - in production use expression evaluator
-      const expr = condition.replace(/\binput\./g, '');
-      // eslint-disable-next-line no-eval
-      return eval(expr);
-    } catch {
-      return false;
-    }
+    return evaluateRoutingGuard(condition, input);
   }
 
   getPipeline(pipelineId: string): PipelineConfig | undefined {
@@ -685,19 +874,39 @@ export class SmartRouter extends EventEmitter {
   }
 
   getMetrics(): PipelineMetrics {
-    // Aggregate metrics from both executors
+    const stages = Object.entries(this.stageExecutor.getAllMetrics()).map(([name, metrics]) => ({
+      name,
+      calls: metrics.calls,
+      errors: metrics.errors,
+      avgLatencyMs: metrics.calls > 0 ? metrics.totalLatency / metrics.calls : null,
+      maxLatencyMs: metrics.maxLatency,
+    }));
+    const stageCalls = stages.reduce((total, stage) => total + stage.calls, 0);
+    const stageErrors = stages.reduce((total, stage) => total + stage.errors, 0);
+    const totalLatency = stages.reduce(
+      (total, stage) => total + (stage.avgLatencyMs ?? 0) * stage.calls,
+      0
+    );
+    const latencies = stages.map((stage) => stage.maxLatencyMs);
+    const speculative = this.hotExecutor.getSpeculativeStats();
     return {
-      totalRequests: 0,
-      hotPathRequests: 0,
-      coldPathRequests: 0,
-      avgLatencyMs: 0,
-      p99LatencyMs: 0,
-      errorRate: 0,
-      throughputRps: 0,
-      stageLatencies: {} as Record<PipelineStage, number>,
-      backpressureEvents: 0,
-      speculativeHits: 0,
-      speculativeMisses: 0,
+      autoRoutedTotal: this.routedTotal,
+      autoRoutedHot: this.routedHot,
+      autoRoutedCold: this.routedCold,
+      activeRequests: this.hotExecutor.getActiveCount(),
+      queueLength: this.coldExecutor.getQueueLength(),
+      stageCalls,
+      stageErrors,
+      errorRate: stageCalls > 0 ? stageErrors / stageCalls : null,
+      avgLatencyMs: stageCalls > 0 ? totalLatency / stageCalls : null,
+      maxLatencyMs: latencies.length > 0 ? Math.max(...latencies) : null,
+      p99HotLatencyMs: this.hotExecutor.getLatencyPercentile(99),
+      speculativeHits: speculative.hits,
+      speculativeMisses: speculative.misses,
+      speculativeCacheSize: speculative.cacheSize,
+      latencyWindowSamples: this.hotExecutor.getLatencySampleCount(),
+      stages,
+      notInstrumented: PIPELINE_METRICS_NOT_INSTRUMENTED,
     };
   }
 }
@@ -799,9 +1008,14 @@ export class PipelineOrchestrator extends EventEmitter {
   }
 
   getHotPathStats() {
+    const speculative = this.hotExecutor.getSpeculativeStats();
     return {
       activeRequests: this.hotExecutor.getActiveCount(),
-      speculativeCacheSize: 0, // Would need access to private
+      speculativeCacheSize: speculative.cacheSize,
+      speculativeHits: speculative.hits,
+      speculativeMisses: speculative.misses,
+      p99LatencyMs: this.hotExecutor.getLatencyPercentile(99),
+      latencyWindowSamples: this.hotExecutor.getLatencySampleCount(),
     };
   }
 

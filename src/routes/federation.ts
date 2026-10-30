@@ -4,6 +4,9 @@
  * Connectors receive signed inbound events, normalize them into a bounded inbox
  * and expose an OpenAPI/model catalog. Ingress NEVER grants authority, never
  * triggers a tool and never forwards the payload to a model automatically.
+ * Connector and inbox writes await the persistence backend; reads stay
+ * synchronous. Backend faults answer 503 with a fixed code so driver text never
+ * reaches the client.
  */
 import { timingSafeEqual } from 'node:crypto';
 import type { Application, Request, Response } from 'express';
@@ -41,6 +44,22 @@ export interface FederationRouteDeps {
     connectorId: string;
     inboxId?: string;
   }) => void;
+}
+
+/** Validation faults raised by the registry: caller mistakes keep the 400 contract. */
+const INPUT_FAULT_CODES: ReadonlySet<string> = new Set([
+  'CONNECTOR_NAME_REQUIRED',
+  'CONNECTOR_KIND_INVALID',
+  'CONNECTOR_URL_INVALID',
+]);
+
+function registryFault(res: Response, error: unknown, outageCode: string): void {
+  const message = error instanceof Error ? error.message : '';
+  if (INPUT_FAULT_CODES.has(message)) {
+    res.status(400).json({ success: false, error: message });
+    return;
+  }
+  res.status(503).json({ success: false, error: outageCode });
 }
 
 function envOf(deps: FederationRouteDeps): Readonly<Record<string, string | undefined>> {
@@ -144,7 +163,7 @@ export function registerFederationRoutes(deps: FederationRouteDeps): void {
     });
   });
 
-  app.post('/api/v1/federation/connectors', (req, res) => {
+  app.post('/api/v1/federation/connectors', async (req, res) => {
     if (!deps.authorizeAdmin(req, res)) return;
     if (!deps.enforceRateLimit(req, res, deps.rateLimiter, 'federation-connector-create')) return;
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -157,12 +176,9 @@ export function registerFederationRoutes(deps: FederationRouteDeps): void {
     const targetUrl = typeof body.targetUrl === 'string' ? body.targetUrl : null;
     let connector;
     try {
-      connector = registry.createConnector({ name, kind, targetUrl });
+      connector = await registry.createConnector({ name, kind, targetUrl });
     } catch (error) {
-      res.status(400).json({
-        success: false,
-        error: error instanceof Error ? error.message : 'CONNECTOR_CREATE_FAILED',
-      });
+      registryFault(res, error, 'CONNECTOR_CREATE_UNAVAILABLE');
       return;
     }
     try {
@@ -179,9 +195,16 @@ export function registerFederationRoutes(deps: FederationRouteDeps): void {
     });
   });
 
-  app.delete('/api/v1/federation/connectors/:id', (req, res) => {
+  app.delete('/api/v1/federation/connectors/:id', async (req, res) => {
     if (!deps.authorizeAdmin(req, res)) return;
-    if (!registry.removeConnector(req.params.id)) {
+    let removed: boolean;
+    try {
+      removed = await registry.removeConnector(req.params.id);
+    } catch (error) {
+      registryFault(res, error, 'CONNECTOR_DELETE_UNAVAILABLE');
+      return;
+    }
+    if (!removed) {
       res.status(404).json({ success: false, error: 'CONNECTOR_NOT_FOUND' });
       return;
     }
@@ -228,7 +251,7 @@ export function registerFederationRoutes(deps: FederationRouteDeps): void {
     res.type('text/plain').status(200).send(challenge);
   });
 
-  app.post('/api/v1/federation/webhooks/:connectorId', (req, res) => {
+  app.post('/api/v1/federation/webhooks/:connectorId', async (req, res) => {
     if (!deps.enforceRateLimit(req, res, deps.rateLimiter, 'federation-webhook')) return;
     const env = envOf(deps);
     const secret = federationSecret(env);
@@ -267,7 +290,18 @@ export function registerFederationRoutes(deps: FederationRouteDeps): void {
       res.status(409).json({ success: false, error: 'FEDERATION_REPLAY_DETECTED' });
       return;
     }
-    const entry = registry.ingest(connector, payload);
+    let entry;
+    try {
+      entry = await registry.ingest(connector, payload);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (message === 'FEDERATION_REPLAY_DETECTED') {
+        res.status(409).json({ success: false, error: 'FEDERATION_REPLAY_DETECTED' });
+        return;
+      }
+      registryFault(res, error, 'FEDERATION_INGEST_UNAVAILABLE');
+      return;
+    }
     try {
       deps.recordEvidence?.({
         action: 'webhook.ingest',

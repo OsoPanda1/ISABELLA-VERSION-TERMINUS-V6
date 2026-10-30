@@ -134,6 +134,22 @@ assert.ok(nexusCss.includes('body .side-rail[data-rail].is-open'), 'Floating rai
 assert.ok(js.includes("case 'go-nexus':") && js.includes("focusNexus('keys')") && js.includes("focusNexus('connectors')"), 'Command palette must open Nexus directly on a tab');
 assert.ok(server.includes("app.get('/ui/nexus.js'") && server.includes("fs.readFileSync(path.join(uiPath, 'nexus.js')"), 'Runtime must serve the Nexus client from the startup asset cache');
 assert.ok(server.includes("app.get('/styles/nexus.css'") && server.includes("fs.readFileSync(path.join(uiPath, 'nexus.css')"), 'Runtime must serve the Nexus stylesheet from the startup asset cache');
+
+const universeJs = fs.readFileSync('src/ui/universe-map.js', 'utf8');
+assert.ok(html.includes('/ui/universe-map.js'), 'El mapa del universo debe cargarse en el workspace');
+assert.ok(html.includes('id="universeBoard"') && html.includes('id="universeLegend"') && html.includes('id="universeReadout"'), 'El mapa necesita panel, leyenda en texto y lectura accesible');
+assert.ok(html.includes('id="quantumMesh"'), 'El canvas del mapa debe existir en el hero');
+assert.ok(!/innerHTML\s*=/.test(universeJs), 'El mapa debe construir el DOM sin innerHTML');
+assert.ok(!universeJs.includes('Math.random'), 'El mapa del universo no puede inventar posiciones, pesos ni estados');
+assert.ok(universeJs.includes("'/api/v1/status'") && universeJs.includes('fetch(ENDPOINT'), 'El mapa debe leer los registros reales del runtime');
+assert.ok(universeJs.includes('isabella.universe.v1'), 'El mapa debe validar el esquema antes de pintar');
+assert.ok(universeJs.includes('SIN DATOS'), 'Un fallo del registro debe renderizar un estado explícito, no una maqueta');
+assert.ok(universeJs.includes('prefers-reduced-motion') && universeJs.includes('IntersectionObserver'), 'El mapa debe respetar el movimiento reducido y pausarse fuera de pantalla');
+assert.ok(server.includes("app.get('/ui/universe-map.js'") && server.includes("fs.readFileSync(path.join(uiPath, 'universe-map.js')"), 'Runtime must serve the universe map client from the startup asset cache');
+assert.ok(css.includes('.universe-board') && css.includes('.universe-legend'), 'El panel del mapa debe tener estilo propio');
+assert.ok(!js.includes("byId('quantumMesh')"), 'La maqueta aleatoria ya no puede montar encima del mapa real');
+assert.ok(!server.includes("toolsCount: 2"), 'El estado público no puede publicar un conteo inventado');
+assert.ok(server.includes('buildUniverseSnapshot'), 'El mapa debe leer el snapshot derivado de los registros reales');
 const introCss = fs.readFileSync(new URL('../src/ui/cinematic.css', import.meta.url), 'utf8');
 const centerCss = fs.readFileSync(new URL('../src/ui/command-center.css', import.meta.url), 'utf8');
 assert.ok(!/\.cinematic-intro\s*\{[^}]*display\s*:\s*none/.test(centerCss), 'command-center.css must not hide the cinematic intro');
