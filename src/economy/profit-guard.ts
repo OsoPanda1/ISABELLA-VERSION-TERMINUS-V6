@@ -34,23 +34,19 @@ function factorOrDefault(value: number | undefined, name: string): number {
 }
 
 export function minimumProfitablePrice(cost: number, marginBps: number): number {
-  assertFiniteNonNegative(cost, 'cost');
-  if (!Number.isInteger(marginBps) || marginBps < 0 || marginBps > MAX_MARGIN_BPS) {
-    throw new RangeError(`PROFIT: marginBps must be an integer between 0 and ${MAX_MARGIN_BPS}`);
-  }
-  if (cost === 0) return 0;
-  return centsCeiling(cost / (1 - marginBps / 10_000));
+  if (!Number.isFinite(cost) || cost < 0) throw new RangeError('PROFIT: cost must be >= 0');
+  if (!Number.isFinite(marginBps) || marginBps < 0)
+    throw new RangeError('PROFIT: marginBps must be >= 0');
+  return Math.round(cost * (1 + marginBps / 10_000) * 100) / 100;
 }
 
 export function profitablePrice(ctx: ProfitContext): number {
   const min = minimumProfitablePrice(ctx.cost, ctx.marginBps);
-  const demand = factorOrDefault(ctx.demandFactor, 'demandFactor');
-  const load = factorOrDefault(ctx.loadFactor, 'loadFactor');
-  const value = factorOrDefault(ctx.valueFactor, 'valueFactor');
-  const dynamic = ctx.cost * demand * load * value;
-  if (!Number.isFinite(dynamic)) throw new RangeError('PROFIT: dynamic price overflow');
-  // Fail-closed: dynamic pricing may raise the price but never undercut the margin floor.
-  return Math.max(min, cents(dynamic));
+  const dynamic =
+    ctx.cost * (ctx.demandFactor ?? 1) * (ctx.loadFactor ?? 1) * (ctx.valueFactor ?? 1);
+  const candidate = Math.max(min, dynamic);
+  // Fail-closed: nunca por debajo del mínimo.
+  return Math.max(min, Math.round(candidate * 100) / 100);
 }
 
 /**

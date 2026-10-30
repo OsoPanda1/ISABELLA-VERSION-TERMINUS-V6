@@ -42,9 +42,12 @@ export class GovernedInferenceRouter implements InferenceRouter {
       if (!pinned) throw new Error('INFERENCE: no compatible model');
       candidates.push(pinned);
     } else {
-      candidates.push(...[...this.models.values()].sort(
-        (a, b) => LATENCY_RANK[a.descriptor.latencyClass] - LATENCY_RANK[b.descriptor.latencyClass]
-      ));
+      candidates.push(
+        ...[...this.models.values()].sort(
+          (a, b) =>
+            LATENCY_RANK[a.descriptor.latencyClass] - LATENCY_RANK[b.descriptor.latencyClass]
+        )
+      );
     }
     if (candidates.length === 0) throw new Error('INFERENCE: no compatible model');
 
@@ -87,10 +90,15 @@ export class GovernedInferenceRouter implements InferenceRouter {
     if (validationError && candidates.length === 1) {
       throw validationError;
     }
-    if (validationError && candidates.every((c) => {
-      // If every candidate was rejected for validation reasons, surface that error.
-      return true;
-    }) && lastError === undefined && candidates.length > 0) {
+    if (
+      validationError &&
+      candidates.every((c) => {
+        // If every candidate was rejected for validation reasons, surface that error.
+        return true;
+      }) &&
+      lastError === undefined &&
+      candidates.length > 0
+    ) {
       // Only throw validation errors when no provider was actually attempted.
       // Heuristic: if lastError is undefined, no generate() ran.
       throw validationError;

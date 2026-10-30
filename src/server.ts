@@ -1,13 +1,35 @@
 import { buildPricingCatalog } from './commerce/catalog';
+
 import { envFlag } from './lib/env-flags';
-import { OllamaAdapter, GratisAPIAdapter, HuggingFaceFreeAdapter } from './inference/free-providers';
+import {
+  OllamaAdapter,
+  GratisAPIAdapter,
+  HuggingFaceFreeAdapter,
+} from './inference/free-providers';
 import { createFoundationalLLM } from './inference/foundational-llm';
+import { createLocalEngine } from './inference/local-engine';
+import { hierarchicalMemory } from './memory/hierarchical';
+import { assessThreat } from './security/advanced-threat-intel';
+import { canonicalize } from './security/jcs';
+import { parseIntent } from './security/intention-parser';
+import { promptGuard } from './security/prompt-guard';
+import { DEFAULT_BENCHMARK, scoreAnswer } from './evaluation/benchmark';
+import { t, getLocaleFromEnv } from './lib/i18n';
+import { searchDomains } from './infra/vercel-domains';
 import { profitablePrice, profitGuard } from './economy/profit-guard';
 import { sovereignRag } from './inference/rag';
 import { boundedBudgetMs, DeadlineBudget, hedgedFirst } from './inference/deadline';
 import { buildAsset, contentHash, serveAsset, type StaticAsset } from './http/static-assets';
 import express, { type Application, type NextFunction, type Request, type Response } from 'express';
-import { createPublicKey, randomUUID, timingSafeEqual, type KeyObject } from 'node:crypto';
+import {
+  createPublicKey,
+  randomUUID,
+  timingSafeEqual,
+  generateKeyPairSync,
+  sign,
+  verify,
+  type KeyObject,
+} from 'node:crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'node:url';
@@ -330,7 +352,7 @@ app.use(
 app.use(
   express.json({
     limit: '256kb',
-    verify: (req, _res, buf) => {
+    verify: (req: any, _res: any, buf: Buffer) => {
       // Preserve raw bytes only for the signed webhook route; duplicating every
       // request body adds avoidable allocations and GC pressure on the hot path.
       const pathname = (req.url ?? '').split('?')[0];
@@ -555,6 +577,14 @@ if (process.env.HF_TOKEN) {
   runtime.inference.register(new HuggingFaceFreeAdapter());
 }
 const foundationalLLM = createFoundationalLLM(runtime);
+
+let isabellaSigningPrivateKey = process.env.ISABELLA_APPROVAL_PRIVATE_KEY_PEM ?? '';
+let isabellaSigningPublicKey = process.env.ISABELLA_APPROVAL_TRUSTED_PUBLIC_KEY_PEM ?? '';
+if (!isabellaSigningPrivateKey || !isabellaSigningPublicKey) {
+  const pair = generateKeyPairSync('ed25519');
+  isabellaSigningPrivateKey = pair.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+  isabellaSigningPublicKey = pair.publicKey.export({ type: 'spki', format: 'pem' }).toString();
+}
 // El registro de herramientas se construye dentro del runtime, antes de que exista el ledger,
 // así que el sello se adjunta aquí. Desde ahora la evidencia es del camino de ejecución: toda
 // herramienta —la de esta ruta y la que invoque un agente interno— queda en BookPI antes de que
@@ -2228,6 +2258,11 @@ app.post('/api/v1/cognition/route', async (req, res) => {
       return;
     const history = sanitizePublicHistory(body.history);
     const input = typeof body.input === 'string' ? body.input.trim() : '';
+    const threat = assessThreat(input);
+    if (threat.level === 'critical') {
+      res.status(403).json({ success: false, error: 'THREAT_BLOCKED', assessment: threat });
+      return;
+    }
     const focusLens = ['territorial', 'epistemic', 'security', 'governance'].includes(
       body.focusLens
     )
@@ -2612,7 +2647,7 @@ app.post('/api/v1/cognition/route', async (req, res) => {
               },
             })
           );
-          generativeNarrative = resp?.text?.trim() || null;
+          generativeNarrative = (resp as { text?: string })?.text?.trim() || null;
           if (generativeNarrative) responseEngine = 'gemini';
         } catch {
           generativeNarrative = null;
@@ -2660,7 +2695,7 @@ app.post('/api/v1/cognition/route', async (req, res) => {
                 },
               })
             );
-            generativeNarrative = resp?.text?.trim() || null;
+            generativeNarrative = (resp as { text?: string })?.text?.trim() || null;
             if (generativeNarrative) responseEngine = 'gemini';
           } catch {
             generativeNarrative = null;
@@ -3498,7 +3533,8 @@ app.post('/api/v1/cognitive/request', async (req, res) => {
           knowledgeContext: verifiedKnowledgeContext,
         });
         generativeNarrative = foundational.text;
-        responseEngine = foundational.engine === 'foundational' ? 'foundational' : 'sovereign-fallback';
+        responseEngine =
+          foundational.engine === 'foundational' ? 'foundational' : 'sovereign-fallback';
       } catch {
         // Same disclosure contract as /cognition/route: the deterministic local answer
         // is never presented as model output.
@@ -3683,6 +3719,43 @@ app.get('/api/v1/isabella/rag/search', (req, res) => {
   res.json({ success: true, hits: sovereignRag.search(q, Number.isFinite(k) ? k : 3) });
 });
 
+app.post('/api/v1/domains/search', async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const domains = Array.isArray(body.domains)
+    ? body.domains.filter((d): d is string => typeof d === 'string')
+    : [];
+  if (domains.length === 0) {
+    res.status(400).json({ success: false, error: 'domains array required' });
+    return;
+  }
+  try {
+    const results = await searchDomains(domains);
+    res.json({ success: true, results });
+  } catch (error) {
+    res
+      .status(502)
+      .json({ success: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post('/api/v1/security/intent', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const input = typeof body.input === 'string' ? body.input : '';
+  res.json({ success: true, intent: parseIntent(input) });
+});
+
+app.post('/api/v1/security/prompt-guard', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const input = typeof body.input === 'string' ? body.input : '';
+  res.json({ success: true, guard: promptGuard(input) });
+});
+
+app.post('/api/v1/security/threat-intel', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const input = typeof body.input === 'string' ? body.input : '';
+  res.json({ success: true, assessment: assessThreat(input) });
+});
+
 app.get('/api/v1/isabella/providers', (_req, res) => {
   res.json({
     success: true,
@@ -3690,6 +3763,262 @@ app.get('/api/v1/isabella/providers', (_req, res) => {
     readiness: describeProviderReadiness(process.env),
     timestamp: new Date().toISOString(),
   });
+});
+
+// Minimal MCP-compatible JSON-RPC endpoint (tools/list, tools/call).
+app.post('/api/mcp', async (req, res) => {
+  const mcpToken = process.env.MCP_SERVER_TOKEN;
+  if (mcpToken) {
+    const auth = req.get('authorization') ?? '';
+    if (auth !== `Bearer ${mcpToken}`) {
+      res.status(401).json({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unauthorized' } });
+      return;
+    }
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const id = body.id ?? null;
+  const method = typeof body.method === 'string' ? body.method : '';
+  const reply = (result: unknown) => res.json({ jsonrpc: '2.0', id, result });
+  const fail = (code: number, message: string) =>
+    res.json({ jsonrpc: '2.0', id, error: { code, message } });
+
+  if (method === 'tools/list') {
+    reply({
+      tools: [
+        {
+          name: 'isabella_status',
+          description: 'Estado del runtime de Isabella',
+          inputSchema: { type: 'object', properties: {} },
+        },
+        {
+          name: 'isabella_foundational',
+          description: 'Genera respuesta con el LLM fundacional',
+          inputSchema: {
+            type: 'object',
+            properties: { input: { type: 'string' } },
+            required: ['input'],
+          },
+        },
+        {
+          name: 'isabella_rag_search',
+          description: 'Busca en el RAG soberano',
+          inputSchema: {
+            type: 'object',
+            properties: { q: { type: 'string' }, k: { type: 'number' } },
+            required: ['q'],
+          },
+        },
+      ],
+    });
+    return;
+  }
+
+  if (method === 'tools/call') {
+    const params = (body.params ?? {}) as Record<string, unknown>;
+    const name = typeof params.name === 'string' ? params.name : '';
+    const args = (params.arguments ?? {}) as Record<string, unknown>;
+    try {
+      if (name === 'isabella_status') {
+        reply({
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                engine: runtime.isabella.snapshot(),
+                providers: runtime.inference.list(),
+              }),
+            },
+          ],
+        });
+        return;
+      }
+      if (name === 'isabella_foundational') {
+        const input = typeof args.input === 'string' ? args.input : '';
+        const result = await foundationalLLM.generate({
+          input,
+          systemPrompt: 'Eres Isabella Villaseñor AI.',
+          maxTokens: 512,
+        });
+        reply({ content: [{ type: 'text', text: result.text }] });
+        return;
+      }
+      if (name === 'isabella_rag_search') {
+        const q = typeof args.q === 'string' ? args.q : '';
+        const k = typeof args.k === 'number' ? args.k : 3;
+        reply({ content: [{ type: 'text', text: JSON.stringify(sovereignRag.search(q, k)) }] });
+        return;
+      }
+      fail(-32601, 'Tool not found');
+    } catch (error) {
+      fail(-32000, error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+
+  fail(-32601, 'Method not found');
+});
+
+app.get('/api/v1/i18n/locale', (_req, res) => {
+  const locale = getLocaleFromEnv();
+  res.json({
+    success: true,
+    locale,
+    greeting: t('greeting', locale),
+    identity: t('identity', locale),
+  });
+});
+
+app.post('/api/isabella/chat', async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const input = typeof body.input === 'string' ? body.input.trim() : '';
+  if (!input) {
+    res.status(400).json({ success: false, error: 'input es requerido' });
+    return;
+  }
+  try {
+    const result = await foundationalLLM.generate({
+      input,
+      systemPrompt:
+        'Eres Isabella Villaseñor AI, LLM fundacional soberano de TAMV. Responde en español latinoamericano mexicano.',
+      maxTokens: typeof body.maxTokens === 'number' ? body.maxTokens : 512,
+    });
+    res.json({
+      success: true,
+      output: result.text,
+      engine: result.engine,
+      modelId: result.modelId,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ success: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post('/api/isabella/isa/reason', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const input = typeof body.input === 'string' ? body.input.trim() : '';
+  if (!input) {
+    res.status(400).json({ success: false, error: 'input es requerido' });
+    return;
+  }
+  const engine = createLocalEngine();
+  const analysis = engine.analyze(input);
+  res.json({
+    success: true,
+    traceId: `trace-${randomUUID()}`,
+    analysis,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.post('/api/isabella/crypto/sign', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const payload =
+    typeof body.payload === 'string' ? body.payload : JSON.stringify(body.payload ?? {});
+  const signature = sign(null, Buffer.from(payload, 'utf8'), isabellaSigningPrivateKey).toString(
+    'base64'
+  );
+  res.json({
+    success: true,
+    payload,
+    signature,
+    publicKey: isabellaSigningPublicKey,
+    algorithm: 'Ed25519',
+  });
+});
+
+app.post('/api/isabella/crypto/verify', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const payload = typeof body.payload === 'string' ? body.payload : '';
+  const signature = typeof body.signature === 'string' ? body.signature : '';
+  const publicKey = typeof body.publicKey === 'string' ? body.publicKey : isabellaSigningPublicKey;
+  let ok = false;
+  try {
+    ok = verify(null, Buffer.from(payload, 'utf8'), publicKey, Buffer.from(signature, 'base64'));
+  } catch {
+    ok = false;
+  }
+  res.json({ success: true, valid: ok, algorithm: 'Ed25519' });
+});
+
+app.post('/api/v1/memory/store', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const scope = (typeof body.scope === 'string' ? body.scope : 'session') as any;
+  const key = typeof body.key === 'string' ? body.key : '';
+  if (!key) {
+    res.status(400).json({ success: false, error: 'key es requerido' });
+    return;
+  }
+  hierarchicalMemory.set(
+    scope,
+    key,
+    body.value,
+    typeof body.ttlMs === 'number' ? body.ttlMs : undefined
+  );
+  res.json({ success: true });
+});
+
+app.get('/api/v1/memory/recall', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const scope = (typeof req.query.scope === 'string' ? req.query.scope : 'session') as any;
+  const key = typeof req.query.key === 'string' ? req.query.key : '';
+  const entry = hierarchicalMemory.get(scope, key);
+  res.json({ success: true, entry });
+});
+
+app.get('/api/v1/memory/snapshot', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const scope = typeof req.query.scope === 'string' ? req.query.scope : undefined;
+  res.json({ success: true, entries: hierarchicalMemory.list(scope as any) });
+});
+
+app.get('/api/v1/isabella/full-status', (_req, res) => {
+  res.json({
+    success: true,
+    engine: runtime.isabella.snapshot(),
+    providers: runtime.inference.list(),
+    memory: hierarchicalMemory.list(),
+    ragSize: sovereignRag.size(),
+    threatIntel: 'active',
+    i18n: getLocaleFromEnv(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get('/api/v1/isabella/eval', async (_req, res) => {
+  const results = [];
+  let total = 0;
+  for (const q of DEFAULT_BENCHMARK) {
+    try {
+      const r = await foundationalLLM.generate({
+        input: q.prompt,
+        systemPrompt: 'Eres Isabella.',
+        maxTokens: 256,
+      });
+      const score = scoreAnswer(r.text, q.expectedKeywords);
+      total += score;
+      results.push({ id: q.id, score, engine: r.engine });
+    } catch (error) {
+      results.push({
+        id: q.id,
+        score: 0,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  res.json({ success: true, avgScore: results.length ? total / results.length : 0, results });
+});
+
+app.post('/api/v1/security/canonicalize', (req, res) => {
+  try {
+    const canonical = canonicalize(req.body ?? {});
+    res.json({ success: true, canonical });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 app.get('/api/v1/isabella/status', (_req, res) => {
@@ -6468,7 +6797,9 @@ app.post('/api/v1/monetization/profit-price', (req, res) => {
     });
     res.json({ success: true, price, guard: profitGuard.snapshot() });
   } catch (error) {
-    res.status(400).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+    res
+      .status(400)
+      .json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 

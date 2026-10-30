@@ -1,5 +1,7 @@
 import { createLocalEngine } from './local-engine';
 import { sovereignRag } from './rag';
+import { generateText } from 'ai';
+import { gateway } from '@ai-sdk/gateway';
 import type { IsabellaGenesisRuntime } from '../genesis/runtime';
 import type { GenerationResult } from './types';
 
@@ -61,6 +63,30 @@ export class IsabellaFoundationalLLM {
     ]
       .filter(Boolean)
       .join('\n\n');
+
+    // 0. Intentar AI SDK Gateway (modelo free de Vercel) si está disponible.
+    try {
+      const result = await generateText({
+        model: gateway('nvidia/nemotron-3.5-lightning-free'),
+        system: request.systemPrompt,
+        prompt: request.input,
+        maxOutputTokens: maxTokens,
+        temperature: 0.35,
+        providerOptions: { gateway: { disallowPromptTraining: true, sort: 'tps' } },
+      });
+      if (result.text && result.text.trim().length > 0) {
+        const value: FoundationalResult = {
+          text: result.text.trim(),
+          engine: 'foundational',
+          latencyMs: Math.max(1, Date.now() - started),
+          modelId: 'ai-sdk-gateway:nemotron',
+        };
+        this.cache.set(key, { result: value, expiresAt: Date.now() + this.cacheTtlMs });
+        return value;
+      }
+    } catch {
+      // Degradar al siguiente proveedor.
+    }
 
     // 1. Intentar proveedores reales registrados (Ollama, HF, Gratis, etc.)
     try {
