@@ -84,7 +84,11 @@ export function registerMarketplaceRoutes(deps: MarketplaceRouteDeps): void {
   });
 
   app.post('/api/v1/marketplace/plan', (req, res) => {
-    if (!deps.authorizeAdmin) {\n      res.status(503).json({ success: false, error: 'MARKETPLACE_ADMIN_GATE_UNAVAILABLE' });\n      return;\n    }\n    if (!deps.authorizeAdmin(req, res)) return;
+    if (!deps.authorizeAdmin) {
+      res.status(503).json({ success: false, error: 'MARKETPLACE_ADMIN_GATE_UNAVAILABLE' });
+      return;
+    }
+    if (!deps.authorizeAdmin(req, res)) return;
     if (!deps.enforceRateLimit(req, res, deps.rateLimiter, 'marketplace-plan')) return;
     const body = (req.body ?? {}) as Record<string, unknown>;
     const packId = typeof body.packId === 'string' ? body.packId.trim() : '';
