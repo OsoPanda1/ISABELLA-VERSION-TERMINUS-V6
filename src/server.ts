@@ -1,5 +1,6 @@
 import { buildPricingCatalog } from './commerce/catalog';
 import { envFlag } from './lib/env-flags';
+import { OllamaAdapter, GratisAPIAdapter, HuggingFaceFreeAdapter } from './inference/free-providers';
 import { boundedBudgetMs, DeadlineBudget, hedgedFirst } from './inference/deadline';
 import { buildAsset, contentHash, serveAsset, type StaticAsset } from './http/static-assets';
 import express, { type Application, type NextFunction, type Request, type Response } from 'express';
@@ -539,6 +540,17 @@ const runtime = new IsabellaGenesisRuntime(
   undefined,
   ikesPersistence
 );
+// Registro de proveedores fundacionales (open source / free) para que Isabella
+// use modelos reales cuando estén disponibles, con fallback local garantizado.
+if (process.env.OLLAMA_ENABLED === 'true') {
+  runtime.inference.register(new OllamaAdapter());
+}
+if (process.env.GRATIS_API_KEY) {
+  runtime.inference.register(new GratisAPIAdapter());
+}
+if (process.env.HF_TOKEN) {
+  runtime.inference.register(new HuggingFaceFreeAdapter());
+}
 // El registro de herramientas se construye dentro del runtime, antes de que exista el ledger,
 // así que el sello se adjunta aquí. Desde ahora la evidencia es del camino de ejecución: toda
 // herramienta —la de esta ruta y la que invoque un agente interno— queda en BookPI antes de que
@@ -3470,10 +3482,20 @@ app.post('/api/v1/cognitive/request', async (req, res) => {
         'No puedo ejecutar esa operación desde una sesión pública. Las acciones privilegiadas o destructivas requieren una identidad verificada y aprobación autorizada.';
       responseEngine = 'blocked';
     } else if (!generativeNarrative) {
-      // Same disclosure contract as /cognition/route: the deterministic local answer
-      // is never presented as model output.
-      generativeNarrative = generateSovereignFallback(input, [], 'general');
-      responseEngine = 'sovereign-fallback';
+      // Intentar el modelo fundacional (proveedores reales registrados) antes del fallback.
+      try {
+        const foundational = await runtime.generate({
+          prompt: `${systemPrompt}\\n\\nSolicitud del usuario:\\n${input}`,
+          maxTokens: 512,
+        });
+        generativeNarrative = foundational.text;
+        responseEngine = 'foundational';
+      } catch {
+        // Same disclosure contract as /cognition/route: the deterministic local answer
+        // is never presented as model output.
+        generativeNarrative = generateSovereignFallback(input, [], 'general');
+        responseEngine = 'sovereign-fallback';
+      }
     }
     if (decision.admitted && responseEngine === 'gemini') {
       sessionMemory.addToSession(sessionId, {
