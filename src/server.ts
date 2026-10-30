@@ -10,6 +10,7 @@ import { createFoundationalLLM } from './inference/foundational-llm';
 import { createLocalEngine } from './inference/local-engine';
 import { hierarchicalMemory } from './memory/hierarchical';
 import { assessThreat } from './security/advanced-threat-intel';
+import { canonicalize } from './security/jcs';
 import { DEFAULT_BENCHMARK, scoreAnswer } from './evaluation/benchmark';
 import { t, getLocaleFromEnv } from './lib/i18n';
 import { searchDomains } from './infra/vercel-domains';
@@ -3987,6 +3988,15 @@ app.get('/api/v1/isabella/eval', async (_req, res) => {
     }
   }
   res.json({ success: true, avgScore: results.length ? total / results.length : 0, results });
+});
+
+app.post('/api/v1/security/canonicalize', (req, res) => {
+  try {
+    const canonical = canonicalize(req.body ?? {});
+    res.json({ success: true, canonical });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 app.get('/api/v1/isabella/status', (_req, res) => {
