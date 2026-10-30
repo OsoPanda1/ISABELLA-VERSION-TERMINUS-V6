@@ -64,7 +64,9 @@ function inboxRow(overrides: Record<string, unknown> = {}): Record<string, unkno
   };
 }
 
-function hydrateClient(overrides: { connectors?: Record<string, unknown>[]; inbox?: Record<string, unknown>[] } = {}) {
+function hydrateClient(
+  overrides: { connectors?: Record<string, unknown>[]; inbox?: Record<string, unknown>[] } = {}
+) {
   return fakeClient((sql) =>
     sql.includes('federation_connectors')
       ? { rows: overrides.connectors ?? [connectorRow()] }
@@ -107,7 +109,9 @@ describe('PostgresFederationPersistence', () => {
 
   it('writes one row per registry mutation', async () => {
     const fake = fakeClient();
-    const registry = new FederationRegistry(new PostgresFederationPersistence({ client: fake.client }));
+    const registry = new FederationRegistry(
+      new PostgresFederationPersistence({ client: fake.client })
+    );
     const connector = await registry.createConnector({
       name: 'principal',
       kind: 'whatsapp',
@@ -116,18 +120,24 @@ describe('PostgresFederationPersistence', () => {
     await registry.ingest(connector, { key: { id: 'msg-1' }, conversation: 'Hola Isabella' });
     expect(await registry.removeConnector(connector.id)).toBe(true);
 
-    const inserts = fake.calls.filter((call) => call.sql.startsWith('INSERT INTO public.federation_connectors'));
+    const inserts = fake.calls.filter((call) =>
+      call.sql.startsWith('INSERT INTO public.federation_connectors')
+    );
     expect(inserts).toHaveLength(1);
     expect(inserts[0].sql).toContain('ON CONFLICT (id) DO NOTHING');
     expect(inserts[0].params[0]).toBe(connector.id);
     expect(inserts[0].params[1]).toBe('principal');
     expect(inserts[0].params[3]).toBe('https://example.com/hooks');
 
-    const inboxInserts = fake.calls.filter((call) => call.sql.startsWith('INSERT INTO public.federation_inbox'));
+    const inboxInserts = fake.calls.filter((call) =>
+      call.sql.startsWith('INSERT INTO public.federation_inbox')
+    );
     expect(inboxInserts).toHaveLength(1);
     expect(inboxInserts[0].params[6]).toBe('msg-1');
 
-    const deletes = fake.calls.filter((call) => call.sql.startsWith('DELETE FROM public.federation_connectors'));
+    const deletes = fake.calls.filter((call) =>
+      call.sql.startsWith('DELETE FROM public.federation_connectors')
+    );
     expect(deletes).toHaveLength(1);
     expect(deletes[0].params).toEqual([connector.id]);
   });
@@ -144,21 +154,28 @@ describe('PostgresFederationPersistence', () => {
     expect(trim?.params).toEqual([200]);
   });
 
-  it('maps a unique violation to a replay rejection and rolls the inbox back', async () => {
+  it('maps a duplicate key from the database to a replay rejection', async () => {
+    let inboxInserts = 0;
     const fake = fakeClient((sql) => {
       if (sql.startsWith('INSERT INTO public.federation_inbox')) {
-        throw Object.assign(new Error('duplicate key value violates unique constraint'), {
-          code: '23505',
-        });
+        inboxInserts += 1;
+        if (inboxInserts > 1) {
+          throw Object.assign(new Error('duplicate key value violates unique constraint'), {
+            code: '23505',
+          });
+        }
       }
       return { rows: [] };
     });
-    const registry = new FederationRegistry(new PostgresFederationPersistence({ client: fake.client }));
+    const registry = new FederationRegistry(
+      new PostgresFederationPersistence({ client: fake.client })
+    );
     const connector = await registry.createConnector({ name: 'principal', kind: 'whatsapp' });
     await registry.ingest(connector, { key: { id: 'msg-1' }, conversation: 'primero' });
     await expect(
       registry.ingest(connector, { key: { id: 'msg-1' }, conversation: 'replay' })
     ).rejects.toThrow('FEDERATION_REPLAY_DETECTED');
+    expect(inboxInserts).toBe(2);
     expect(registry.listInbox(10)).toHaveLength(1);
     expect(registry.hasRemoteMessage(connector.id, 'msg-1')).toBe(true);
   });
@@ -170,7 +187,9 @@ describe('PostgresFederationPersistence', () => {
       }
       return { rows: [] };
     });
-    const registry = new FederationRegistry(new PostgresFederationPersistence({ client: fake.client }));
+    const registry = new FederationRegistry(
+      new PostgresFederationPersistence({ client: fake.client })
+    );
     const connector = await registry.createConnector({ name: 'principal', kind: 'whatsapp' });
     await expect(
       registry.ingest(connector, { key: { id: 'msg-9' }, conversation: 'dos' })
@@ -181,14 +200,6 @@ describe('PostgresFederationPersistence', () => {
   it('degrades the registry to process-local state when hydration fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     let closed = false;
-    const failing: PostgresQueryClient = {
-      async query(): Promise<PostgresQueryResult> {
-        throw new Error('database is unreachable');
-      },
-      async close(): Promise<void> {
-        closed = true;
-      },
-    };
     const registry = new FederationRegistry({
       load: () => ({ connectors: [], inbox: [] }),
       save: () => undefined,
@@ -202,8 +213,11 @@ describe('PostgresFederationPersistence', () => {
     await registry.hydrate();
     expect(registry.degradationReason).toContain('database is unreachable');
     expect(closed).toBe(true);
-    const connector = await registry.createConnector({ name: 'local', kind: 'webhook' });
-    expect((connector as ConnectorRecord).name).toBe('local');
+    const connector: ConnectorRecord = await registry.createConnector({
+      name: 'local',
+      kind: 'webhook',
+    });
+    expect(registry.getConnector(connector.id)?.name).toBe('local');
     warn.mockRestore();
   });
 

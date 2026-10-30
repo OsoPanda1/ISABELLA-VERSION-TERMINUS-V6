@@ -78,6 +78,10 @@ function recordFixture(id: string, lastUsedAt: string | null): StoredKey {
   };
 }
 
+function sha256Digest(secret: string): Buffer {
+  return createHash('sha256').update(secret, 'utf8').digest();
+}
+
 describe('resolvePostgresUrl', () => {
   it('uses the documented variable precedence and rejects other schemes', () => {
     expect(resolvePostgresUrl({ DATABASE_URL: ' postgresql://a/b ' })).toBe('postgresql://a/b');
@@ -85,9 +89,9 @@ describe('resolvePostgresUrl', () => {
     expect(resolvePostgresUrl({ POSTGRES_PRISMA_URL: 'postgresql://c/d' })).toBe('postgresql://c/d');
     expect(resolvePostgresUrl({ POSTGRES_URL_NON_POOLING: 'postgres://e/f' })).toBe('postgres://e/f');
     expect(resolvePostgresUrl({ DATABASE_URL: 'mysql://a/b' })).toBeNull();
-    expect(resolvePostgresUrl({ DATABASE_URL: 'postgresql://a/b', POSTGRES_URL: 'postgres://z' })).toBe(
-      'postgresql://a/b'
-    );
+    expect(
+      resolvePostgresUrl({ DATABASE_URL: 'postgresql://a/b', POSTGRES_URL: 'postgres://z' })
+    ).toBe('postgresql://a/b');
     expect(resolvePostgresUrl({})).toBeNull();
   });
 
@@ -132,7 +136,9 @@ describe('PostgresApiKeyPersistence', () => {
       name: 'fila',
       scopes: ['cognition:read'],
     });
-    const inserts = fake.calls.filter((call) => call.sql.startsWith('INSERT INTO public.isabella_api_keys'));
+    const inserts = fake.calls.filter((call) =>
+      call.sql.startsWith('INSERT INTO public.isabella_api_keys')
+    );
     expect(inserts).toHaveLength(1);
     expect(inserts[0].sql).toContain('ON CONFLICT (id) DO UPDATE');
     expect(inserts[0].sql).not.toMatch(/created_at = EXCLUDED/);
@@ -177,6 +183,18 @@ describe('PostgresApiKeyPersistence', () => {
     expect(reading.verify(issued.secret, 'cognition:read', 'tenant-a').ok).toBe(true);
     expect(reading.verify(issued.secret, 'admin:keys')).toEqual({ ok: false, reason: 'scope' });
     expect(JSON.stringify(reader.calls)).not.toContain(issued.secret);
+  });
+
+  it('stores only the digest, so the row alone cannot be turned back into a secret', async () => {
+    const secret = `isa_live_${'C'.repeat(43)}`;
+    const fake = fakeClient(() => ({ rows: [keyRow({ digest: sha256Digest(secret) })] }));
+    const store = new IsabellaApiKeyStore({
+      persistence: new PostgresApiKeyPersistence({ client: fake.client }),
+    });
+    await store.hydrate();
+    expect(store.verify(secret).ok).toBe(true);
+    expect(store.verify(`isa_live_${'D'.repeat(43)}`).ok).toBe(false);
+    expect(JSON.stringify(fake.calls)).not.toContain(secret);
   });
 
   it('buffers lastUsedAt and flushes it in one batched UPDATE', async () => {
@@ -246,7 +264,11 @@ describe('PostgresApiKeyPersistence', () => {
       lastUsedFlushRows: 1,
     });
     const store = new IsabellaApiKeyStore({ persistence });
-    const issued = await store.issue({ tenantId: 'tenant-a', name: 'flush', scopes: ['cognition:read'] });
+    const issued = await store.issue({
+      tenantId: 'tenant-a',
+      name: 'flush',
+      scopes: ['cognition:read'],
+    });
     expect(store.verify(issued.secret).ok).toBe(true);
     await persistence.flushLastUsed();
     expect(store.verify(issued.secret).ok).toBe(true);
@@ -274,19 +296,4 @@ describe('PostgresApiKeyPersistence', () => {
     expect(closed).toBe(true);
     warn.mockRestore();
   });
-
-  it('computes the same peppered digest the store verifies against', async () => {
-    const secret = `isa_live_${'B'.repeat(43)}`;
-    const digest = createHmacDigest(secret);
-    const fake = fakeClient(() => ({ rows: [keyRow({ digest })] }));
-    const store = new IsabellaApiKeyStore({
-      persistence: new PostgresApiKeyPersistence({ client: fake.client }),
-    });
-    await store.hydrate();
-    expect(store.verify(secret).ok).toBe(true);
-  });
 });
-
-function createHmacDigest(secret: string): Uint8Array {
-  return createHash('sha256').update(secret, 'utf8').digest();
-}
