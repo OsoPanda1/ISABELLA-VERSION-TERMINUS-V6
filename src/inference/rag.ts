@@ -83,12 +83,6 @@ export class SovereignRagStore {
     return idf;
   }
 
-  private rebuild(): void {
-    if (this.docs.length === 0) return;
-    const texts = this.docs.map((d) => d.text);
-    const idf = this.computeIdf(texts);
-    for (const d of this.docs) d.vector = buildVector(d.text, idf);
-  }
 
   search(query: string, k = 3): RagHit[] {
     if (typeof query !== 'string') throw new TypeError('RAG: query must be a string');
