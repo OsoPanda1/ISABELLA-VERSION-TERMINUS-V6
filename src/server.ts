@@ -3498,8 +3498,18 @@ app.post('/api/v1/cognitive/request', async (req, res) => {
         })),
       },
     });
-  } catch {
-    res.status(500).json({ success: false, error: 'COGNITIVE_REQUEST_FAILED' });
+  } catch (error) {
+    // Isabella must always answer the user, even on unexpected runtime errors.
+    // The failure is disclosed as a local fallback, never as model inference.
+    const fallback = generateSovereignFallback(input, [], 'general');
+    res.status(200).json({
+      success: true,
+      output: fallback,
+      responseEngine: 'sovereign-fallback',
+      error: 'COGNITIVE_REQUEST_FAILED',
+      detail: error instanceof Error ? error.message : String(error),
+      publicAuthority: 'VIEWER_ONLY',
+    });
   }
 });
 
