@@ -368,6 +368,11 @@ export class LocalInferenceEngine {
     return best;
   }
 
+  analyze(prompt: string): { intent: string; confidence: 'HIGH' | 'MEDIUM' | 'LOW'; matchedTerms: readonly string[] } {
+    const result = this.matchIntent(prompt.trim());
+    return { intent: result.intent, confidence: result.confidence, matchedTerms: result.matchedTerms };
+  }
+
   getSnapshot(): LocalEngineConfig {
     return { ...this.config };
   }

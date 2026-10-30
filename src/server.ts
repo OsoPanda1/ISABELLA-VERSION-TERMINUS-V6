@@ -2,6 +2,7 @@ import { buildPricingCatalog } from './commerce/catalog';
 import { envFlag } from './lib/env-flags';
 import { OllamaAdapter, GratisAPIAdapter, HuggingFaceFreeAdapter } from './inference/free-providers';
 import { createFoundationalLLM } from './inference/foundational-llm';
+import { createLocalEngine } from './inference/local-engine';
 import { assessThreat } from './security/advanced-threat-intel';
 import { t, getLocaleFromEnv } from './lib/i18n';
 import { searchDomains } from './infra/vercel-domains';
@@ -10,7 +11,7 @@ import { sovereignRag } from './inference/rag';
 import { boundedBudgetMs, DeadlineBudget, hedgedFirst } from './inference/deadline';
 import { buildAsset, contentHash, serveAsset, type StaticAsset } from './http/static-assets';
 import express, { type Application, type NextFunction, type Request, type Response } from 'express';
-import { createPublicKey, randomUUID, timingSafeEqual, type KeyObject } from 'node:crypto';
+import { createPublicKey, randomUUID, timingSafeEqual, generateKeyPairSync, sign, verify, type KeyObject } from 'node:crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'node:url';
@@ -558,6 +559,14 @@ if (process.env.HF_TOKEN) {
   runtime.inference.register(new HuggingFaceFreeAdapter());
 }
 const foundationalLLM = createFoundationalLLM(runtime);
+
+let isabellaSigningPrivateKey = process.env.ISABELLA_APPROVAL_PRIVATE_KEY_PEM ?? '';
+let isabellaSigningPublicKey = process.env.ISABELLA_APPROVAL_TRUSTED_PUBLIC_KEY_PEM ?? '';
+if (!isabellaSigningPrivateKey || !isabellaSigningPublicKey) {
+  const pair = generateKeyPairSync('ed25519');
+  isabellaSigningPrivateKey = pair.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+  isabellaSigningPublicKey = pair.publicKey.export({ type: 'spki', format: 'pem' }).toString();
+}
 // El registro de herramientas se construye dentro del runtime, antes de que exista el ledger,
 // así que el sello se adjunta aquí. Desde ahora la evidencia es del camino de ejecución: toda
 // herramienta —la de esta ruta y la que invoque un agente interno— queda en BookPI antes de que
@@ -3775,6 +3784,58 @@ app.post('/api/mcp', async (req, res) => {
 app.get('/api/v1/i18n/locale', (_req, res) => {
   const locale = getLocaleFromEnv();
   res.json({ success: true, locale, greeting: t('greeting', locale), identity: t('identity', locale) });
+});
+
+app.post('/api/isabella/chat', async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const input = typeof body.input === 'string' ? body.input.trim() : '';
+  if (!input) {
+    res.status(400).json({ success: false, error: 'input es requerido' });
+    return;
+  }
+  try {
+    const result = await foundationalLLM.generate({
+      input,
+      systemPrompt: 'Eres Isabella Villaseñor AI, LLM fundacional soberano de TAMV. Responde en español latinoamericano mexicano.',
+      maxTokens: typeof body.maxTokens === 'number' ? body.maxTokens : 512,
+    });
+    res.json({ success: true, output: result.text, engine: result.engine, modelId: result.modelId, timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post('/api/isabella/isa/reason', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const input = typeof body.input === 'string' ? body.input.trim() : '';
+  if (!input) {
+    res.status(400).json({ success: false, error: 'input es requerido' });
+    return;
+  }
+  const engine = createLocalEngine();
+  const analysis = engine.analyze(input);
+  res.json({ success: true, traceId: `trace-${randomUUID()}`, analysis, timestamp: new Date().toISOString() });
+});
+
+app.post('/api/isabella/crypto/sign', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const payload = typeof body.payload === 'string' ? body.payload : JSON.stringify(body.payload ?? {});
+  const signature = sign(null, Buffer.from(payload, 'utf8'), isabellaSigningPrivateKey).toString('base64');
+  res.json({ success: true, payload, signature, publicKey: isabellaSigningPublicKey, algorithm: 'Ed25519' });
+});
+
+app.post('/api/isabella/crypto/verify', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const payload = typeof body.payload === 'string' ? body.payload : '';
+  const signature = typeof body.signature === 'string' ? body.signature : '';
+  const publicKey = typeof body.publicKey === 'string' ? body.publicKey : isabellaSigningPublicKey;
+  let ok = false;
+  try {
+    ok = verify(null, Buffer.from(payload, 'utf8'), Buffer.from(signature, 'base64'), publicKey);
+  } catch {
+    ok = false;
+  }
+  res.json({ success: true, valid: ok, algorithm: 'Ed25519' });
 });
 
 app.get('/api/v1/isabella/status', (_req, res) => {
