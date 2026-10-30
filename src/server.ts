@@ -3,6 +3,7 @@ import { envFlag } from './lib/env-flags';
 import { OllamaAdapter, GratisAPIAdapter, HuggingFaceFreeAdapter } from './inference/free-providers';
 import { createFoundationalLLM } from './inference/foundational-llm';
 import { createLocalEngine } from './inference/local-engine';
+import { hierarchicalMemory } from './memory/hierarchical';
 import { assessThreat } from './security/advanced-threat-intel';
 import { t, getLocaleFromEnv } from './lib/i18n';
 import { searchDomains } from './infra/vercel-domains';
@@ -3836,6 +3837,33 @@ app.post('/api/isabella/crypto/verify', (req, res) => {
     ok = false;
   }
   res.json({ success: true, valid: ok, algorithm: 'Ed25519' });
+});
+
+app.post('/api/v1/memory/store', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const scope = (typeof body.scope === 'string' ? body.scope : 'session') as any;
+  const key = typeof body.key === 'string' ? body.key : '';
+  if (!key) {
+    res.status(400).json({ success: false, error: 'key es requerido' });
+    return;
+  }
+  hierarchicalMemory.set(scope, key, body.value, typeof body.ttlMs === 'number' ? body.ttlMs : undefined);
+  res.json({ success: true });
+});
+
+app.get('/api/v1/memory/recall', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const scope = (typeof req.query.scope === 'string' ? req.query.scope : 'session') as any;
+  const key = typeof req.query.key === 'string' ? req.query.key : '';
+  const entry = hierarchicalMemory.get(scope, key);
+  res.json({ success: true, entry });
+});
+
+app.get('/api/v1/memory/snapshot', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const scope = typeof req.query.scope === 'string' ? req.query.scope : undefined;
+  res.json({ success: true, entries: hierarchicalMemory.list(scope as any) });
 });
 
 app.get('/api/v1/isabella/status', (_req, res) => {
