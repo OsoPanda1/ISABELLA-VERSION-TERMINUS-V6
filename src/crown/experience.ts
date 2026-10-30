@@ -13,6 +13,7 @@
 
 import type { CrownVerdict } from './index';
 import type { Principal } from '../identity/principal';
+import { isAuthenticatedCreatorPrincipal } from '../identity/creator';
 import { evaluateEpistemicState, type EpistemicEvaluation } from '../cognition/epistemic-evaluator';
 
 export const GENESIS_CROWN_CONVERGENCE_VERSION = '1.0.0';
@@ -174,14 +175,10 @@ export function buildCanonicalSystemPrompt(
 
   const responseMode = verdict.responseMode.toUpperCase();
 
-  const configuredCreatorPrincipalId = process.env.ISABELLA_CREATOR_PRINCIPAL_ID?.trim();
-  // Principal is created by the server-side identity boundary; never infer authority from a name in user text.
-  const authenticatedCreator =
-    request.principal.kind === 'human' &&
-    ((configuredCreatorPrincipalId !== undefined &&
-      configuredCreatorPrincipalId.length > 0 &&
-      request.principal.id === configuredCreatorPrincipalId) ||
-      request.principal.roles.includes('isabella:creator'));
+  const authenticatedCreator = isAuthenticatedCreatorPrincipal(
+    request.principal,
+    process.env.ISABELLA_CREATOR_PRINCIPAL_ID
+  );
 
   return [
     'ISABELLA GENESIS — CANONICAL GOVERNED COGNITIVE RUNTIME',
