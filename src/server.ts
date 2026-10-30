@@ -1,4 +1,5 @@
 import { buildPricingCatalog } from './commerce/catalog';
+/// <reference path="./ambient.d.ts" />
 import { envFlag } from './lib/env-flags';
 import { OllamaAdapter, GratisAPIAdapter, HuggingFaceFreeAdapter } from './inference/free-providers';
 import { createFoundationalLLM } from './inference/foundational-llm';
@@ -335,7 +336,7 @@ app.use(
 app.use(
   express.json({
     limit: '256kb',
-    verify: (req, _res, buf) => {
+    verify: (req: any, _res: any, buf: Buffer) => {
       // Preserve raw bytes only for the signed webhook route; duplicating every
       // request body adds avoidable allocations and GC pressure on the hot path.
       const pathname = (req.url ?? '').split('?')[0];
@@ -2630,7 +2631,7 @@ app.post('/api/v1/cognition/route', async (req, res) => {
               },
             })
           );
-          generativeNarrative = resp?.text?.trim() || null;
+          generativeNarrative = (resp as { text?: string })?.text?.trim() || null;
           if (generativeNarrative) responseEngine = 'gemini';
         } catch {
           generativeNarrative = null;
@@ -2678,7 +2679,7 @@ app.post('/api/v1/cognition/route', async (req, res) => {
                 },
               })
             );
-            generativeNarrative = resp?.text?.trim() || null;
+            generativeNarrative = (resp as { text?: string })?.text?.trim() || null;
             if (generativeNarrative) responseEngine = 'gemini';
           } catch {
             generativeNarrative = null;

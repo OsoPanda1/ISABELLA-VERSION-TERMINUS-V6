@@ -4,6 +4,7 @@
  * Persistent storage for ledger, settlements, wallets, usage events
  */
 
+/// <reference path="../../ambient.d.ts" />
 import { Pool, type PoolConfig } from 'pg';
 import Stripe from 'stripe';
 import { ImmutableLedger, type LedgerJournal } from './immutable-ledger';
