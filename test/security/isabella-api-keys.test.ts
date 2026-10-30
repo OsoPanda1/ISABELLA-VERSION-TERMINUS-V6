@@ -16,7 +16,7 @@ interface RowBackend extends ApiKeyPersistence {
   failNextWrite: boolean;
 }
 
-/** Row-level fake: counts writes so a regression to whole-collection snapshots is visible. */
+/** Row-level fake: writes are counted so a regression to whole-collection snapshots is visible. */
 function rowBackend(): RowBackend {
   const rows = new Map<string, StoredKey>();
   const backend: RowBackend = {
@@ -60,7 +60,7 @@ function storedKey(secret: string, id = "k1"): StoredKey {
   };
 }
 
-function warnText(spy: { mock: { calls: unknown[][] } }): string {
+function warnText(spy: { mock: { calls: readonly (readonly unknown[])[] } }): string {
   return spy.mock.calls.map((args) => args.map((arg) => String(arg)).join(" ")).join(" ");
 }
 
@@ -167,7 +167,7 @@ describe("Isabella API key store", () => {
     const issued = await store.issue({ tenantId: "tenant-a", name: "degraded", scopes: ["cognition:read"] });
     expect(store.degradationReason).toContain("connection refused");
     expect(store.verify(issued.secret).ok).toBe(true);
-    expect(warnText(spy(warn))).toContain("process-local");
+    expect(warnText(warn)).toContain("process-local");
     warn.mockRestore();
   });
 
@@ -198,7 +198,7 @@ describe("Isabella API key store", () => {
       ISABELLA_API_KEY_STORE: "postgres",
     });
     expect(store).toBeInstanceOf(IsabellaApiKeyStore);
-    const text = warnText(spy(warn));
+    const text = warnText(warn);
     expect(text).toContain("DATABASE_URL");
     expect(text).not.toContain("postgres://");
     warn.mockRestore();
@@ -213,11 +213,7 @@ describe("Isabella API key store", () => {
       ISABELLA_API_KEY_STORE_PATH: ".data/never-written.json",
     });
     expect(store.list()).toEqual([]);
-    expect(warnText(spy(warn))).toContain("ephemeral on serverless");
+    expect(warnText(warn)).toContain("ephemeral on serverless");
     warn.mockRestore();
   });
 });
-
-function spy<T>(value: T): T {
-  return value;
-}
