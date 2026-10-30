@@ -157,6 +157,14 @@ describe("Marketplace routes", () => {
     expect(captured.body).toBeUndefined();
   });
 
+  it("falla cerrado si no existe el admin gate", () => {
+    const handlers = harness({ omitAdmin: true });
+    const { res, captured } = makeRes();
+    handlers.get("POST /api/v1/marketplace/plan")!({ body: { packId: KIT } } as unknown as Request, res);
+    expect(captured.status).toBe(503);
+    expect((captured.body as { error: string }).error).toBe("MARKETPLACE_ADMIN_GATE_UNAVAILABLE");
+  });
+
   it("respeta el rate limit", () => {
     const handlers = harness({ denyRate: true });
     const { res, captured } = makeRes();
