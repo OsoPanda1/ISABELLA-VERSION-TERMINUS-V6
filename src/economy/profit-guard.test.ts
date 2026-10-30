@@ -23,7 +23,7 @@ describe('minimumProfitablePrice', () => {
 
 describe('profitablePrice', () => {
   it('never prices below the gross-margin floor', () => {
-    expect(profitablePrice({ cost: 100, marginBps: 2_500, demandFactor: 1 })).toBe(133.33);
+    expect(profitablePrice({ cost: 100, marginBps: 2_500, demandFactor: 1 })).toBe(133.34);
   });
 
   it('allows bounded dynamic pricing above the floor', () => {
