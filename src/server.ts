@@ -6,6 +6,7 @@ import { createFoundationalLLM } from './inference/foundational-llm';
 import { createLocalEngine } from './inference/local-engine';
 import { hierarchicalMemory } from './memory/hierarchical';
 import { assessThreat } from './security/advanced-threat-intel';
+import { DEFAULT_BENCHMARK, scoreAnswer } from './evaluation/benchmark';
 import { t, getLocaleFromEnv } from './lib/i18n';
 import { searchDomains } from './infra/vercel-domains';
 import { profitablePrice, profitGuard } from './economy/profit-guard';
@@ -3878,6 +3879,22 @@ app.get('/api/v1/isabella/full-status', (_req, res) => {
     i18n: getLocaleFromEnv(),
     timestamp: new Date().toISOString(),
   });
+});
+
+app.get('/api/v1/isabella/eval', async (_req, res) => {
+  const results = [];
+  let total = 0;
+  for (const q of DEFAULT_BENCHMARK) {
+    try {
+      const r = await foundationalLLM.generate({ input: q.prompt, systemPrompt: 'Eres Isabella.', maxTokens: 256 });
+      const score = scoreAnswer(r.text, q.expectedKeywords);
+      total += score;
+      results.push({ id: q.id, score, engine: r.engine });
+    } catch (error) {
+      results.push({ id: q.id, score: 0, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  res.json({ success: true, avgScore: results.length ? total / results.length : 0, results });
 });
 
 app.get('/api/v1/isabella/status', (_req, res) => {
