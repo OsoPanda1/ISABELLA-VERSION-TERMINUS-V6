@@ -3461,7 +3461,7 @@ app.post('/api/v1/cognitive/request', async (req, res) => {
       ? `${baseSystemPrompt}\n\n${memoryContextBlock}`
       : baseSystemPrompt;
     let generativeNarrative: string | null = null;
-    let responseEngine: 'gemini' | 'sovereign-fallback' | 'blocked' = 'blocked';
+    let responseEngine: 'gemini' | 'sovereign-fallback' | 'blocked' | 'foundational' = 'blocked';
     if (
       decision.admitted &&
       wantsGemini &&
