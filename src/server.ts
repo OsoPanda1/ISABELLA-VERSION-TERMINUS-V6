@@ -11,6 +11,8 @@ import { createLocalEngine } from './inference/local-engine';
 import { hierarchicalMemory } from './memory/hierarchical';
 import { assessThreat } from './security/advanced-threat-intel';
 import { canonicalize } from './security/jcs';
+import { parseIntent } from './security/intention-parser';
+import { promptGuard } from './security/prompt-guard';
 import { DEFAULT_BENCHMARK, scoreAnswer } from './evaluation/benchmark';
 import { t, getLocaleFromEnv } from './lib/i18n';
 import { searchDomains } from './infra/vercel-domains';
@@ -3734,6 +3736,18 @@ app.post('/api/v1/domains/search', async (req, res) => {
       .status(502)
       .json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
+});
+
+app.post('/api/v1/security/intent', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const input = typeof body.input === 'string' ? body.input : '';
+  res.json({ success: true, intent: parseIntent(input) });
+});
+
+app.post('/api/v1/security/prompt-guard', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const input = typeof body.input === 'string' ? body.input : '';
+  res.json({ success: true, guard: promptGuard(input) });
 });
 
 app.post('/api/v1/security/threat-intel', (req, res) => {
