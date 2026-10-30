@@ -33,3 +33,5 @@ export * from './fairness';
 export * from './cards';
 export * from './provenance';
 export * from './native-ml-engine';
+export * from './memory-core';
+export * from './memory-hierarchical';
