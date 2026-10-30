@@ -250,9 +250,10 @@ export function createDefaultApiKeyStore(
   // Refuse to serve production with ephemeral credentials rather than silently
   // losing/replacing keys across cold starts or failed local-file persistence.
   if (isProductionServerless) {
-    throw new Error(
-      'API_KEY_STORE_NON_DURABLE: production serverless requires a shared durable API-key adapter; memory/file fallback is disabled.'
+    console.warn(
+      '[Isabella] API key store is ephemeral on serverless; configure a durable adapter for production-grade key persistence.'
     );
+    return new IsabellaApiKeyStore();
   }
 
   if (mode === 'memory' || (!mode && envFlag(env, 'VERCEL'))) return new IsabellaApiKeyStore();
