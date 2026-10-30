@@ -332,7 +332,7 @@ export class HuggingFaceFreeAdapter implements InferenceAdapter {
     if (!this.config.apiKey) return false;
     try {
       const response = await fetchWithTimeout(
-        `${this.config.baseUrl.replace(/\\/$/, '')}/${this.config.model}`,
+        `${this.config.baseUrl.replace(/\/$/, '')}/${this.config.model}`,
         { method: 'GET', headers: { Authorization: `Bearer ${this.config.apiKey}` } },
         5_000
       );
@@ -345,7 +345,7 @@ export class HuggingFaceFreeAdapter implements InferenceAdapter {
   async generate(request: GenerationRequest): Promise<GenerationResult> {
     if (!this.config.apiKey) throw new Error('HF_TOKEN_MISSING');
     const started = Date.now();
-    const url = `${this.config.baseUrl.replace(/\\/$/, '')}/${this.config.model}`;
+    const url = `${this.config.baseUrl.replace(/\/$/, '')}/${this.config.model}`;
 
     const result = await retryWithBackoff(
       async (attemptTimeoutMs) => {

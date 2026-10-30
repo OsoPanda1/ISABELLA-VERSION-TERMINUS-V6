@@ -3658,6 +3658,15 @@ app.post('/api/v1/isabella/entropy', (req, res) => {
   }
 });
 
+app.get('/api/v1/isabella/providers', (_req, res) => {
+  res.json({
+    success: true,
+    providers: runtime.inference.list(),
+    readiness: describeProviderReadiness(process.env),
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.get('/api/v1/isabella/status', (_req, res) => {
   res.json({
     success: true,
