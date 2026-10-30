@@ -11,6 +11,7 @@ import { createLocalEngine } from './inference/local-engine';
 import { hierarchicalMemory } from './memory/hierarchical';
 import { assessThreat } from './security/advanced-threat-intel';
 import { canonicalize } from './security/jcs';
+import { humanReviewGate } from './governance/human-review-gate';
 import { parseIntent } from './security/intention-parser';
 import { promptGuard } from './security/prompt-guard';
 import { DEFAULT_BENCHMARK, scoreAnswer } from './evaluation/benchmark';
@@ -4024,6 +4025,46 @@ app.post('/api/v1/security/canonicalize', (req, res) => {
   } catch (error) {
     res.status(400).json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
+});
+
+app.post('/api/v1/governance/review/submit', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const action = typeof body.action === 'string' ? body.action : '';
+  if (!action) {
+    res.status(400).json({ success: false, error: 'action es requerido' });
+    return;
+  }
+  const item = humanReviewGate.submit(action, body.payload);
+  res.json({ success: true, item });
+});
+
+app.post('/api/v1/governance/review/:id/approve', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const approver = (req.get('x-human-approver-id') ?? '').trim() || 'human-approver-001';
+  const item = humanReviewGate.approve(req.params.id, approver);
+  if (!item) {
+    res.status(404).json({ success: false, error: 'review item not found or not pending' });
+    return;
+  }
+  res.json({ success: true, item });
+});
+
+app.post('/api/v1/governance/review/:id/reject', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const approver = (req.get('x-human-approver-id') ?? '').trim() || 'human-approver-001';
+  const item = humanReviewGate.reject(req.params.id, approver);
+  if (!item) {
+    res.status(404).json({ success: false, error: 'review item not found or not pending' });
+    return;
+  }
+  res.json({ success: true, item });
+});
+
+app.get('/api/v1/governance/review', (req, res) => {
+  if (!authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN')) return;
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  res.json({ success: true, items: humanReviewGate.list(status as any) });
 });
 
 app.get('/api/v1/isabella/status', (_req, res) => {
