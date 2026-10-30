@@ -69,7 +69,7 @@ function scopesFrom(value: unknown): ApiKeyScope[] | null {
 function slug(value: string): string {
   const base = value
     .normalize('NFKD')
-    .replace([\u0300-\u036f]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
