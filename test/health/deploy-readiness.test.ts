@@ -55,6 +55,19 @@ describe("deploy readiness", () => {
     expect(ids).toContain("DR-ORIGINS-LOCAL");
   });
 
+  it("blocks Vercel production when API-key or federation state is ephemeral", () => {
+    const r = runDeployReadiness({
+      ...good,
+      VERCEL: "1",
+      ISABELLA_API_KEY_STORE: "memory",
+      ISABELLA_FEDERATION_STORE: "memory",
+    });
+    expect(r.status).toBe("BLOCKED");
+    const ids = r.findings.map((f) => f.id);
+    expect(ids).toContain("DR-SERVERLESS-NON_DURABLE_API_KEYS");
+    expect(ids).toContain("DR-SERVERLESS-NON_DURABLE_FEDERATION");
+  });
+
   it("never leaks secret values in findings", () => {
     const r = runDeployReadiness({ ...good, BOOKPI_INTEGRITY_SECRET: "changeme" });
     expect(JSON.stringify(r)).not.toContain("changeme");
