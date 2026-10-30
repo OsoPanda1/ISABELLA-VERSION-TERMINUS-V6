@@ -85,6 +85,10 @@ GET  /api/v1/readyz
 GET  /api/v1/status
 GET  /api/v1/isabella/providers
 POST /api/v1/isabella/foundational
+POST /api/isabella/chat
+POST /api/isabella/isa/reason
+POST /api/isabella/crypto/sign
+POST /api/isabella/crypto/verify
 POST /api/v1/isabella/rag/add
 GET  /api/v1/isabella/rag/search?q=...
 POST /api/v1/cognition/route
