@@ -3692,6 +3692,57 @@ app.get('/api/v1/isabella/providers', (_req, res) => {
   });
 });
 
+// Minimal MCP-compatible JSON-RPC endpoint (tools/list, tools/call).
+app.post('/api/mcp', async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const id = body.id ?? null;
+  const method = typeof body.method === 'string' ? body.method : '';
+  const reply = (result: unknown) => res.json({ jsonrpc: '2.0', id, result });
+  const fail = (code: number, message: string) =>
+    res.json({ jsonrpc: '2.0', id, error: { code, message } });
+
+  if (method === 'tools/list') {
+    reply({
+      tools: [
+        { name: 'isabella_status', description: 'Estado del runtime de Isabella', inputSchema: { type: 'object', properties: {} } },
+        { name: 'isabella_foundational', description: 'Genera respuesta con el LLM fundacional', inputSchema: { type: 'object', properties: { input: { type: 'string' } }, required: ['input'] } },
+        { name: 'isabella_rag_search', description: 'Busca en el RAG soberano', inputSchema: { type: 'object', properties: { q: { type: 'string' }, k: { type: 'number' } }, required: ['q'] } },
+      ],
+    });
+    return;
+  }
+
+  if (method === 'tools/call') {
+    const params = (body.params ?? {}) as Record<string, unknown>;
+    const name = typeof params.name === 'string' ? params.name : '';
+    const args = (params.arguments ?? {}) as Record<string, unknown>;
+    try {
+      if (name === 'isabella_status') {
+        reply({ content: [{ type: 'text', text: JSON.stringify({ engine: runtime.isabella.snapshot(), providers: runtime.inference.list() }) }] });
+        return;
+      }
+      if (name === 'isabella_foundational') {
+        const input = typeof args.input === 'string' ? args.input : '';
+        const result = await foundationalLLM.generate({ input, systemPrompt: 'Eres Isabella Villaseñor AI.', maxTokens: 512 });
+        reply({ content: [{ type: 'text', text: result.text }] });
+        return;
+      }
+      if (name === 'isabella_rag_search') {
+        const q = typeof args.q === 'string' ? args.q : '';
+        const k = typeof args.k === 'number' ? args.k : 3;
+        reply({ content: [{ type: 'text', text: JSON.stringify(sovereignRag.search(q, k)) }] });
+        return;
+      }
+      fail(-32601, 'Tool not found');
+    } catch (error) {
+      fail(-32000, error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+
+  fail(-32601, 'Method not found');
+});
+
 app.get('/api/v1/isabella/status', (_req, res) => {
   res.json({
     success: true,
