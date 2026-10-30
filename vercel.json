@@ -3,6 +3,12 @@
   "installCommand": "corepack pnpm install --frozen-lockfile",
   "buildCommand": "corepack pnpm run build:dist",
   "env": {
+    "APP_PUBLIC_URL": "https://isabella-ai.visitarealdelmonte.online",
+    "PUBLIC_URL": "https://isabella-ai.visitarealdelmonte.online",
+    "ISABELLA_PUBLIC_URL": "https://isabella-ai.visitarealdelmonte.online",
+    "ALLOWED_ORIGINS": "https://isabella-ai.visitarealdelmonte.online",
+    "WEBAUTHN_RP_ID": "isabella-ai.visitarealdelmonte.online",
+    "WEBAUTHN_ORIGIN": "https://isabella-ai.visitarealdelmonte.online",
     "ISABELLA_KEYLESS_FREE_PROVIDER": "llm7,pollinations",
     "KEYLESS_FREE_PROVIDER_TIMEOUT_MS": "30000",
     "CHAT_CHAIN_BUDGET_MS": "45000",
