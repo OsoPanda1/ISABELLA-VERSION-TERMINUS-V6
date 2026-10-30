@@ -1,4 +1,12 @@
 import { createHash } from 'node:crypto';
+import {
+  arbitrateHybridExecution,
+  compileSkillProgram,
+  validateSkillProgram,
+  type HybridExecutionDecision,
+  type SkillProgram,
+  type SkillStep,
+} from './agentic-world';
 
 export type FederationId =
   | 'Sociologica'
@@ -46,7 +54,14 @@ export interface LatentPoint {
 }
 export interface IsabellaLedgerEntry {
   id: string;
-  kind: 'contra-auditoria' | 'simulacion-epistemologica' | 'heptafederacion' | 'entropia' | 'meta';
+  kind:
+    | 'contra-auditoria'
+    | 'simulacion-epistemologica'
+    | 'heptafederacion'
+    | 'entropia'
+    | 'skill-program'
+    | 'execution-decision'
+    | 'meta';
   timestamp: string;
   profile: IsabellaProfile;
   payload: unknown;
@@ -274,6 +289,37 @@ export class IsabellaEngine {
     const resultado = this.mitigator.evaluate(probabilidades);
     const ledger = this.appendLedger('entropia', 'general', { probabilidades, resultado });
     return { resultado, ledger };
+  }
+  compilarHabilidad(input: {
+    goal: string;
+    steps: readonly SkillStep[];
+    preconditions?: readonly string[];
+    postconditions?: readonly string[];
+    confidence?: number;
+  }): { program: SkillProgram; validation: ReturnType<typeof validateSkillProgram>; ledger: IsabellaLedgerEntry } {
+    const program = compileSkillProgram(input);
+    const validation = validateSkillProgram(program);
+    const ledger = this.appendLedger('skill-program', 'general', {
+      operation: 'compile',
+      program,
+      validation,
+    });
+    return { program, validation, ledger };
+  }
+  decidirEjecucion(input: {
+    program: SkillProgram;
+    actionChunkAvailable: boolean;
+    observationConfident: boolean;
+    progressConfirmed: boolean;
+    highImpact: boolean;
+  }): { decision: HybridExecutionDecision; ledger: IsabellaLedgerEntry } {
+    const decision = arbitrateHybridExecution(input);
+    const ledger = this.appendLedger('execution-decision', 'general', {
+      operation: 'arbitrate',
+      decision,
+      programDigest: input.program.digest,
+    });
+    return { decision, ledger };
   }
   chat({ input, profile = 'general' }: { input: string; profile?: IsabellaProfile }) {
     const text = normalizeText(input);
