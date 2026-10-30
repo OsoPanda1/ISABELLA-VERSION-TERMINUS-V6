@@ -493,19 +493,30 @@ export class CrossEncoderReranker {
     documents: Array<{ document: Document; score: number }>,
     topK: number
   ): Promise<Array<{ document: Document; score: number; rerankScore: number }>> {
-    // In production, would call cross-encoder model
-    // For now, return original scores with slight adjustment
-
-    return documents.slice(0, topK).map(({ document, score }, index) => ({
-      document,
-      score,
-      rerankScore: score * (1 - index * 0.01), // slight decay for position
-    }));
+    const queryTerms = new Set(this.tokenize(query));
+    return documents
+      .map(({ document, score }) => {
+        const terms = this.tokenize(document.content);
+        const overlap = terms.filter((term) => queryTerms.has(term)).length;
+        const lexicalBoost = queryTerms.size === 0 ? 0 : overlap / queryTerms.size;
+        return { document, score, rerankScore: score * 0.7 + lexicalBoost * 0.3 };
+      })
+      .sort((left, right) => right.rerankScore - left.rerankScore)
+      .slice(0, topK);
   }
 
   async scorePairs(query: string, documents: Document[]): Promise<Float32Array> {
-    // In production, would batch score query-document pairs
-    return new Float32Array(documents.length).fill(0.5);
+    return new Float32Array(
+      documents.map(({ content }) => {
+        const queryTerms = new Set(this.tokenize(query));
+        const terms = this.tokenize(content);
+        return queryTerms.size === 0 ? 0 : terms.filter((term) => queryTerms.has(term)).length / queryTerms.size;
+      })
+    );
+  }
+
+  private tokenize(value: string): string[] {
+    return value.toLocaleLowerCase().normalize('NFC').match(/[\\p{L}\\p{N}]+/gu) ?? [];
   }
 }
 
@@ -533,21 +544,29 @@ export class EvidenceSynthesizer {
     citations: Array<{ docId: string; text: string; start: number; end: number }>;
     confidence: number;
   }> {
-    // In production, would call LLM with documents as context
-    // For now, return structured placeholder
-
-    const citations = documents.slice(0, 5).map((doc, i) => ({
+    const maxTokens = config.maxTokens ?? 512;
+    const queryTerms = new Set(query.toLocaleLowerCase().normalize('NFC').match(/[\\p{L}\\p{N}]+/gu) ?? []);
+    const ranked = documents
+      .map((doc) => {
+        const sentences = doc.content.split(/(?<=[.!?])\\s+/).filter(Boolean);
+        const sentence = sentences
+          .map((value) => ({ value, score: (value.toLocaleLowerCase().match(/[\\p{L}\\p{N}]+/gu) ?? []).filter((term) => queryTerms.has(term)).length }))
+          .sort((left, right) => right.score - left.score)[0]?.value ?? doc.content;
+        return { doc, sentence: sentence.slice(0, Math.max(80, maxTokens * 4)) };
+      })
+      .slice(0, 5);
+    const citations = config.includeCitations === false ? [] : ranked.map(({ doc, sentence }) => ({
       docId: doc.id,
-      text: doc.content.slice(0, 200),
-      start: 0,
-      end: Math.min(200, doc.content.length),
+      text: sentence,
+      start: Math.max(0, doc.content.indexOf(sentence)),
+      end: Math.max(0, doc.content.indexOf(sentence)) + sentence.length,
     }));
-
-    return {
-      answer: `Based on ${documents.length} sources: [Synthesized answer would be generated here]`,
-      citations,
-      confidence: Math.min(0.9, 0.5 + documents.length * 0.05),
-    };
+    const prefix = config.style === 'bullet_points' ? '• ' : '';
+    const answer = ranked.length === 0
+      ? 'No se encontró evidencia suficiente para responder.'
+      : ranked.map(({ sentence }) => `${prefix}${sentence}`).join(config.style === 'bullet_points' ? '\\n' : ' ');
+    const confidence = ranked.length === 0 ? 0 : Math.min(0.95, 0.45 + ranked.length * 0.1 + (queryTerms.size > 0 ? 0.1 : 0));
+    return { answer, citations, confidence };
   }
 
   async synthesizeStreaming(
@@ -555,8 +574,10 @@ export class EvidenceSynthesizer {
     documents: Document[],
     onChunk: (chunk: string) => void
   ): Promise<{ answer: string; citations: unknown[] }> {
-    // Streaming synthesis
-    return { answer: '', citations: [] };
+    const result = await this.synthesize(query, documents, { includeCitations: true });
+    const chunks = result.answer.match(/.{1,120}(?:\\s|$)/g) ?? [result.answer];
+    for (const chunk of chunks) onChunk(chunk);
+    return { answer: result.answer, citations: result.citations };
   }
 }
 

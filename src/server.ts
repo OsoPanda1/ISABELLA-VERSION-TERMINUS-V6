@@ -539,6 +539,15 @@ void runtime.initPersistence().catch((error) => {
   const reasons = error instanceof AggregateError ? [...error.errors] : [error];
   for (const reason of reasons) {
     const message = reason instanceof Error ? reason.message : 'PERSISTENCE_INITIALIZATION_FAILED';
+    if (message === 'IKES_SUPABASE_HTTP_404') {
+      // A missing or unexposed Data API table is an infrastructure/configuration
+      // issue, not a reason to prevent the runtime from starting. IKES remains
+      // explicitly volatile until the Supabase migration is applied/exposed.
+      console.warn(
+        '[Genesis] IKES Supabase tables are unavailable (HTTP 404); continuing with volatile in-process memory. Apply supabase/migrations/20261017000001_ikes-memory.sql and expose the tables through the Data API before enabling durable persistence.'
+      );
+      continue;
+    }
     console.error('[Genesis] persistence initialization failed:', message);
   }
 });
