@@ -20,10 +20,23 @@ export interface FoundationalResult {
  * con memoria de contexto y fallback soberano garantizado.
  */
 export class IsabellaFoundationalLLM {
+  private readonly cache = new Map<string, { result: FoundationalResult; expiresAt: number }>();
+  private readonly cacheTtlMs = 60_000;
+
   constructor(private readonly runtime: IsabellaGenesisRuntime) {}
+
+  private cacheKey(request: FoundationalRequest): string {
+    return `${request.maxTokens ?? 512}:${request.systemPrompt.slice(0, 128)}:${request.input}`;
+  }
 
   async generate(request: FoundationalRequest): Promise<FoundationalResult> {
     const started = Date.now();
+    const key = this.cacheKey(request);
+    const cached = this.cache.get(key);
+    if (cached && cached.expiresAt > Date.now()) {
+      return { ...cached.result, latencyMs: Math.max(1, Date.now() - started) };
+    }
+
     const maxTokens = request.maxTokens ?? 512;
     const prompt = `${request.systemPrompt}\n\nSolicitud del usuario:\n${request.input}`;
 
@@ -34,12 +47,14 @@ export class IsabellaFoundationalLLM {
         maxTokens,
       });
       if (result.text && result.text.trim().length > 0) {
-        return {
+        const value: FoundationalResult = {
           text: result.text.trim(),
           engine: 'foundational',
           latencyMs: Math.max(1, Date.now() - started),
           modelId: result.modelId,
         };
+        this.cache.set(key, { result: value, expiresAt: Date.now() + this.cacheTtlMs });
+        return value;
       }
     } catch {
       // Degradar al motor local soberano.
@@ -47,12 +62,14 @@ export class IsabellaFoundationalLLM {
 
     // 2. Fallback local determinista enriquecido (nunca se presenta como modelo externo).
     const local = await createLocalEngine().generate({ prompt: request.input, maxTokens });
-    return {
+    const value: FoundationalResult = {
       text: local.text,
       engine: 'sovereign-fallback',
       latencyMs: Math.max(1, Date.now() - started),
       modelId: 'isabella-local-fallback',
     };
+    this.cache.set(key, { result: value, expiresAt: Date.now() + this.cacheTtlMs });
+    return value;
   }
 }
 

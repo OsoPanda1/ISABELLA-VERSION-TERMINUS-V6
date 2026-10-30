@@ -3667,6 +3667,32 @@ app.get('/api/v1/isabella/status', (_req, res) => {
   });
 });
 
+app.post('/api/v1/isabella/foundational', async (req, res) => {
+  if (!enforceRateLimit(req, res, publicCognitionLimiter, 'isabella-foundational')) return;
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const input = typeof body.input === 'string' ? body.input.trim() : '';
+    if (!input) {
+      res.status(400).json({ success: false, error: 'input es requerido' });
+      return;
+    }
+    const result = await foundationalLLM.generate({
+      input,
+      systemPrompt:
+        typeof body.systemPrompt === 'string'
+          ? body.systemPrompt
+          : 'Eres Isabella Villaseñor AI, LLM fundacional soberano de TAMV.',
+      maxTokens: typeof body.maxTokens === 'number' ? body.maxTokens : 512,
+    });
+    res.json({ success: true, ...result, timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
 // Hyper Skill Fabric — every capability remains behind Genesis governance.
 app.get('/api/v1/hsf/status', async (_req, res) => {
   res.json({
