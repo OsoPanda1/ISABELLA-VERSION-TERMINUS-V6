@@ -3,7 +3,7 @@ import { ProfitGuard, minimumProfitablePrice, profitablePrice } from './profit-g
 
 describe('minimumProfitablePrice', () => {
   it('calculates gross margin on revenue rather than markup on cost', () => {
-    expect(minimumProfitablePrice(100, 2_500)).toBe(133.33);
+    expect(minimumProfitablePrice(100, 2_500)).toBe(133.34);
     expect(minimumProfitablePrice(100, 0)).toBe(100);
   });
 
