@@ -210,6 +210,18 @@ const latinoGenesis = new LatinoGenesis(SEED_LATAM);
 // Por privacidad, sólo se activa con opt-in explícito del operador:
 // ISABELLA_KEYLESS_FREE_PROVIDER=llm7,pollinations (o on/true/1 para el orden por defecto).
 app.disable('x-powered-by');
+// Hardening de cabeceras HTTP (fail-closed por defecto).
+app.use((req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  const forwardedProto = String(req.headers['x-forwarded-proto'] ?? '').toLowerCase();
+  if (req.secure || forwardedProto.includes('https')) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
 // Detrás de un balanceador, req.ip sería la IP del proxy y todos los clientes compartirían cubeta de rate limit.
 // TRUST_PROXY=<saltos> (entero 1..10) habilita X-Forwarded-For; sin valor válido NO se confía en él.
 const trustProxyHops = parseTrustProxy(process.env.TRUST_PROXY);
