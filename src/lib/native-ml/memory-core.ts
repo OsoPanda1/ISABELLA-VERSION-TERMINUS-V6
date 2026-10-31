@@ -170,7 +170,7 @@ export class IsabellaMemoryCore {
     const out = new Float64Array(n);
     for (let i = 0; i < n; i++) {
       let sum = 0;
-      for (let j = 0; j < n; j++) sum += a[(j + i) % n]! * b[j]!;
+      for (let j = 0; j < n; j++) sum += a[(j - i + n) % n]! * b[j]!;
       out[i] = round(sum);
     }
     return this.normalize(out);

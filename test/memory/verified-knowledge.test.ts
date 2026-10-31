@@ -94,4 +94,100 @@ describe('verified knowledge store', () => {
     expect(out).toContain('[E5 · s · 2026-01-01T00:00:00.000Z]');
     expect(out.slice(-1)).toBe('…');
   });
+
+  it('selects MongoDB by default, supports explicit providers, and fails closed', () => {
+    expect(
+      createVerifiedKnowledgeBackend({ MONGODB_URI: 'mongodb://localhost/isabella' })
+    ).toBeInstanceOf(MongoVerifiedKnowledgeBackend);
+    expect(
+      createVerifiedKnowledgeBackend({
+        ISABELLA_VERIFIED_KNOWLEDGE_BACKEND: 'supabase',
+        SUPABASE_URL: 'https://example.supabase.co',
+        SUPABASE_SERVICE_ROLE_KEY: 'server-only-test-key',
+      })
+    ).toBeInstanceOf(SupabaseVerifiedKnowledgeBackend);
+    expect(
+      createVerifiedKnowledgeBackend({ ISABELLA_VERIFIED_KNOWLEDGE_BACKEND: 'memory' })
+    ).toBeInstanceOf(InMemoryVerifiedKnowledgeBackend);
+    expect(() => createVerifiedKnowledgeBackend({})).toThrow(
+      'VERIFIED_KNOWLEDGE_MONGODB_URI_MISSING'
+    );
+    expect(() =>
+      createVerifiedKnowledgeBackend({ ISABELLA_VERIFIED_KNOWLEDGE_BACKEND: 'unknown' })
+    ).toThrow('VERIFIED_KNOWLEDGE_BACKEND_INVALID');
+  });
+
+  it('writes append-only Mongo records and reuses its connection for reads', async () => {
+    const storedDocuments = [
+      {
+        _id: 'vkn-test-record',
+        content: 'Registro validado.',
+        source: 'fuente de prueba',
+        verifiedAt: '2026-10-31T00:00:00.000Z',
+        confidenceLevel: 'E3' as const,
+      },
+    ];
+    const cursor = {
+      sort: vi.fn(() => cursor),
+      limit: vi.fn(() => cursor),
+      toArray: vi.fn(async () => storedDocuments),
+    };
+    const collection = {
+      updateOne: vi.fn(async () => ({
+        acknowledged: true,
+        matchedCount: 0,
+        modifiedCount: 0,
+        upsertedCount: 1,
+      })),
+      find: vi.fn(() => cursor),
+    };
+    const database = { collection: vi.fn(() => collection) };
+    let client: MongoClient;
+    const clientMock = {
+      connect: vi.fn(async () => client),
+      db: vi.fn(() => database),
+      close: vi.fn(async () => undefined),
+    };
+    client = clientMock as unknown as MongoClient;
+    const backend = new MongoVerifiedKnowledgeBackend(
+      { uri: 'mongodb://localhost/isabella', databaseName: 'isabella' },
+      client
+    );
+    const entry = {
+      id: 'vkn-test-record',
+      content: 'Registro validado.',
+      source: 'fuente de prueba',
+      verifiedAt: '2026-10-31T00:00:00.000Z',
+      confidenceLevel: 'E3' as const,
+    };
+
+    await backend.save(entry);
+    const loaded = await backend.loadAll();
+
+    expect(clientMock.connect).toHaveBeenCalledTimes(1);
+    expect(collection.updateOne).toHaveBeenCalledWith(
+      { _id: entry.id },
+      {
+        $setOnInsert: {
+          _id: entry.id,
+          content: entry.content,
+          source: entry.source,
+          verifiedAt: entry.verifiedAt,
+          confidenceLevel: entry.confidenceLevel,
+        },
+      },
+      { upsert: true }
+    );
+    expect(loaded).toEqual([
+      {
+        id: entry.id,
+        content: entry.content,
+        source: entry.source,
+        verifiedAt: entry.verifiedAt,
+        confidenceLevel: entry.confidenceLevel,
+      },
+    ]);
+    await backend.close();
+    expect(clientMock.close).toHaveBeenCalledOnce();
+  });
 });
