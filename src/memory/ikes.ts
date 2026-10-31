@@ -114,6 +114,25 @@ export interface IKESEnginePersistencePort {
   health(): Promise<{ healthy: boolean; reason: string }>;
 }
 
+/** Default bound for a readiness probe waiting on startup hydration. */
+const DEFAULT_HYDRATION_PROBE_TIMEOUT_MS = 5_000;
+
+/**
+ * Resolves when `promise` settles or the timeout elapses, whichever comes
+ * first. The timer is always cleared so a slow probe never keeps the process
+ * alive after the response is written.
+ */
+function waitForSettlement(promise: Promise<unknown>, timeoutMs: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, timeoutMs);
+    const done = (): void => {
+      clearTimeout(timer);
+      resolve();
+    };
+    promise.then(done, done);
+  });
+}
+
 export class IKESEngine {
   private readonly sources = new Map<string, KnowledgeSource>();
   private readonly claims = new Map<string, KnowledgeClaim>();
@@ -121,6 +140,9 @@ export class IKESEngine {
   private persistenceInitialized = false;
   private pendingWrites: Promise<void> = Promise.resolve();
   private persistenceFailure: string | null = null;
+  /** In-flight hydration, shared so readiness can wait instead of flapping. */
+  private hydrationPromise: Promise<void> | null = null;
+  private hydrationFailure: string | null = null;
 
   constructor(persistence?: IKESEnginePersistencePort) {
     this.persistence = persistence;
@@ -129,41 +151,55 @@ export class IKESEngine {
   /** Hydrates only integrity-valid records. It never promotes epistemic state. */
   async initPersistence(): Promise<void> {
     if (!this.persistence || this.persistenceInitialized) return;
-    const snapshot = await this.persistence.load();
-    const nextSources = new Map<string, KnowledgeSource>();
-    for (const source of snapshot.sources) {
-      if (
-        !source.sourceId.trim() ||
-        !source.title.trim() ||
-        !/^[a-f0-9]{64}$/i.test(source.contentHash) ||
-        !Number.isFinite(Date.parse(source.retrievedAt))
-      ) {
-        throw new Error('IKES_PERSISTED_SOURCE_INVALID');
+    if (this.hydrationPromise) return this.hydrationPromise;
+    const persistence = this.persistence;
+    this.hydrationPromise = (async () => {
+      try {
+        const snapshot = await persistence.load();
+        const nextSources = new Map<string, KnowledgeSource>();
+        for (const source of snapshot.sources) {
+          if (
+            !source.sourceId.trim() ||
+            !source.title.trim() ||
+            !/^[a-f0-9]{64}$/i.test(source.contentHash) ||
+            !Number.isFinite(Date.parse(source.retrievedAt))
+          ) {
+            throw new Error('IKES_PERSISTED_SOURCE_INVALID');
+          }
+          const uri = new URL(source.uri);
+          if (uri.protocol !== 'https:' && uri.protocol !== 'http:')
+            throw new Error('IKES_PERSISTED_SOURCE_URI_INVALID');
+          nextSources.set(source.sourceId, Object.freeze({ ...source, uri: uri.toString() }));
+        }
+        const nextClaims = new Map<string, KnowledgeClaim>();
+        for (const claim of snapshot.claims) {
+          if (
+            !verifyKnowledgeClaimIntegrity(claim) ||
+            claim.sourceIds.some((id) => !nextSources.has(id)) ||
+            claim.evidenceIds.some((id) => !nextSources.has(id)) ||
+            !Number.isSafeInteger(claim.version) ||
+            claim.version < 1
+          ) {
+            throw new Error('IKES_PERSISTED_CLAIM_INTEGRITY_FAILURE');
+          }
+          nextClaims.set(claim.claimId, freezeClaim(claim));
+        }
+        this.sources.clear();
+        this.claims.clear();
+        for (const [id, source] of nextSources) this.sources.set(id, source);
+        for (const [id, claim] of nextClaims) this.claims.set(id, claim);
+        this.persistenceFailure = null;
+        this.hydrationFailure = null;
+        this.persistenceInitialized = true;
+      } catch (error) {
+        this.hydrationFailure =
+          error instanceof Error ? error.message : 'IKES_PERSISTENCE_HYDRATION_FAILED';
+        throw error;
+      } finally {
+        this.hydrationPromise = null;
       }
-      const uri = new URL(source.uri);
-      if (uri.protocol !== 'https:' && uri.protocol !== 'http:')
-        throw new Error('IKES_PERSISTED_SOURCE_URI_INVALID');
-      nextSources.set(source.sourceId, Object.freeze({ ...source, uri: uri.toString() }));
-    }
-    const nextClaims = new Map<string, KnowledgeClaim>();
-    for (const claim of snapshot.claims) {
-      if (
-        !verifyKnowledgeClaimIntegrity(claim) ||
-        claim.sourceIds.some((id) => !nextSources.has(id)) ||
-        claim.evidenceIds.some((id) => !nextSources.has(id)) ||
-        !Number.isSafeInteger(claim.version) ||
-        claim.version < 1
-      ) {
-        throw new Error('IKES_PERSISTED_CLAIM_INTEGRITY_FAILURE');
-      }
-      nextClaims.set(claim.claimId, freezeClaim(claim));
-    }
-    this.sources.clear();
-    this.claims.clear();
-    for (const [id, source] of nextSources) this.sources.set(id, source);
-    for (const [id, claim] of nextClaims) this.claims.set(id, claim);
-    this.persistenceFailure = null;
-    this.persistenceInitialized = true;
+    })();
+    return this.hydrationPromise;
   }
 
   private assertInitialized(): void {
@@ -184,7 +220,13 @@ export class IKESEngine {
     if (this.persistenceFailure) throw new Error(this.persistenceFailure);
   }
 
-  async persistenceProbe(): Promise<{
+  /**
+   * Reports durable-memory readiness. A cold start can be probed while hydration
+   * is still running, so the probe briefly waits for the in-flight promise
+   * instead of publishing a transient `pending` that makes readiness flap.
+   * `pending` means "still starting", never "silently healthy".
+   */
+  async persistenceProbe(options: { hydrationTimeoutMs?: number } = {}): Promise<{
     healthy: boolean;
     backend: string;
     reason: string;
@@ -198,7 +240,25 @@ export class IKESEngine {
         pending: false,
       };
     }
+    if (!this.persistenceInitialized && this.hydrationPromise) {
+      const timeoutMs = Math.max(
+        0,
+        options.hydrationTimeoutMs ?? DEFAULT_HYDRATION_PROBE_TIMEOUT_MS
+      );
+      await waitForSettlement(this.hydrationPromise, timeoutMs);
+    }
     if (!this.persistenceInitialized) {
+      if (this.hydrationFailure) {
+        const code = /^IKES_[A-Z0-9_]+$/u.test(this.hydrationFailure)
+          ? this.hydrationFailure
+          : 'IKES_PERSISTENCE_HYDRATION_FAILED';
+        return {
+          healthy: false,
+          backend: 'SUPABASE',
+          reason: `IKES startup hydration failed (${code}); memory stays process-local.`,
+          pending: false,
+        };
+      }
       try {
         const health = await this.persistence.health();
         return {
