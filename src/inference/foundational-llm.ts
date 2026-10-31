@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
-import { generateText, gateway } from 'ai';
 import { createLocalEngine } from './local-engine';
 import { sovereignRag } from './rag';
+import { TtlCache } from './cache';
+import { generateText } from 'ai';
+import { gateway } from '@ai-sdk/gateway';
 import type { IsabellaGenesisRuntime } from '../genesis/runtime';
 import type { GenerationResult } from './types';
 
@@ -11,7 +13,14 @@ export interface FoundationalRequest {
   maxTokens?: number;
   history?: ReadonlyArray<{ role: 'user' | 'assistant'; content: string }>;
   knowledgeContext?: string;
-  signal?: AbortSignal;
+  /** Aísla la caché por sesión; sin él, la caché solo aplica a peticiones sin contexto personal. */
+  sessionId?: string;
+}
+
+export interface FoundationalAttempt {
+  stage: 'gateway' | 'providers' | 'local';
+  ok: boolean;
+  reason?: string;
 }
 
 export type FoundationalAttempt = {
@@ -25,361 +34,287 @@ export interface FoundationalResult {
   engine: 'foundational' | 'sovereign-fallback';
   latencyMs: number;
   modelId?: string;
+  /** Diagnóstico de la cadena de degradación (sin datos del usuario). */
   attempts?: readonly FoundationalAttempt[];
   cached?: boolean;
 }
 
-export interface GatewayGenerationInput {
-  model: string;
-  system: string;
-  prompt: string;
-  maxTokens: number;
-  signal: AbortSignal;
-}
-
-export interface FoundationalLLMOptions {
-  gatewayGenerate?: (input: GatewayGenerationInput) => Promise<string>;
-  gatewayModel?: string;
+export interface FoundationalOptions {
+  /** Timeout por proveedor. */
   providerTimeoutMs?: number;
+  /** Fallos consecutivos antes de abrir el circuito de un proveedor. */
   breakerThreshold?: number;
   breakerCooldownMs?: number;
   cacheTtlMs?: number;
   cacheMaxEntries?: number;
+  /** Modelo del AI Gateway; `off` lo desactiva. Por defecto ISABELLA_GATEWAY_MODEL. */
+  gatewayModel?: string;
+  /** Inyección para pruebas. */
+  gatewayGenerate?: (args: {
+    system: string;
+    prompt: string;
+    maxTokens: number;
+    signal: AbortSignal;
+  }) => Promise<string>;
   now?: () => number;
 }
 
-type CacheEntry = {
-  result: FoundationalResult;
-  expiresAt: number;
-};
-
-const DEFAULT_GATEWAY_MODEL = 'nvidia/nemotron-3.5-lightning-free';
-const DEFAULT_PROVIDER_TIMEOUT_MS = 12_000;
-const DEFAULT_BREAKER_THRESHOLD = 3;
-const DEFAULT_BREAKER_COOLDOWN_MS = 60_000;
-const DEFAULT_CACHE_TTL_MS = 60_000;
-const DEFAULT_CACHE_MAX_ENTRIES = 500;
+const MAX_INPUT_CHARS = 8_000;
+const MAX_CONTEXT_CHARS = 6_000;
 const MAX_HISTORY_TURNS = 8;
-const MAX_INPUT_CHARS = 20_000;
-const MAX_CONTEXT_CHARS = 40_000;
+const MIN_TOKENS = 16;
+const MAX_TOKENS = 2_048;
+const DEFAULT_TOKENS = 512;
+const DEFAULT_GATEWAY_MODEL = 'nvidia/nemotron-3.5-lightning-free';
 
-class ProviderTimeoutError extends Error {
-  constructor() {
-    super('PROVIDER_TIMEOUT');
-    this.name = 'ProviderTimeoutError';
+class Breaker {
+  private failures = 0;
+  private openUntil = 0;
+  constructor(
+    private readonly threshold: number,
+    private readonly cooldownMs: number,
+    private readonly now: () => number
+  ) {}
+  allow(): boolean {
+    return this.now() >= this.openUntil;
   }
-}
-
-class RequestAbortedError extends Error {
-  constructor() {
-    super('REQUEST_ABORTED');
-    this.name = 'RequestAbortedError';
+  success(): void {
+    this.failures = 0;
+    this.openUntil = 0;
   }
-}
-
-function boundedInteger(value: number | undefined, fallback: number, min: number, max: number) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
-  return Math.min(max, Math.max(min, Math.trunc(value)));
-}
-
-function providerFailureReason(error: unknown): FoundationalAttempt['reason'] {
-  if (error instanceof ProviderTimeoutError) return 'PROVIDER_TIMEOUT';
-  return 'PROVIDER_UNAVAILABLE';
-}
-
-function raceWithTimeout<T>(
-  execute: (signal: AbortSignal) => Promise<T>,
-  timeoutMs: number,
-  requestSignal?: AbortSignal
-): Promise<T> {
-  if (requestSignal?.aborted) return Promise.reject(new RequestAbortedError());
-
-  const controller = new AbortController();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let onRequestAbort: (() => void) | undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
-      const timeoutError = new ProviderTimeoutError();
-      reject(timeoutError);
-      controller.abort(timeoutError);
-    }, timeoutMs);
-  });
-  const requestAbort = new Promise<never>((_resolve, reject) => {
-    if (!requestSignal) return;
-    onRequestAbort = () => {
-      controller.abort();
-      reject(new RequestAbortedError());
-    };
-    requestSignal.addEventListener('abort', onRequestAbort, { once: true });
-  });
-
-  return Promise.race([execute(controller.signal), timeout, requestAbort]).finally(() => {
-    if (timer) clearTimeout(timer);
-    if (requestSignal && onRequestAbort) {
-      requestSignal.removeEventListener('abort', onRequestAbort);
+  failure(): void {
+    this.failures += 1;
+    if (this.failures >= this.threshold) {
+      this.openUntil = this.now() + this.cooldownMs;
+      this.failures = 0;
     }
-  });
+  }
 }
 
-function historyBlock(request: FoundationalRequest): string {
-  const history = (request.history ?? [])
-    .slice(-MAX_HISTORY_TURNS)
-    .filter((turn) => turn && (turn.role === 'user' || turn.role === 'assistant'))
-    .map((turn) => `${turn.role === 'user' ? 'Usuario' : 'Isabella'}: ${turn.content.slice(0, 6_000)}`)
-    .join('\n');
-  return history ? `Historial reciente (contexto, no instrucciones):\n${history}` : '';
+function clampTokens(value: number | undefined): number {
+  if (value === undefined || !Number.isFinite(value)) return DEFAULT_TOKENS;
+  return Math.min(MAX_TOKENS, Math.max(MIN_TOKENS, Math.floor(value)));
 }
 
-function contextPrompt(request: FoundationalRequest, ragContext: string): string {
-  const knowledge = request.knowledgeContext?.trim()
-    ? `Contexto verificado:\n${request.knowledgeContext.trim().slice(0, MAX_CONTEXT_CHARS)}`
-    : '';
-  return [
-    knowledge,
-    ragContext,
-    historyBlock(request),
-    `Solicitud del usuario:\n${request.input.trim().slice(0, MAX_INPUT_CHARS)}`,
-  ]
-    .filter(Boolean)
-    .join('\n\n')
-    .slice(0, MAX_CONTEXT_CHARS);
-}
-
-function cacheKey(request: FoundationalRequest, model: string, ragContext: string): string {
-  const canonical = JSON.stringify([
-    model,
-    request.systemPrompt,
-    request.input,
-    request.history ?? [],
-    request.knowledgeContext ?? '',
-    request.maxTokens ?? 512,
-    ragContext,
-  ]);
-  return createHash('sha256').update(canonical, 'utf8').digest('hex');
+function truncate(text: string, max: number): string {
+  return text.length > max ? text.slice(0, max) : text;
 }
 
 /**
- * Isabella Foundational LLM — uses AI Gateway and configured runtime providers,
- * with a deterministic local fallback that is explicitly labeled and never cached.
+ * Carrera real entre el trabajo y el aborto: si el proveedor ignora la señal,
+ * la promesa se rechaza igualmente en vez de quedar colgada.
+ */
+function withTimeout<T>(ms: number, work: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error('PROVIDER_TIMEOUT'));
+    }, ms);
+    work(controller.signal).then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
+/**
+ * Isabella Foundational LLM — ORQUESTADOR de proveedores externos (no un modelo propio).
+ *
+ * Cadena de degradación: AI Gateway → proveedores registrados en el runtime → motor local
+ * determinista. Cada etapa recibe el MISMO prompt enriquecido (historial, conocimiento
+ * verificado, RAG), tiene timeout, interruptor de circuito y se registra en `attempts`.
+ * La respuesta del motor local siempre se etiqueta `sovereign-fallback`.
  */
 export class IsabellaFoundationalLLM {
-  private readonly cache = new Map<string, CacheEntry>();
-  private readonly inFlight = new Map<string, Promise<FoundationalResult>>();
-  private readonly gatewayModel: string;
-  private readonly gatewayGenerate: (input: GatewayGenerationInput) => Promise<string>;
-  private readonly providerTimeoutMs: number;
-  private readonly breakerThreshold: number;
-  private readonly breakerCooldownMs: number;
-  private readonly cacheTtlMs: number;
-  private readonly cacheMaxEntries: number;
+  private readonly cache: TtlCache<FoundationalResult>;
+  private readonly inflight = new Map<string, Promise<FoundationalResult>>();
+  private readonly gatewayBreaker: Breaker;
+  private readonly providersBreaker: Breaker;
   private readonly now: () => number;
-  private gatewayFailureCount = 0;
-  private gatewayOpenUntil = 0;
+  private readonly timeoutMs: number;
+  private readonly gatewayModel: string;
+  private readonly gatewayGenerate: NonNullable<FoundationalOptions['gatewayGenerate']>;
 
   constructor(
     private readonly runtime: IsabellaGenesisRuntime,
-    options: FoundationalLLMOptions = {}
+    options: FoundationalOptions = {}
   ) {
-    this.gatewayModel = options.gatewayModel?.trim() || DEFAULT_GATEWAY_MODEL;
-    this.gatewayGenerate = options.gatewayGenerate ?? this.generateWithGateway;
-    this.providerTimeoutMs = boundedInteger(
-      options.providerTimeoutMs,
-      DEFAULT_PROVIDER_TIMEOUT_MS,
-      20,
-      120_000
-    );
-    this.breakerThreshold = boundedInteger(
-      options.breakerThreshold,
-      DEFAULT_BREAKER_THRESHOLD,
-      1,
-      20
-    );
-    this.breakerCooldownMs = boundedInteger(
-      options.breakerCooldownMs,
-      DEFAULT_BREAKER_COOLDOWN_MS,
-      1_000,
-      300_000
-    );
-    this.cacheTtlMs = boundedInteger(options.cacheTtlMs, DEFAULT_CACHE_TTL_MS, 1_000, 300_000);
-    this.cacheMaxEntries = boundedInteger(
-      options.cacheMaxEntries,
-      DEFAULT_CACHE_MAX_ENTRIES,
-      1,
-      5_000
-    );
     this.now = options.now ?? Date.now;
+    this.timeoutMs = options.providerTimeoutMs ?? 20_000;
+    const threshold = options.breakerThreshold ?? 3;
+    const cooldown = options.breakerCooldownMs ?? 30_000;
+    this.gatewayBreaker = new Breaker(threshold, cooldown, this.now);
+    this.providersBreaker = new Breaker(threshold, cooldown, this.now);
+    this.cache = new TtlCache<FoundationalResult>(
+      options.cacheTtlMs ?? 60_000,
+      options.cacheMaxEntries ?? 500
+    );
+    this.gatewayModel =
+      options.gatewayModel ?? process.env.ISABELLA_GATEWAY_MODEL ?? DEFAULT_GATEWAY_MODEL;
+    this.gatewayGenerate =
+      options.gatewayGenerate ??
+      (async ({ system, prompt, maxTokens, signal }) => {
+        const result = await generateText({
+          model: gateway(this.gatewayModel),
+          system,
+          prompt,
+          maxOutputTokens: maxTokens,
+          temperature: 0.35,
+          abortSignal: signal,
+          providerOptions: { gateway: { disallowPromptTraining: true, sort: 'tps' } },
+        });
+        return result.text;
+      });
   }
 
-  private generateWithGateway = async ({
-    model,
-    system,
-    prompt,
-    maxTokens,
-    signal,
-  }: GatewayGenerationInput): Promise<string> => {
-    const result = await generateText({
-      model: gateway(model),
-      system,
-      prompt,
-      maxOutputTokens: maxTokens,
-      temperature: 0.35,
-      maxRetries: 0,
-      abortSignal: signal,
-      providerOptions: { gateway: { disallowPromptTraining: true, sort: 'tps' } },
-    });
-    return result.text;
-  };
-
-  private cleanupCache(): void {
-    const now = this.now();
-    for (const [key, entry] of this.cache) {
-      if (entry.expiresAt <= now) this.cache.delete(key);
-    }
-    while (this.cache.size >= this.cacheMaxEntries) {
-      const oldest = this.cache.keys().next().value as string | undefined;
-      if (!oldest) break;
-      this.cache.delete(oldest);
-    }
+  /** La clave incluye TODO lo que condiciona la respuesta, con hash completo (no prefijos). */
+  private cacheKey(request: FoundationalRequest, maxTokens: number): string {
+    return createHash('sha256')
+      .update(
+        JSON.stringify([
+          maxTokens,
+          request.sessionId ?? '',
+          request.systemPrompt,
+          request.input,
+          request.knowledgeContext ?? '',
+          request.history ?? [],
+        ])
+      )
+      .digest('hex');
   }
 
-  private readCache(key: string, started: number): FoundationalResult | null {
-    const entry = this.cache.get(key);
-    if (!entry) return null;
-    if (entry.expiresAt <= this.now()) {
-      this.cache.delete(key);
-      return null;
-    }
-    return {
-      ...entry.result,
-      attempts: entry.result.attempts ? [...entry.result.attempts] : [],
-      latencyMs: Math.max(1, this.now() - started),
-      cached: true,
-    };
+  private buildPrompt(request: FoundationalRequest, input: string): string {
+    const historyBlock = (request.history ?? [])
+      .slice(-MAX_HISTORY_TURNS)
+      .map(
+        (turn) =>
+          `${turn.role === 'user' ? 'Usuario' : 'Isabella'}: ${truncate(turn.content, 1_000)}`
+      )
+      .join('\n');
+    const knowledge = request.knowledgeContext?.trim();
+    const knowledgeBlock = knowledge
+      ? `Contexto verificado:\n${truncate(knowledge, MAX_CONTEXT_CHARS)}`
+      : '';
+    const ragHits = sovereignRag.search(input, 3).filter((h) => h.score > 0.05);
+    const ragBlock = ragHits.length
+      ? `Contexto recuperado (RAG léxico local):\n${ragHits.map((h) => `- ${h.text}`).join('\n')}`
+      : '';
+    return [
+      knowledgeBlock,
+      ragBlock,
+      historyBlock ? `Historial reciente:\n${historyBlock}` : '',
+      `Solicitud del usuario:\n${input}`,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
   }
 
   async generate(request: FoundationalRequest): Promise<FoundationalResult> {
-    const normalizedInput = request.input?.trim().slice(0, MAX_INPUT_CHARS) ?? '';
-    if (!normalizedInput) throw new Error('FOUNDATIONAL_LLM_INVALID_INPUT');
-
-    const normalizedRequest: FoundationalRequest = {
-      ...request,
-      input: normalizedInput,
-      maxTokens: boundedInteger(request.maxTokens, 512, 1, 4_096),
-    };
     const started = this.now();
-    const ragHits = sovereignRag.search(normalizedInput, 3).filter((hit) => hit.score > 0.05);
-    const ragContext = ragHits.length
-      ? `Contexto recuperado (RAG soberano; verificar con sus fuentes):\n${ragHits.map((hit) => `- ${hit.text}`).join('\n')}`
-      : '';
-    const prompt = contextPrompt(normalizedRequest, ragContext);
-    const key = cacheKey(normalizedRequest, this.gatewayModel, ragContext);
-    const cached = this.readCache(key, started);
-    if (cached) return cached;
+    const maxTokens = clampTokens(request.maxTokens);
+    const key = this.cacheKey(request, maxTokens);
 
-    const activeRequest = this.inFlight.get(key);
-    if (activeRequest) return activeRequest;
+    const cached = this.cache.get(key);
+    if (cached) {
+      return { ...cached, cached: true, latencyMs: Math.max(1, this.now() - started) };
+    }
 
-    const generation = this.generateUncached(normalizedRequest, prompt, started, key);
-    this.inFlight.set(key, generation);
+    // Single-flight: peticiones idénticas simultáneas comparten una sola llamada upstream.
+    const pending = this.inflight.get(key);
+    if (pending) return pending;
+
+    const work = this.run(request, maxTokens, started).then((result) => {
+      if (result.engine === 'foundational') this.cache.set(key, result);
+      return result;
+    });
+    this.inflight.set(key, work);
     try {
-      return await generation;
+      return await work;
     } finally {
-      if (this.inFlight.get(key) === generation) this.inFlight.delete(key);
+      this.inflight.delete(key);
     }
   }
 
-  private async generateUncached(
+  private async run(
     request: FoundationalRequest,
-    prompt: string,
-    started: number,
-    key: string
+    maxTokens: number,
+    started: number
   ): Promise<FoundationalResult> {
+    const input = truncate(request.input, MAX_INPUT_CHARS);
+    const enriched = this.buildPrompt(request, input);
     const attempts: FoundationalAttempt[] = [];
-    const now = this.now();
 
-    if (now < this.gatewayOpenUntil) {
-      attempts.push({ provider: 'ai-gateway', status: 'skipped', reason: 'CIRCUIT_OPEN' });
-    } else {
-      if (this.gatewayOpenUntil !== 0) {
-        this.gatewayOpenUntil = 0;
-        this.gatewayFailureCount = 0;
-      }
-      try {
-        const text = await raceWithTimeout(
-          (signal) =>
-            this.gatewayGenerate({
-              model: this.gatewayModel,
-              system: request.systemPrompt,
-              prompt,
-              maxTokens: request.maxTokens ?? 512,
-              signal,
-            }),
-          this.providerTimeoutMs,
-          request.signal
-        );
-        if (!text || !text.trim()) {
-          attempts.push({
-            provider: 'ai-gateway',
-            status: 'failure',
-            reason: 'EMPTY_PROVIDER_RESPONSE',
-          });
-          this.recordGatewayFailure();
-        } else {
-          this.gatewayFailureCount = 0;
-          this.gatewayOpenUntil = 0;
-          const result: FoundationalResult = {
-            text: text.trim(),
+    // 0. AI Gateway (si no está desactivado) con el prompt enriquecido completo.
+    if (this.gatewayModel !== 'off') {
+      if (!this.gatewayBreaker.allow()) {
+        attempts.push({ stage: 'gateway', ok: false, reason: 'CIRCUIT_OPEN' });
+      } else {
+        try {
+          const text = (
+            await withTimeout(this.timeoutMs, (signal) =>
+              this.gatewayGenerate({
+                system: request.systemPrompt,
+                prompt: enriched,
+                maxTokens,
+                signal,
+              })
+            )
+          ).trim();
+          if (!text) throw new Error('EMPTY_OUTPUT');
+          this.gatewayBreaker.success();
+          attempts.push({ stage: 'gateway', ok: true });
+          return {
+            text,
             engine: 'foundational',
             latencyMs: Math.max(1, this.now() - started),
             modelId: `ai-sdk-gateway:${this.gatewayModel}`,
-            attempts: [...attempts, { provider: 'ai-gateway', status: 'success' }],
+            attempts,
           };
-          this.writeCache(key, result);
-          return result;
+        } catch (error) {
+          this.gatewayBreaker.failure();
+          attempts.push({ stage: 'gateway', ok: false, reason: errorCode(error) });
         }
-      } catch (error) {
-        if (error instanceof RequestAbortedError) throw error;
-        attempts.push({
-          provider: 'ai-gateway',
-          status: 'failure',
-          reason: providerFailureReason(error),
-        });
-        this.recordGatewayFailure();
       }
     }
 
-    try {
-      const result: GenerationResult = await raceWithTimeout(
-        () => this.runtime.generate({ prompt: `${request.systemPrompt}\n\n${prompt}`, maxTokens: request.maxTokens ?? 512 }),
-        this.providerTimeoutMs,
-        request.signal
-      );
-      if (result.text?.trim()) {
-        attempts.push({ provider: 'runtime', status: 'success' });
-        const value: FoundationalResult = {
-          text: result.text.trim(),
+    // 1. Proveedores registrados en el runtime (Ollama, HF, etc.).
+    if (!this.providersBreaker.allow()) {
+      attempts.push({ stage: 'providers', ok: false, reason: 'CIRCUIT_OPEN' });
+    } else {
+      try {
+        const result: GenerationResult = await withTimeout(this.timeoutMs, () =>
+          this.runtime.generate({
+            prompt: `${request.systemPrompt}\n\n${enriched}`,
+            maxTokens,
+          })
+        );
+        const text = result.text?.trim() ?? '';
+        if (!text) throw new Error('EMPTY_OUTPUT');
+        this.providersBreaker.success();
+        attempts.push({ stage: 'providers', ok: true });
+        return {
+          text,
           engine: 'foundational',
           latencyMs: Math.max(1, this.now() - started),
           modelId: result.modelId,
           attempts,
         };
-        this.writeCache(key, value);
-        return value;
+      } catch (error) {
+        this.providersBreaker.failure();
+        attempts.push({ stage: 'providers', ok: false, reason: errorCode(error) });
       }
-      attempts.push({ provider: 'runtime', status: 'failure', reason: 'EMPTY_PROVIDER_RESPONSE' });
-    } catch (error) {
-      if (error instanceof RequestAbortedError) throw error;
-      attempts.push({
-        provider: 'runtime',
-        status: 'failure',
-        reason: providerFailureReason(error),
-      });
     }
 
-    const local = await createLocalEngine().generate({
-      prompt: request.input,
-      maxTokens: request.maxTokens ?? 512,
-    });
+    // 2. Fallback local determinista: nunca se presenta como modelo externo ni se cachea.
+    const local = await createLocalEngine().generate({ prompt: input, maxTokens });
+    attempts.push({ stage: 'local', ok: true });
     return {
       text: local.text,
       engine: 'sovereign-fallback',
@@ -388,27 +323,18 @@ export class IsabellaFoundationalLLM {
       attempts,
     };
   }
+}
 
-  private recordGatewayFailure(): void {
-    this.gatewayFailureCount += 1;
-    if (this.gatewayFailureCount >= this.breakerThreshold) {
-      this.gatewayOpenUntil = this.now() + this.breakerCooldownMs;
-    }
-  }
-
-  private writeCache(key: string, result: FoundationalResult): void {
-    if (result.engine !== 'foundational') return;
-    this.cleanupCache();
-    this.cache.set(key, {
-      result: { ...result, cached: undefined },
-      expiresAt: this.now() + this.cacheTtlMs,
-    });
-  }
+/** Código corto y seguro: no se filtran mensajes de error del proveedor. */
+function errorCode(error: unknown): string {
+  const message = error instanceof Error ? error.message : '';
+  if (message === 'PROVIDER_TIMEOUT' || message === 'EMPTY_OUTPUT') return message;
+  return 'PROVIDER_ERROR';
 }
 
 export function createFoundationalLLM(
   runtime: IsabellaGenesisRuntime,
-  options: FoundationalLLMOptions = {}
+  options?: FoundationalOptions
 ): IsabellaFoundationalLLM {
   return new IsabellaFoundationalLLM(runtime, options);
 }

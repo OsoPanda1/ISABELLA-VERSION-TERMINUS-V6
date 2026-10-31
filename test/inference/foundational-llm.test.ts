@@ -33,6 +33,14 @@ describe('IsabellaFoundationalLLM', () => {
     expect(gatewayGenerate).toHaveBeenCalledTimes(2);
   });
 
+  it('does not share cache between different sessions', async () => {
+    const gatewayGenerate = vi.fn(async () => 'ok');
+    const llm = createFoundationalLLM(failingRuntime, { gatewayGenerate, gatewayModel: 'm' });
+    await llm.generate({ ...base, input: 'q', sessionId: 's1' });
+    await llm.generate({ ...base, input: 'q', sessionId: 's2' });
+    expect(gatewayGenerate).toHaveBeenCalledTimes(2);
+  });
+
   it('serves identical requests from cache and dedupes concurrent calls', async () => {
     const gatewayGenerate = vi.fn(async () => 'ok');
     const llm = createFoundationalLLM(failingRuntime, { gatewayGenerate, gatewayModel: 'm' });
@@ -79,6 +87,18 @@ describe('IsabellaFoundationalLLM', () => {
       providerTimeoutMs: 20,
     });
     const r = await llm.generate({ ...base, input: 'lento' });
+    expect(r.engine).toBe('sovereign-fallback');
+    expect(r.attempts?.[0]?.reason).toBe('PROVIDER_TIMEOUT');
+  });
+
+  it('times out a provider that ignores the abort signal', async () => {
+    const gatewayGenerate = vi.fn(() => new Promise<string>(() => undefined));
+    const llm = createFoundationalLLM(failingRuntime, {
+      gatewayGenerate,
+      gatewayModel: 'm',
+      providerTimeoutMs: 20,
+    });
+    const r = await llm.generate({ ...base, input: 'colgado' });
     expect(r.engine).toBe('sovereign-fallback');
     expect(r.attempts?.[0]?.reason).toBe('PROVIDER_TIMEOUT');
   });

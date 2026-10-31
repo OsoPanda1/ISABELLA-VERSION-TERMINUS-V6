@@ -12,6 +12,7 @@
     "src/ui/integration.ts",
     "src/economy/revenue-fabric/storage.ts",
     "src/routes/revenue-fabric.ts",
+    "src/lib/native-ml",
     "src/multimodal",
     "src/security/bookpi-integrity.ts",
     "src/security/http-hardening.ts",

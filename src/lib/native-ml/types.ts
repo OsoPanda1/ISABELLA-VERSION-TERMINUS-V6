@@ -77,6 +77,19 @@ export interface FederatedUpdate {
   signature: string;
   createdAt: string;
 }
+/** Ruta de experto del facade MoE léxico (compatibilidad con el contrato de UI). */
+export interface ExpertRoute {
+  expertId: string;
+  name: string;
+  weight: number;
+  domain: string;
+}
+/** Decisión de enrutamiento del facade MoE léxico. */
+export interface MoeRoutingDecision {
+  selectedExperts: ExpertRoute[];
+  routingConfidence: number;
+  routingLatencyMs: number;
+}
 export interface FederatedRound {
   roundId: string;
   modelId: string;

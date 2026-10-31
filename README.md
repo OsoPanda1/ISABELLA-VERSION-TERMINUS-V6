@@ -87,6 +87,7 @@ Un rechazo 400 devuelve el motivo exacto (`TAMV_PAYLOAD_EMPTY`, `TAMV_BASE64_INV
 | **Territorio** | Identidad e integración TAMV (MSR, MDD, DreamSpaces, Blindajes, Kaos Audio) | `src/territory/` |
 | **Canon Ω∞** | Registro canónico de pilares, capas, implementaciones y madurez | `src/platform/omega-canon.ts`, `src/platform/catalog.ts` |
 | **Integraciones** | MCP, dominios Vercel, Hugging Face Hub, malla federada TAMV | `src/infra/vercel-domains.ts`, `src/federation/`, `/api/mcp` |
+| **Nexus** | Grafo con procedencia, agente con evidencia, workflows DAG, antifragilidad, cuántica local | `src/nexus/`, `src/routes/nexus.ts` |
 
 ## LLM fundacional nativo
 
@@ -98,6 +99,29 @@ Un rechazo 400 devuelve el motivo exacto (`TAMV_PAYLOAD_EMPTY`, `TAMV_BASE64_INV
 - Fallback de 4 niveles: `PROGRAM → ACTION_CHUNK → HUMAN_REVIEW → DEGRADED`.
 - Habilidades de alto impacto siempre terminan en `HUMAN_REVIEW`.
 - Catálogo gobernado de herramientas registrado en `src/tools/catalog.ts`; cada ejecución deja evidencia en BookPI antes de que su salida llegue al llamador.
+
+## Nexus — capa unificada de capacidades locales
+
+Nexus (`src/nexus/`) unifica patrones auditados de doce repositorios de referencia **sin copiar su código**. Todo es local, determinista y acotado; ninguna capacidad se declara en producción. El dictamen completo, incluidos los dos repositorios que no aportaron nada (`google/agi` es Android GPU Inspector y `w37fhy/QuantumultX` son reglas de proxy), está en [`docs/rfc/RFC-0010-nexus.md`](docs/rfc/RFC-0010-nexus.md).
+
+| Componente | Qué hace de verdad | Qué no hace |
+|---|---|---|
+| **Grafo de conocimiento** | Hechos con fuente obligatoria, detección de duplicado/conflicto, corrección versionada y retiro con razón | No resuelve conflictos solo; el hecho nunca se borra |
+| **Bucle de agente** | Planificar/ejecutar/observar con ledger de evidencia encadenado y memoria de skills | No usa LLM ni red; una skill aprendida no autoriza |
+| **Workflows DAG** | Orden topológico determinista, reintentos acotados y compensación inversa (saga) | Rechaza ciclos; no acepta código del cliente |
+| **Antifragilidad** | Ventana de salud, cortacircuitos con `half-open` y sustitución declarada | No ejecuta reparaciones: solo las propone con aprobación humana |
+| **Cuántica local** | Simulador statevector de hasta 12 qubits con muestreo determinista | No es hardware real ni reemplaza PennyLane |
+
+```text
+GET  /api/v1/nexus                    POST /api/v1/nexus/ask
+GET  /api/v1/nexus/knowledge          POST /api/v1/nexus/knowledge
+POST /api/v1/nexus/knowledge/:id/correct
+POST /api/v1/nexus/knowledge/:id/withdraw
+POST /api/v1/nexus/quantum/simulate   GET  /api/v1/nexus/health
+GET  /api/v1/nexus/repairs            POST /api/v1/nexus/diagnostics
+```
+
+Las escrituras exigen `GENESIS_ADMIN_API_TOKEN` verificado en el servidor y el cuerpo HTTP nunca concede aprobación. Lecturas: 30 req/min; escrituras: 10 req/min. Límites actuales: el grafo, el ledger y la memoria de skills viven **en memoria del proceso** y no sobreviven a un reinicio; todas las capacidades se declaran `production: false` hasta revisión humana nominal.
 
 ## Variables de entorno
 
@@ -123,7 +147,7 @@ corepack pnpm run build
 corepack pnpm run deploy:readiness
 ```
 
-Puertas duras del inventario y del canon: `test/deployment/route-inventory.test.ts` (las 304 rutas registradas en `src/` están congeladas; una extracción de módulo no puede perder ni renombrar un endpoint), `test/deployment/openapi-contract.test.ts` (ninguna operación documentada en `docs/api/openapi.yaml` puede ser fantasma: hoy 75 operaciones), `test/deployment/env-documentation.test.ts` y `test/deployment/readiness-consistency.test.ts`. La suite del Kaos Audio System son 8 archivos y 125 pruebas, con oráculo DFT ingenuo que valida la FFT y regresiones explícitas de los dos errores que ya se corrigieron.
+Puertas duras del inventario y del canon: `test/deployment/route-inventory.test.ts` (las 314 rutas registradas en `src/` están congeladas; una extracción de módulo no puede perder ni renombrar un endpoint), `test/deployment/openapi-contract.test.ts` (ninguna operación documentada en `docs/api/openapi.yaml` puede ser fantasma: hoy 75 operaciones), `test/deployment/env-documentation.test.ts` y `test/deployment/readiness-consistency.test.ts`. La suite del Kaos Audio System son 8 archivos y 125 pruebas, con oráculo DFT ingenuo que valida la FFT y regresiones explícitas de los dos errores que ya se corrigieron.
 
 El inventario se regenera con `node scripts/route-inventory.mjs`; las columnas Auth/Rate-limit/Validación son heurísticas de análisis estático, no pruebas en ejecución.
 
@@ -131,7 +155,19 @@ El inventario se regenera con `node scripts/route-inventory.mjs`; las columnas A
 
 Avance global de implementación: no publicado como porcentaje único. Mientras no exista un denominador de requisitos ponderados y reproducible, una cifra agregada sería especulación y no se presenta como hecho.
 
-Lo que sí es verificable en este SHA: typecheck sin errores, 304 rutas congeladas, 75 operaciones OpenAPI sin fantasmas, superficie TAMV montada en `src/server.ts` con autorización, rate limit, ledger y blackout, y su suite de 125 pruebas en verde. Estado documentado y limitaciones: [`docs/ESTADO-REAL-ACTUAL.md`](docs/ESTADO-REAL-ACTUAL.md).
+Lo que sí es verificable en este SHA: typecheck sin errores, 314 rutas congeladas, 75 operaciones OpenAPI sin fantasmas, superficie TAMV montada en `src/server.ts` con autorización, rate limit, ledger y blackout, y su suite de 125 pruebas en verde. Estado documentado y limitaciones: [`docs/ESTADO-REAL-ACTUAL.md`](docs/ESTADO-REAL-ACTUAL.md).
+
+## Despliegue en Vercel
+
+Topología desplegada el 2026-10-31:
+
+- El proyecto de Vercel está configurado como **Other** (`framework: null`), no como preset `Express`. El preset `Express` detectaba `src/server.ts` como entrypoint y lo compilaba con `tsc` dentro de la función (`/var/task/src/server.js`); Node ESM no resuelve los imports sin extensión que emite `tsc`, así que `/` fallaba con `ERR_MODULE_NOT_FOUND` mientras otras rutas respondían.
+- La única función es `api/index.js`, que importa el bundle `dist/server.js` producido por esbuild en `pnpm build:dist`.
+- `vercel.json` declara `outputDirectory: "public"` (solo contiene `robots.txt`) porque Vercel exige un directorio de salida estático aunque `rewrites` mande todo a `/api`.
+- `includeFiles` se limita a `dist/**`, `src/ui/**` y `src/assets/video/**`: exactamente lo que el runtime lee del disco. Ya no incluye todo `src/**`, que hacía que Vercel compilara TypeScript fuente dentro de la función.
+- El entrypoint raíz `server.js` se eliminó para que no exista un segundo candidato ambiguo.
+
+Evidencia observada en el deployment `dpl_C5xBWTQ2z2Zay969hoP6YrJp2Fhq`: `GET /` → 200 `text/html` (54 447 bytes), `GET /health` → 200, y `/ui/app.js`, `/styles/cinematic.css`, `/api/v1/nexus` y `/api/v1/nexus/health` → 200. Un 200 demuestra que el artefacto arranca y sirve; **no** demuestra autoridad, ni producción certificada, ni que los gates de abajo estén cerrados.
 
 ## Gates pendientes para liberar
 
@@ -141,7 +177,7 @@ Mientras estos gates no estén cerrados sobre el SHA candidato, el sistema **no*
 2. Persistencia durable verificada: secretos del entorno, migraciones aplicadas, adaptadores Postgres de API-keys y federación, durabilidad y recuperación de BookPI.
 3. Conversación generativa E2E con proveedor autorizado, incluyendo timeout, error y fallback comprobados.
 4. E2E de navegador en desktop y móvil: navegación, conversación, accesibilidad y errores.
-5. Despliegue, monitorización, backup/restore y rollback reales en el entorno objetivo; el incidente `500 FUNCTION_INVOCATION_FAILED` sigue abierto hasta reproducirse y cerrarse con evidencia.
+5. Despliegue, monitorización, backup/restore y rollback reales en el entorno objetivo. El incidente concreto `500 FUNCTION_INVOCATION_FAILED` en `/` fue reproducido, diagnosticado y corregido (ver «Despliegue en Vercel»); los demás puntos de este gate siguen abiertos.
 6. Revisión humana nominal de todo artefacto marcado `engine-generated`.
 
 ## Propiedad

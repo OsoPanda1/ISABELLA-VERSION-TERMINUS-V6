@@ -28,7 +28,6 @@ import { buildRedefinePlan, summarizeGates } from '../tamv/plan';
 import {
   TAMV_ENGINE_VERSION,
   TAMV_METHOD_IDS,
-  type TamvAnalysis,
   type TamvPreset,
   type TamvRedefinePlan,
 } from '../tamv/types';
@@ -177,10 +176,7 @@ export function registerTamvRoutes(deps: TamvRouteDeps): void {
     const preset: TamvPreset =
       requestedPresetId === null
         ? buildAdaptivePreset(analysis)
-        : applyFactoryPreset(analysis, requestedPresetId);
-    if (preset.source === 'factory' && !getFactoryPreset(preset.presetId)) {
-      return fail(res, 404, 'TAMV_PRESET_NOT_FOUND');
-    }
+        : (getFactoryPreset(requestedPresetId) ?? buildAdaptivePreset(analysis));
     const plan: TamvRedefinePlan = buildRedefinePlan(analysis, preset);
     deps.recordEvidence({
       type: 'TAMV_REDEFINE_PLAN',
@@ -200,11 +196,4 @@ export function registerTamvRoutes(deps: TamvRouteDeps): void {
       executionPerformed: false,
     });
   });
-}
-
-/** Preset de fábrica aplicado al análisis: reusa la cadena declarada del preset elegido. */
-function applyFactoryPreset(analysis: TamvAnalysis, presetId: string): TamvPreset {
-  const factory = getFactoryPreset(presetId);
-  if (factory !== null) return factory;
-  return buildAdaptivePreset(analysis);
 }

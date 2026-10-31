@@ -104,7 +104,7 @@ export function validInbox(value: unknown): value is InboxEntry {
     typeof entry.id === 'string' &&
     typeof entry.connectorId === 'string' &&
     typeof entry.receivedAt === 'string' &&
-    typeof entry.kind === 'string' &&
+    (CONNECTOR_KINDS as readonly string[]).includes(entry.kind as string) &&
     typeof entry.from === 'string' &&
     typeof entry.text === 'string' &&
     (entry.remoteMessageId === null || typeof entry.remoteMessageId === 'string')

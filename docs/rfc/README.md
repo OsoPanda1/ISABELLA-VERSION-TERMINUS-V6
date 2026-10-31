@@ -18,6 +18,7 @@
 | RFC-0007 | Despliegue y operaciones | CI, Docker, Vercel, rollback, observabilidad |
 | RFC-0008 | Voz y TTS | Genesis TTS, IVCC, consentimiento |
 | RFC-0009 | Sanitización documental | Archivo, unificación, reglas de borrado |
+| RFC-0010 | Nexus: capa unificada | Grafo con procedencia, agente, workflows, antifragilidad, cuántica local |
 
 ## Fuentes que permanecen intactas (load-bearing)
 

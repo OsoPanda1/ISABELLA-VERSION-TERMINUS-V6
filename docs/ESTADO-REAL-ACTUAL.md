@@ -47,7 +47,7 @@ conservada ni evidencia firmada en el entorno objetivo.
 | Motor u orquestador | `tested` | `test/tamv/engine.test.ts` |
 | Superficie HTTP `/api/v1/tamv` | `tested` | `test/routes/tamv.test.ts` + `docs/api/route-inventory.json` |
 | Render de audio, síntesis de voz, separación de fuentes, HRTF, LUFS, háptica | `specified` | sin implementación; el motor lo declara en cada respuesta |
-| Despliegue del Kaos Audio System en producción | `planned` | abierto el incidente `500 FUNCTION_INVOCATION_FAILED` |
+| Despliegue del Kaos Audio System en producción | `planned` | el 500 de `/` fue reproducido, corregido y verificado (RFC-0007); el Kaos Audio System aún no está desplegado |
 
 Registros actualizados con la madurez real: `ΩX-26` en `src/platform/omega-canon.ts` y
 `KaosAudioSystem` en `src/territory/tamv-integration.ts` (`tested`, con disclaimer de lo que no
