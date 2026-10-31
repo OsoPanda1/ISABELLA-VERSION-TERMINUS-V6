@@ -18,8 +18,7 @@ info:
     url: https://tamv.network
     email: ecastillotrejo1983@gmail.com
   license:
-    name: Apache License 2.0 (Code) / CC BY 4.0 (Docs) / ISCL-1.0
-    url: https://www.apache.org/licenses/LICENSE-2.0
+    name: "Propietaria — Todos los derechos reservados (TAMV ONLINE ENTERPRISE). Ver el archivo LICENSE en la raiz del repositorio."
 
 servers:
   - url: https://ais-dev-55cyeky5ipqlihjrmfbpqw-223897458933.us-east1.run.app

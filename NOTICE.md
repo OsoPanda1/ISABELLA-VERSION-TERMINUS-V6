@@ -11,8 +11,13 @@ cognitiva del ecosistema TAMV ONLINE (Nodo Cero: Real del Monte, Hidalgo, Méxic
 
 ## 2. Alcance del `LICENSE`
 
-El archivo `LICENSE` (MIT) es la única autorización de uso del **código** publicada por el titular,
-y se aplica tal como está escrito. Ese permiso **no** se extiende a:
+El archivo `LICENSE` es un aviso de **licencia propietaria, todos los derechos
+reservados**: no autoriza ningún uso del **código** ni de la documentación, y leer,
+clonar o descargar el repositorio no concede permiso alguno. Sólo un acuerdo de licencia
+escrito, otorgado por el titular, habilita el uso. Su §6 fija el alcance temporal frente
+al texto MIT que circuló en versiones anteriores.
+
+Incluso en el supuesto de que existiera tal acuerdo, la licencia **no** se extiende a:
 
 - la denominación **Isabella Villaseñor**, **TINA**, **Génesis Ω∞**, **TAMV ONLINE** y **Kaos
   Audio System**, junto con sus logotipos y versiones estilísticas;

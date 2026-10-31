@@ -622,8 +622,8 @@ La soberanía se trata como **restricción arquitectónica primaria**, no como c
 ### 10.1 Propiedad intelectual
 
 - Derechos de autor: © 2026 Edwin Oswaldo Castillo Trejo (Anubis Villaseñor).
-- Licencia de contenido académico: Creative Commons BY-SA 4.0 (propuesta de registro).
-- Licencia de código: MIT o Apache 2.0 (propuesta de registro).
+- Licencia de código: **propietaria, todos los derechos reservados**, según el texto vigente en `LICENSE`. Las opciones MIT y Apache 2.0 que este documento barajaba como propuesta de registro quedan retiradas: no otorgan permiso alguno.
+- Licencia de contenido académico: Creative Commons BY-SA 4.0 (propuesta de registro). El contenido distribuido en este repositorio se sujeta al aviso de `LICENSE`, que es el texto aquí vigente; cualquier registro externo se decide de forma independiente por el titular.
 
 ### 10.2 Limitación de responsabilidad
 

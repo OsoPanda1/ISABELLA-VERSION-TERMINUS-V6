@@ -4,7 +4,7 @@ Isabella es un **Runtime Web Operativo y Sistema Federado de Inteligencia Artifi
 
 > Estado del repositorio: `draft | engine-generated` hasta revisión humana nominal. No se declara conciencia, autonomía jurídica ni autoridad propia.
 >
-> Propiedad y uso: ver [`NOTICE`](NOTICE.md). El código publicado bajo `LICENSE` no transfiere la marca, la identidad territorial ni el diseño del Kaos Audio System.
+> Propiedad y uso: ver [`LICENSE`](LICENSE) y [`NOTICE`](NOTICE.md). La licencia publicada es **propietaria, con todos los derechos reservados**: clonar o leer el repositorio no autoriza ningún uso, y en ningún caso se transfieren la marca, la identidad territorial ni el diseño del Kaos Audio System.
 
 ## Contrato de evidencia
 
@@ -123,7 +123,7 @@ corepack pnpm run build
 corepack pnpm run deploy:readiness
 ```
 
-Puertas duras del inventario y del canon: `test/deployment/route-inventory.test.ts` (las 302 rutas registradas en `src/` están congeladas; una extracción de módulo no puede perder ni renombrar un endpoint), `test/deployment/openapi-contract.test.ts` (ninguna operación documentada en `docs/api/openapi.yaml` puede ser fantasma: hoy 73 operaciones), `test/deployment/env-documentation.test.ts` y `test/deployment/readiness-consistency.test.ts`. La suite del Kaos Audio System son 8 archivos y 125 pruebas, con oráculo DFT ingenuo que valida la FFT y regresiones explícitas de los dos errores que ya se corrigieron.
+Puertas duras del inventario y del canon: `test/deployment/route-inventory.test.ts` (las 304 rutas registradas en `src/` están congeladas; una extracción de módulo no puede perder ni renombrar un endpoint), `test/deployment/openapi-contract.test.ts` (ninguna operación documentada en `docs/api/openapi.yaml` puede ser fantasma: hoy 75 operaciones), `test/deployment/env-documentation.test.ts` y `test/deployment/readiness-consistency.test.ts`. La suite del Kaos Audio System son 8 archivos y 125 pruebas, con oráculo DFT ingenuo que valida la FFT y regresiones explícitas de los dos errores que ya se corrigieron.
 
 El inventario se regenera con `node scripts/route-inventory.mjs`; las columnas Auth/Rate-limit/Validación son heurísticas de análisis estático, no pruebas en ejecución.
 
@@ -131,7 +131,7 @@ El inventario se regenera con `node scripts/route-inventory.mjs`; las columnas A
 
 Avance global de implementación: no publicado como porcentaje único. Mientras no exista un denominador de requisitos ponderados y reproducible, una cifra agregada sería especulación y no se presenta como hecho.
 
-Lo que sí es verificable en este SHA: typecheck sin errores, 302 rutas congeladas, 73 operaciones OpenAPI sin fantasmas, superficie TAMV montada en `src/server.ts` con autorización, rate limit, ledger y blackout, y su suite de 125 pruebas en verde. Estado documentado y limitaciones: [`docs/ESTADO-REAL-ACTUAL.md`](docs/ESTADO-REAL-ACTUAL.md).
+Lo que sí es verificable en este SHA: typecheck sin errores, 304 rutas congeladas, 75 operaciones OpenAPI sin fantasmas, superficie TAMV montada en `src/server.ts` con autorización, rate limit, ledger y blackout, y su suite de 125 pruebas en verde. Estado documentado y limitaciones: [`docs/ESTADO-REAL-ACTUAL.md`](docs/ESTADO-REAL-ACTUAL.md).
 
 ## Gates pendientes para liberar
 
@@ -147,3 +147,13 @@ Mientras estos gates no estén cerrados sobre el SHA candidato, el sistema **no*
 ## Propiedad
 
 Copyright (c) 2026 **TAMV ONLINE ENTERPRISE** — **Edwin Oswaldo Castillo Trejo (Anubis Villaseñor)**. El TAMV Kaos Audio System, el canon Génesis Ω∞, la identidad Isabella Villaseñor y el branding TAMV ONLINE son creación y propiedad de su autor y no pueden utilizarse sin su consentimiento. Ver [`NOTICE`](NOTICE.md).
+
+### Licencia
+
+Este repositorio **no** está bajo una licencia de código abierto. Se publica bajo el aviso
+propietario de [`LICENSE`](LICENSE): todos los derechos reservados, y ningún uso —incluidas
+la copia, la redistribución, el despliegue como servicio y el aprovechamiento del código o
+de su documentación para entrenar modelos de IA— sin consentimiento previo, expreso y por
+escrito del titular. Las versiones anteriores circularon con un texto MIT; la sustitución es
+prospectiva y su alcance está declarado en el §6 de `LICENSE`. Cada dependencia y cada
+activo de terceros conservan la licencia que les dio su propio titular (§4).
