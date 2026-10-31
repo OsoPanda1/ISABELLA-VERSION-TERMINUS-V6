@@ -25,3 +25,7 @@ netlify/public/assets/
 .chrome-headless-profile*/
 
 .vercel
+
+# Configuración local del editor (extensiones recomendadas, preferencias por máquina):
+# versionarla impondría a todo clonador una extensión de terceros.
+.vscode/
