@@ -157,6 +157,18 @@ Avance global de implementación: no publicado como porcentaje único. Mientras 
 
 Lo que sí es verificable en este SHA: typecheck sin errores, 314 rutas congeladas, 75 operaciones OpenAPI sin fantasmas, superficie TAMV montada en `src/server.ts` con autorización, rate limit, ledger y blackout, y su suite de 125 pruebas en verde. Estado documentado y limitaciones: [`docs/ESTADO-REAL-ACTUAL.md`](docs/ESTADO-REAL-ACTUAL.md).
 
+## Despliegue en Vercel
+
+Topología desplegada el 2026-10-31:
+
+- El proyecto de Vercel está configurado como **Other** (`framework: null`), no como preset `Express`. El preset `Express` detectaba `src/server.ts` como entrypoint y lo compilaba con `tsc` dentro de la función (`/var/task/src/server.js`); Node ESM no resuelve los imports sin extensión que emite `tsc`, así que `/` fallaba con `ERR_MODULE_NOT_FOUND` mientras otras rutas respondían.
+- La única función es `api/index.js`, que importa el bundle `dist/server.js` producido por esbuild en `pnpm build:dist`.
+- `vercel.json` declara `outputDirectory: "public"` (solo contiene `robots.txt`) porque Vercel exige un directorio de salida estático aunque `rewrites` mande todo a `/api`.
+- `includeFiles` se limita a `dist/**`, `src/ui/**` y `src/assets/video/**`: exactamente lo que el runtime lee del disco. Ya no incluye todo `src/**`, que hacía que Vercel compilara TypeScript fuente dentro de la función.
+- El entrypoint raíz `server.js` se eliminó para que no exista un segundo candidato ambiguo.
+
+Evidencia observada en el deployment `dpl_C5xBWTQ2z2Zay969hoP6YrJp2Fhq`: `GET /` → 200 `text/html` (54 447 bytes), `GET /health` → 200, y `/ui/app.js`, `/styles/cinematic.css`, `/api/v1/nexus` y `/api/v1/nexus/health` → 200. Un 200 demuestra que el artefacto arranca y sirve; **no** demuestra autoridad, ni producción certificada, ni que los gates de abajo estén cerrados.
+
 ## Gates pendientes para liberar
 
 Mientras estos gates no estén cerrados sobre el SHA candidato, el sistema **no** se declara en producción:
@@ -165,7 +177,7 @@ Mientras estos gates no estén cerrados sobre el SHA candidato, el sistema **no*
 2. Persistencia durable verificada: secretos del entorno, migraciones aplicadas, adaptadores Postgres de API-keys y federación, durabilidad y recuperación de BookPI.
 3. Conversación generativa E2E con proveedor autorizado, incluyendo timeout, error y fallback comprobados.
 4. E2E de navegador en desktop y móvil: navegación, conversación, accesibilidad y errores.
-5. Despliegue, monitorización, backup/restore y rollback reales en el entorno objetivo; el incidente `500 FUNCTION_INVOCATION_FAILED` sigue abierto hasta reproducirse y cerrarse con evidencia.
+5. Despliegue, monitorización, backup/restore y rollback reales en el entorno objetivo. El incidente concreto `500 FUNCTION_INVOCATION_FAILED` en `/` fue reproducido, diagnosticado y corregido (ver «Despliegue en Vercel»); los demás puntos de este gate siguen abiertos.
 6. Revisión humana nominal de todo artefacto marcado `engine-generated`.
 
 ## Propiedad
