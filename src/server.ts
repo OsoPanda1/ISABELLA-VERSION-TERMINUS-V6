@@ -97,6 +97,7 @@ import { FixedWindowRateLimiter } from './security/rate-limit';
 import { createDefaultApiKeyStore } from './security/isabella-api-keys';
 import { createOptionalApiKeyAuthenticator, registerApiKeyRoutes } from './routes/api-keys';
 import { appDb } from './database/app-db';
+import { resolvePostgresConnectTimeoutMs } from './database/postgres-client';
 import { registerPersistentChatRoutes } from './routes/persistent-chat';
 import { createDefaultFederationRegistry } from './federation/connectors';
 import { registerFederationRoutes } from './routes/federation';
@@ -297,7 +298,7 @@ const subscriptionPersistencePool = subscriptionDatabaseUrl
   ? new Pool({
       connectionString: subscriptionDatabaseUrl,
       max: 5,
-      connectionTimeoutMillis: 3_000,
+      connectionTimeoutMillis: resolvePostgresConnectTimeoutMs(),
       idleTimeoutMillis: 30_000,
     })
   : undefined;
