@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 export type MemoryScope = 'immediate' | 'session' | 'project' | 'territorial' | 'historical';
 
 export interface MemoryEntry {
@@ -10,6 +13,44 @@ export interface MemoryEntry {
 
 export class HierarchicalMemory {
   private store = new Map<string, MemoryEntry>();
+  private readonly filePath: string | null;
+
+  constructor() {
+    const mode = (process.env.ISABELLA_MEMORY_STORE ?? 'file').trim().toLowerCase();
+    const vercel =
+      (process.env.VERCEL ?? '').trim() !== '' || (process.env.VERCEL_ENV ?? '').trim() !== '';
+    if (mode === 'file' && !vercel) {
+      this.filePath = path.resolve(
+        process.cwd(),
+        process.env.ISABELLA_MEMORY_STORE_PATH ?? '.data/memory.json'
+      );
+      this.load();
+    } else {
+      this.filePath = null;
+    }
+  }
+
+  private load(): void {
+    if (!this.filePath) return;
+    try {
+      if (!fs.existsSync(this.filePath)) return;
+      const raw = fs.readFileSync(this.filePath, 'utf8');
+      const parsed = JSON.parse(raw) as MemoryEntry[];
+      for (const e of parsed) this.store.set(this.k(e.scope, e.key), e);
+    } catch {
+      // ignore
+    }
+  }
+
+  private save(): void {
+    if (!this.filePath) return;
+    try {
+      fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
+      fs.writeFileSync(this.filePath, JSON.stringify([...this.store.values()], null, 2));
+    } catch {
+      // ignore
+    }
+  }
 
   private k(scope: MemoryScope, key: string): string {
     return `${scope}::${key}`;
@@ -24,6 +65,7 @@ export class HierarchicalMemory {
       createdAt: now,
       expiresAt: ttlMs ? now + ttlMs : null,
     });
+    this.save();
   }
 
   get(scope: MemoryScope, key: string): MemoryEntry | null {
@@ -50,11 +92,13 @@ export class HierarchicalMemory {
   clear(scope?: MemoryScope): void {
     if (!scope) {
       this.store.clear();
+      this.save();
       return;
     }
     for (const [k, v] of this.store) {
       if (v.scope === scope) this.store.delete(k);
     }
+    this.save();
   }
 }
 

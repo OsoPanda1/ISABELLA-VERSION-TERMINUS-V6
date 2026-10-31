@@ -13,6 +13,12 @@ const tsconfig = JSON.parse(read("tsconfig.json"));
 const layers = fs.existsSync("tsconfig.layers.json") ? JSON.parse(read("tsconfig.layers.json")) : { include: [] };
 const excluded = (tsconfig.exclude ?? []).filter((e) => e.startsWith("src/")).sort();
 const inLayers = new Set(layers.include ?? []);
+const layerIncludes = (layers.include ?? []).filter((i) => typeof i === "string");
+const coverage = (area) => {
+  if (inLayers.has(area)) return "sí";
+  const partial = layerIncludes.filter((i) => i.startsWith(`${area}/`));
+  return partial.length > 0 ? `parcial (${partial.join(", ")})` : "no";
+};
 const security = read("SECURITY.md");
 const limits = security.split(/\r?\n/).filter((l) => /^- .*(volatile|not configured|not durable)/i.test(l));
 
@@ -31,7 +37,7 @@ const body = [
   "",
   "| Área | Cubierta por `tsconfig.layers.json` |",
   "| --- | --- |",
-  ...excluded.map((e) => `| \`${e}\` | ${inLayers.has(e) ? "sí" : "no"} |`),
+  ...excluded.map((e) => `| \`${e}\` | ${coverage(e)} |`),
   "",
   "Una capa excluida del typecheck principal **no puede declararse lista para producción** (CAPABILITY ≠ PRODUCTION).",
   "",

@@ -127,6 +127,8 @@ import {
 } from './omega-runtime';
 import { KNOWLEDGE_ENTRIES } from './agents/knowledge';
 import { registerAgentRoutes } from './routes/agents';
+import { registerNexusRoutes } from './routes/nexus';
+import { createNexusRuntime } from './nexus/runtime';
 import { PLATFORM_PUBLIC_SURFACE, registerPlatformRoutes } from './routes/platform';
 
 import { createAtlasStoreFromEnv } from './atlas/persistence';
@@ -3570,6 +3572,7 @@ app.post('/api/v1/cognitive/request', async (req, res) => {
           input,
           systemPrompt,
           maxTokens: 512,
+          sessionId,
           history: sessionMemory
             .getSessionHistory(sessionId)
             .map((turn) => ({ role: turn.role as 'user' | 'assistant', content: turn.content })),
@@ -3933,6 +3936,7 @@ app.post('/api/isabella/chat', async (req, res) => {
       systemPrompt:
         'Eres Isabella Villaseñor AI, LLM fundacional soberano de TAMV. Responde en español latinoamericano mexicano.',
       maxTokens: Math.min(512, typeof body.maxTokens === 'number' ? body.maxTokens : 256),
+      sessionId: deriveSessionId(req.get('x-session-id')),
     });
     res.json({
       success: true,
@@ -4138,10 +4142,9 @@ app.post('/api/v1/isabella/foundational', async (req, res) => {
     const result = await foundationalLLM.generate({
       input,
       systemPrompt:
-        typeof body.systemPrompt === 'string'
-          ? body.systemPrompt
-          : 'Eres Isabella Villaseñor AI, LLM fundacional soberano de TAMV.',
-      maxTokens: typeof body.maxTokens === 'number' ? body.maxTokens : 512,
+        'Eres Isabella Villaseñor AI, LLM fundacional soberano de TAMV. Responde en español latinoamericano mexicano.',
+      maxTokens: Math.min(512, typeof body.maxTokens === 'number' ? body.maxTokens : 256),
+      sessionId: deriveSessionId(req.get('x-session-id')),
     });
     res.json({ success: true, ...result, timestamp: new Date().toISOString() });
   } catch (error) {
@@ -6025,6 +6028,23 @@ registerAgentRoutes({
   agent: localAgent,
   enforceRateLimit,
   rateLimiter: publicCognitionLimiter,
+  isAdminAuthorized: (req) =>
+    verifyBearerToken(req.get('authorization'), process.env.GENESIS_ADMIN_API_TOKEN) ===
+    'AUTHORIZED',
+});
+
+// ── Nexus: grafo con procedencia, bucle de agente, workflow, salud y cuántica local ──
+// Todo es local y determinista; las escrituras exigen bearer administrativo verificado
+// en el servidor. La fachada declara `production: false` en cada capacidad.
+const nexusRuntime = createNexusRuntime();
+const nexusReadLimiter = new FixedWindowRateLimiter(30, 60_000);
+const nexusWriteLimiter = new FixedWindowRateLimiter(10, 60_000);
+registerNexusRoutes({
+  app,
+  nexus: nexusRuntime,
+  enforceRateLimit,
+  rateLimiter: nexusReadLimiter,
+  writeRateLimiter: nexusWriteLimiter,
   isAdminAuthorized: (req) =>
     verifyBearerToken(req.get('authorization'), process.env.GENESIS_ADMIN_API_TOKEN) ===
     'AUTHORIZED',

@@ -22,7 +22,7 @@ No editar a mano: `node scripts/generate-status.mjs` regenera este archivo y `--
 | `src/hooks` | no |
 | `src/hypercore-runtime` | no |
 | `src/learning/federated` | sí |
-| `src/lib` | no |
+| `src/lib` | parcial (src/lib/native-ml) |
 | `src/memory/mesh` | sí |
 | `src/multimodal` | sí |
 | `src/observability` | sí |
