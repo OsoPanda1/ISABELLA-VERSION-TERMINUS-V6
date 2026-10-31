@@ -237,7 +237,8 @@ export function resolveCatalogSkill(
   const parsed = parseSkillInvocation(input);
   if (!parsed) return { code: 'AAS_INVOCATION_INVALID', error: 'Invocación de skill no válida.' };
   const entry = entries.find((item) => item.skill.id === parsed.requestedId);
-  if (!entry) return { code: 'SKILL_NOT_FOUND', error: `Skill no registrado: @${parsed.requestedId}` };
+  if (!entry)
+    return { code: 'SKILL_NOT_FOUND', error: `Skill no registrado: @${parsed.requestedId}` };
   return {
     code: 'SKILL_UNAVAILABLE',
     error: `Capacidad externa declarada, no ejecutable: @${entry.skill.id}`,

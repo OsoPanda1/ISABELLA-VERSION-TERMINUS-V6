@@ -11,7 +11,11 @@ export function canonicalize(value: unknown): string {
   }
   if (typeof value === 'object') {
     const keys = Object.keys(value as Record<string, unknown>).sort();
-    return '{' + keys.map((k) => JSON.stringify(k) + ':' + canonicalize((value as any)[k])).join(',') + '}';
+    return (
+      '{' +
+      keys.map((k) => JSON.stringify(k) + ':' + canonicalize((value as any)[k])).join(',') +
+      '}'
+    );
   }
   throw new Error('JCS: unsupported type');
 }

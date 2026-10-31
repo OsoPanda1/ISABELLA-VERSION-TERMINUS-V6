@@ -75,7 +75,9 @@ export function memoryTokens(text: string): string[] {
     .match(/[\p{L}\p{N}]+/gu);
   if (!terms || terms.length === 0) throw new Error('no_memory_tokens');
   const bounded = terms
-    .map((t) => (t.length > MEMORY_CORE_MAX_TOKEN_CHARS ? t.slice(0, MEMORY_CORE_MAX_TOKEN_CHARS) : t))
+    .map((t) =>
+      t.length > MEMORY_CORE_MAX_TOKEN_CHARS ? t.slice(0, MEMORY_CORE_MAX_TOKEN_CHARS) : t
+    )
     .slice(0, MEMORY_CORE_MAX_TOKENS);
   return [...new Set(bounded)];
 }

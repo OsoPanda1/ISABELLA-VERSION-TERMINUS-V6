@@ -17,7 +17,11 @@ export interface IntentResult {
 const PATTERNS: Array<{ domain: IntentDomain; patterns: RegExp[]; weight: number }> = [
   { domain: 'submission', patterns: [/enviar|submit|upload|subir|publicar/i], weight: 0.8 },
   { domain: 'library', patterns: [/biblioteca|library|documento|archivo|buscar/i], weight: 0.7 },
-  { domain: 'constitution', patterns: [/constituci.n|constitution|crown|manifiesto/i], weight: 0.9 },
+  {
+    domain: 'constitution',
+    patterns: [/constituci.n|constitution|crown|manifiesto/i],
+    weight: 0.9,
+  },
   { domain: 'governance', patterns: [/gobernanza|governance|policy|pol.tica|rbac/i], weight: 0.85 },
   { domain: 'ecosystem', patterns: [/ecosistema|ecosystem|tamv|isabella/i], weight: 0.75 },
   { domain: 'education', patterns: [/educaci.n|education|aprender|tutorial|curso/i], weight: 0.7 },

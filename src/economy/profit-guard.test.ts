@@ -32,7 +32,9 @@ describe('profitablePrice', () => {
 
   it('rejects non-finite, zero, negative, or excessive dynamic factors', () => {
     for (const demandFactor of [0, -1, 11, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(() => profitablePrice({ cost: 100, marginBps: 2_500, demandFactor })).toThrow(RangeError);
+      expect(() => profitablePrice({ cost: 100, marginBps: 2_500, demandFactor })).toThrow(
+        RangeError
+      );
     }
   });
 });
@@ -41,7 +43,12 @@ describe('ProfitGuard', () => {
   it('validates and rounds records before accumulating', () => {
     const guard = new ProfitGuard();
     guard.record(120.005, 80);
-    expect(guard.snapshot()).toEqual({ revenue: 120.01, cost: 80, profit: 40.01, margin: 40.01 / 120.01 });
+    expect(guard.snapshot()).toEqual({
+      revenue: 120.01,
+      cost: 80,
+      profit: 40.01,
+      margin: 40.01 / 120.01,
+    });
   });
 
   it('rejects negative and non-finite amounts', () => {

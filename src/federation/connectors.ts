@@ -160,7 +160,10 @@ export class FederationRegistry {
           ...this.state.connectors,
           ...file.connectors.filter((item) => !knownConnectors.has(item.id)),
         ];
-        const inbox = [...this.state.inbox, ...file.inbox.filter((item) => !knownInbox.has(item.id))]
+        const inbox = [
+          ...this.state.inbox,
+          ...file.inbox.filter((item) => !knownInbox.has(item.id)),
+        ]
           .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))
           .slice(0, MAX_INBOX);
         this.state = { connectors, inbox };

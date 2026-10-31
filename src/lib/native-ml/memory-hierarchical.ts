@@ -217,8 +217,8 @@ export class HierarchicalMemoryCore {
         authority: c.authority,
         sensitivity: c.sensitivity,
         score,
+        ...(c.sensitivity === 'public' && c.sourceUri ? { sourceUri: c.sourceUri } : {}),
       };
-      if (c.sensitivity === 'public' && c.sourceUri) match.sourceUri = c.sourceUri;
       matches.push(match);
     }
     matches.sort((a, b) => b.score - a.score || a.chunkId.localeCompare(b.chunkId));
@@ -342,11 +342,7 @@ export class HierarchicalMemoryCore {
   }
 
   /** Shared write path: freezes the record, seals provenance, fires the audit hook. */
-  private seal(
-    chunk: ChunkMetadata,
-    vector: HyperVector,
-    writtenAt: string
-  ): StoredChunkRecord {
+  private seal(chunk: ChunkMetadata, vector: HyperVector, writtenAt: string): StoredChunkRecord {
     const vectorHash = this.memory.hashVector(vector);
     const event = this.ledger.record({
       type: 'evaluation',

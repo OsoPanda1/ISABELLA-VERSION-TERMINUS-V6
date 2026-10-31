@@ -85,6 +85,8 @@ export const GOVERNED_ROUTE_SCOPES: ReadonlyArray<{
   { prefix: '/api/v1/tts', scope: 'VOICE_SYNTHESIS' },
   { prefix: '/api/v1/voice', scope: 'VOICE_SYNTHESIS' },
   { prefix: '/api/v1/audio-overview', scope: 'VOICE_SYNTHESIS' },
+  // TAMV Kaos Audio System: analiza PCM del cliente y declara planes sobre la cadena de voz.
+  { prefix: '/api/v1/tamv', scope: 'VOICE_SYNTHESIS' },
   // Inferencia de lenguaje: egreso de la conversación a proveedores externos.
   { prefix: '/api/v1/cognition', scope: 'LLM_INFERENCE' },
   { prefix: '/api/v1/cognitive/request', scope: 'LLM_INFERENCE' },

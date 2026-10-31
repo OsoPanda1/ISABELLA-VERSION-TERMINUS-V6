@@ -505,6 +505,22 @@ export const OMEGA_IMPLEMENTATIONS: readonly CanonImplementation[] = Object.free
     evidence: ['src/evolution/engine.ts', 'src/evolution/hypercore.ts'],
     note: 'Evoluciona artefactos bajo gobernanza; no se auto-despliega a producción.',
   },
+  {
+    id: 'ΩX-26',
+    order: 26,
+    title: 'TAMV Kaos Audio System',
+    summary:
+      'Análisis espectral nativo (FFT/Welch/transitorios/mono-suma), presets de fábrica, preset adaptativo y plan de redefinición, servido por /api/v1/tamv.',
+    maturity: 'verified',
+    evidence: [
+      'src/tamv/dsp.ts',
+      'src/tamv/engine.ts',
+      'src/routes/tamv.ts',
+      'test/tamv/dsp.test.ts',
+      'test/routes/tamv.test.ts',
+    ],
+    note: 'Analiza y planifica; no sintetiza voz ni renderiza audio — el render sigue sin ejecutar.',
+  },
 ]);
 
 export const OMEGA_MEMORY_TIERS: readonly CanonMemoryTier[] = Object.freeze([

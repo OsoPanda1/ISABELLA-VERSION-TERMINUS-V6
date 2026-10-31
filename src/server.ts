@@ -205,6 +205,7 @@ import { registerIvccRoutes } from './routes/ivcc';
 import { createIvccRuntimeFromEnv } from './ivcc';
 import { GenesisTtsEngine } from './tts/engine';
 import { registerTrafficLightRoutes } from './routes/traffic-light';
+import { registerTamvRoutes } from './routes/tamv';
 import { registerCivilizationRoutes } from './routes/civilization';
 import { registerHfHubRoutes } from './routes/hf-hub';
 import { registerIhecRoutes } from './routes/ihec';
@@ -1467,6 +1468,10 @@ const publicScanLimiter = new FixedWindowRateLimiter(30, 60_000);
 const publicEconomyLimiter = new FixedWindowRateLimiter(20, 60_000);
 const publicOmegaLimiter = new FixedWindowRateLimiter(20, 60_000);
 const linguisticsLimiter = new FixedWindowRateLimiter(20, 60_000);
+// TAMV Kaos Audio System: cada POST hace FFT sobre ~180 kB de PCM. El límite es de
+// CPU por instancia, no de cortesía: 8 análisis/min por cliente es el techo razonable
+// en serverless antes de que el request entre en timeout.
+const tamvAudioLimiter = new FixedWindowRateLimiter(8, 60_000);
 // SCER · libro económico append-only (evidencia, no movimiento de fondos). En proceso;
 // la persistencia durable se delega al ledger BookPI en una iteración posterior.
 const economicLedger = new EconomicLedger();
@@ -3770,12 +3775,18 @@ app.get('/api/v1/isabella/providers', (_req, res) => {
 app.post('/api/mcp', async (req, res) => {
   const mcpToken = process.env.MCP_SERVER_TOKEN;
   if (!mcpToken) {
-    res.status(503).json({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'MCP_SERVER_TOKEN not configured' } });
+    res.status(503).json({
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: -32001, message: 'MCP_SERVER_TOKEN not configured' },
+    });
     return;
   }
   const auth = req.get('authorization') ?? '';
   if (!verifyBearerToken(auth, mcpToken)) {
-    res.status(401).json({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unauthorized' } });
+    res
+      .status(401)
+      .json({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unauthorized' } });
     return;
   }
   const body = (req.body ?? {}) as Record<string, unknown>;
@@ -4023,7 +4034,9 @@ app.post('/api/v1/security/canonicalize', (req, res) => {
     const canonical = canonicalize(req.body ?? {});
     res.json({ success: true, canonical });
   } catch (error) {
-    res.status(400).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+    res
+      .status(400)
+      .json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -6211,6 +6224,30 @@ registerIvccRoutes({
       principal: 'human:public-session',
       riskTier: 'LOW',
       status: 'ADMITTED',
+    });
+  },
+});
+
+// ── TAMV Kaos Audio System (state: engine-generated) ─ DSP nativo en TypeScript: FFT
+// radix-2, centroide/flatness reales, bandas, transitorios, M/S. Mide el WAV que envía el
+// cliente, deriva un preset adaptativo y declara un plan de redefinición reversible con sus
+// puertas de validación. No reproduce, no sintetiza, no separa fuentes: `executionPerformed`
+// es `false` en las seis respuestas y las ocho etapas del plan quedan en `declared`.
+// Analizar NO autoriza ni ejecuta: CROWN sigue autorizando y BookPI sigue evidenciando.
+registerTamvRoutes({
+  app,
+  enforceRateLimit,
+  rateLimiter: tamvAudioLimiter,
+  authorizeAdmin: (req, res) => authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN'),
+  recordEvidence: (event) => {
+    bookPiLedger.append({
+      id: `tamv-${event.detailId}-${randomUUID().slice(0, 8)}`,
+      timestamp: new Date().toISOString(),
+      type: event.type,
+      methodId: event.methodId,
+      principal: event.principal,
+      riskTier: event.riskTier,
+      status: event.status,
     });
   },
 });

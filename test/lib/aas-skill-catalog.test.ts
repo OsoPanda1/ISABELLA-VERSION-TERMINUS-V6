@@ -26,6 +26,12 @@ function descriptor(overrides: Partial<AasSkillDescriptor> = {}): AasSkillDescri
   };
 }
 
+function parseFailureCode(input: string): string {
+  const parsed = parseAasFrontmatter(input);
+  if (parsed.ok) throw new Error('se esperaba un fallo de parseo');
+  return parsed.error;
+}
+
 function parseSafeSkillFrontmatter() {
   return parseAasFrontmatter(
     [
@@ -102,8 +108,8 @@ describe('AAS frontmatter parser', () => {
       ok: false,
       error: 'AAS_FRONTMATTER_MISSING',
     });
-    expect(parseAasFrontmatter('---\nrisk: safe\n---\n').error).toBe('AAS_NAME_MISSING');
-    expect(parseAasFrontmatter('---\nname: x\n---\n').error).toBe('AAS_DESCRIPTION_MISSING');
+    expect(parseFailureCode('---\nrisk: safe\n---\n')).toBe('AAS_NAME_MISSING');
+    expect(parseFailureCode('---\nname: x\n---\n')).toBe('AAS_DESCRIPTION_MISSING');
   });
 
   it('trata un riesgo ausente o ilegible como no seguro', () => {

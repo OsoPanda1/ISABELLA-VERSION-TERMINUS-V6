@@ -24,6 +24,7 @@ export const TAMV_MODULES = [
   'DreamSpaces',
   'Blindajes',
   'TerritorialArchitecture',
+  'KaosAudioSystem',
 ] as const;
 
 export type TamvModule = (typeof TAMV_MODULES)[number];
@@ -67,6 +68,13 @@ export const TAMV_INTEGRATION_MAP: Readonly<Record<TamvModule, TamvModuleDescrip
       role: 'contexto e identidad territorial',
       maturity: 'implemented',
       disclaimer: 'Contexto e identidad, no restricción técnica.',
+    },
+    KaosAudioSystem: {
+      module: 'KaosAudioSystem',
+      role: 'análisis espectral, presets y plan de redefinición de audio',
+      maturity: 'tested',
+      disclaimer:
+        'Analiza señal real y planifica; no sintetiza voz ni renderiza audio, y las cadenas de downstream siguen siendo conceptuales.',
     },
   });
 

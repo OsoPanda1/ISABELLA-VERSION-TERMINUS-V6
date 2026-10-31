@@ -1628,3 +1628,91 @@ paths:
           description: No autorizado
         "503":
           description: FAIL (errores bloqueantes) o token de administración no configurado
+  /api/v1/tamv/status:
+    get:
+      summary: Estado del motor TAMV Kaos Audio System
+      description: Declara versión, contenedores soportados, límites y qué capacidades NO están activas (reproducción en tiempo real, háptico, GPU). Público y honesto sobre su alcance.
+      operationId: getTamvStatus
+      responses:
+        "200":
+          description: Estado del runtime; audioRendered y executionPerformed siempre false
+  /api/v1/tamv/presets:
+    get:
+      summary: Catálogo de presets acústicos de fábrica
+      description: Once presets declarativos con su matriz (entorno, contenido, emoción, espacialidad, háptico) y cadena de etapas DSP. Son parámetros, no audio renderizado.
+      operationId: listTamvPresets
+      responses:
+        "200":
+          description: Lista de presets de fábrica
+  /api/v1/tamv/presets/{presetId}:
+    get:
+      summary: Detalle de un preset de fábrica
+      description: Devuelve la cadena DSP completa y la geometría espacial declarada del preset. 404 si el identificador no existe.
+      operationId: getTamvPreset
+      parameters:
+        - name: presetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Preset encontrado
+        "404":
+          description: TAMV_PRESET_NOT_FOUND
+  /api/v1/tamv/analyze:
+    post:
+      summary: Análisis espectral de un WAV (DSP nativo)
+      description: Decodifica WAV (PCM 8/16/24/32 o float 32), calcula FFT radix-2 con ventana de Hann, centroide, flatness, bandas, flujo espectral, transitorios, rango dinámico y correlación M/S. No reproduce ni sintetiza. 400 si el contenedor o la duración son inválidos.
+      operationId: postTamvAnalyze
+      security:
+        - AdminBearer: []
+      responses:
+        "200":
+          description: Features, predicción de contenido y monitor; authorizationPerformed y executionPerformed false
+        "400":
+          description: TAMV_PAYLOAD_INVALID o código de fallo del decodificador
+        "401":
+          description: No autorizado
+        "429":
+          description: Límite de CPU por cliente alcanzado
+        "503":
+          description: Token de administración no configurado
+  /api/v1/tamv/adaptive-preset:
+    post:
+      summary: Preset adaptativo derivado del audio enviado
+      description: Reglas deterministas sobre las mediciones reales: ganancia hacia -16 dBFS RMS, ancho según complejidad espacial, techo según headroom y patrón háptico según densidad de transitorios. Mismo audio produce mismo presetId.
+      operationId: postTamvAdaptivePreset
+      security:
+        - AdminBearer: []
+      responses:
+        "200":
+          description: Preset adaptativo y preset de fábrica más cercano
+        "400":
+          description: Payload inválido o no decodificable
+        "401":
+          description: No autorizado
+        "429":
+          description: Límite de CPU por cliente alcanzado
+        "503":
+          description: Token de administración no configurado
+  /api/v1/tamv/redefine-plan:
+    post:
+      summary: Plan de redefinición reversible (8 etapas declaradas)
+      description: Genera el plan con acción compensadora por etapa y seis puertas de validación, firmado con digest SHA-256 sobre JSON canónico. Ninguna etapa ejecuta DSP: stagesExecuted es 0 y audioRendered false.
+      operationId: postTamvRedefinePlan
+      security:
+        - AdminBearer: []
+      responses:
+        "200":
+          description: Plan declarado con resumen de puertas
+        "400":
+          description: Payload inválido o no decodificable
+        "401":
+          description: No autorizado
+        "404":
+          description: TAMV_PRESET_NOT_FOUND si presetId no existe
+        "429":
+          description: Límite de CPU por cliente alcanzado
+        "503":
+          description: Token de administración no configurado

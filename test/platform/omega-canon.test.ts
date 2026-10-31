@@ -37,7 +37,7 @@ describe("Génesis Ω∞ canonical registry", () => {
     expect(payload.counts).toEqual({
       pillars: 7,
       architectureLayers: 14,
-      implementations: 25,
+      implementations: 26,
       memoryTiers: 4,
       crownLevels: 7,
       agents: 12,
@@ -45,7 +45,7 @@ describe("Génesis Ω∞ canonical registry", () => {
       securityLayers: 7,
       foundationGenerations: 3,
     });
-    expect(payload.maturity).toEqual({ verified: 4, implemented: 6, partial: 12, specified: 3 });
+    expect(payload.maturity).toEqual({ verified: 5, implemented: 6, partial: 12, specified: 3 });
     const sum = MATURITIES.reduce((total, maturity) => total + payload.maturity[maturity], 0);
     expect(sum).toBe(payload.counts.implementations);
   });
@@ -107,7 +107,7 @@ describe("Génesis Ω∞ canonical registry", () => {
     expect(payload.contract).toBe(PLATFORM_CONTRACT_VERSION);
     expect(payload.counts).toEqual({ pages: 17, groups: 5, chatSurfaces: 1 });
     expect(payload.pages.some((entry) => entry.path === "/platform/canon")).toBe(true);
-    expect(payload.canon.counts.implementations).toBe(25);
+    expect(payload.canon.counts.implementations).toBe(26);
     expect(payload.canon.canonical.productionClaim).toBe(false);
     expect(payload.disclaimers.some((line) => line.includes("canon Génesis Ω∞"))).toBe(true);
   });

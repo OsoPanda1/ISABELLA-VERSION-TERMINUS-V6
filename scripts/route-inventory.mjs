@@ -149,7 +149,14 @@ function domainToken(routePath) {
 }
 
 function controlsFor(segment) {
-  const auth = /authorizeApiToken\s*\(|verifyBearerToken\s*\(|assertBalancedAuthority\s*\(/.test(segment);
+  // `authorizeAdmin(...)` es el nombre del control ya extraído del monolito: el módulo de rutas
+  // recibe el callback por dependencias y `src/server.ts` lo alambrea siempre a
+  // `authorizeApiToken`/`authorizeProviderRoute`. Sin reconocerlo, el inventario declaraba
+  // `auth: no` en rutas que sí exigen token.
+  const auth =
+    /authorizeApiToken\s*\(|verifyBearerToken\s*\(|assertBalancedAuthority\s*\(|authorizeAdmin\s*\(|authorizeProviderRoute\s*\(/.test(
+      segment,
+    );
   const rateLimit = /enforceRateLimit\s*\(/.test(segment);
   const touchesInput = /req\.(body|params|query)/.test(segment);
   const validates =
@@ -256,7 +263,8 @@ ${rows || "| — | _sin rutas parseables_ | — | — | — | — | — | — |"
 
 > Las columnas **Auth**, **Rate-limit** y **Validación** son heurísticas de análisis
 > estático sobre el cuerpo del handler (presencia de \`authorizeApiToken\` /
-> \`verifyBearerToken\` / \`assertBalancedAuthority\`, \`enforceRateLimit\` y guardas de
+> \`verifyBearerToken\` / \`assertBalancedAuthority\` / \`authorizeAdmin\` /
+> \`authorizeProviderRoute\`, \`enforceRateLimit\` y guardas de
 > entrada). No son una prueba en ejecución.
 
 ## Cómo regenerar
