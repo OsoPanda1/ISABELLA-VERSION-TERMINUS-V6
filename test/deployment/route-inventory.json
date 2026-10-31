@@ -5,6 +5,8 @@
   "DELETE /api/v1/ivcc/memory",
   "DELETE /api/v1/tts/memory",
   "GET /",
+  "GET /api/skills/catalog",
+  "GET /api/skills/catalog/:id",
   "GET /api/v1/admin/api-keys",
   "GET /api/v1/agents",
   "GET /api/v1/audit",

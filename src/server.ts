@@ -215,6 +215,7 @@ import { registerPipelineRoutes } from './routes/pipeline';
 import { registerYunEventRoutes } from './routes/yun-events';
 import { registerEconomyRoutes } from './routes/economy';
 import { registerNativeEnginesRoutes } from './routes/native-engines';
+import { registerSkillCatalogRoutes } from './routes/skill-catalog';
 import { registerTreasuryRoutes } from './routes/treasury';
 import { registerOmegaRoutes } from './routes/omega';
 import { registerRevenueFabricRoutes } from './routes/revenue-fabric';
@@ -6373,6 +6374,16 @@ registerNativeEnginesRoutes({
   enforceRateLimit,
   rateLimiter: publicCognitionLimiter,
   authorizeAdmin: (req, res) => authorizeApiToken(req, res, 'GENESIS_ADMIN_API_TOKEN'),
+});
+
+// ── Catálogo de skills (state: draft | engine-generated) ─ introspección GET de sólo
+// lectura: revela el estado de capacidad declarado por cada registro de ISABELLA_SKILLS y
+// si pasa el portón del registro. Declarar capacidad no otorga autoridad ni ejecuta
+// efectos; la ejecución sigue gobernada y el catálogo no inventa habilidades.
+registerSkillCatalogRoutes({
+  app,
+  enforceRateLimit,
+  rateLimiter: publicCognitionLimiter,
 });
 
 // ── SCER Economy API v3 (state: draft | engine-generated) ─ núcleo económico aditivo:

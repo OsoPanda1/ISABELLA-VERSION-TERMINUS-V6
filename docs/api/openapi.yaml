@@ -1628,6 +1628,32 @@ paths:
           description: No autorizado
         "503":
           description: FAIL (errores bloqueantes) o token de administración no configurado
+  /api/skills/catalog:
+    get:
+      summary: Catálogo de skills registradas
+      description: Introspección de sólo lectura del registro ISABELLA_SKILLS agrupado por carpeta, con el estado de capacidad declarado y si pasa el portón del registro. Declarar capacidad no otorga autoridad ni ejecuta efectos.
+      operationId: listSkillCatalog
+      responses:
+        "200":
+          description: Resumen, estados de capacidad y grupos de skills
+  /api/skills/catalog/{id}:
+    get:
+      summary: Vista de una skill por identificador
+      description: Devuelve la capacidad declarada y el estado del portón para una skill. 400 si el id viola el esquema SkillId, 404 si no está registrada; sin eco de la entrada.
+      operationId: getSkillCatalogEntry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Vista de la skill solicitada
+        "400":
+          description: SKILL_ID_INVALID
+        "404":
+          description: SKILL_NOT_FOUND
   /api/v1/tamv/status:
     get:
       summary: Estado del motor TAMV Kaos Audio System
@@ -1681,7 +1707,7 @@ paths:
   /api/v1/tamv/adaptive-preset:
     post:
       summary: Preset adaptativo derivado del audio enviado
-      description: Reglas deterministas sobre las mediciones reales: ganancia hacia -16 dBFS RMS, ancho según complejidad espacial, techo según headroom y patrón háptico según densidad de transitorios. Mismo audio produce mismo presetId.
+      description: "Reglas deterministas sobre las mediciones reales: ganancia hacia -16 dBFS RMS, ancho según complejidad espacial, techo según headroom y patrón háptico según densidad de transitorios. Mismo audio produce mismo presetId."
       operationId: postTamvAdaptivePreset
       security:
         - AdminBearer: []
@@ -1699,7 +1725,7 @@ paths:
   /api/v1/tamv/redefine-plan:
     post:
       summary: Plan de redefinición reversible (8 etapas declaradas)
-      description: Genera el plan con acción compensadora por etapa y seis puertas de validación, firmado con digest SHA-256 sobre JSON canónico. Ninguna etapa ejecuta DSP: stagesExecuted es 0 y audioRendered false.
+      description: "Genera el plan con acción compensadora por etapa y seis puertas de validación, firmado con digest SHA-256 sobre JSON canónico. Ninguna etapa ejecuta DSP: stagesExecuted es 0 y audioRendered false."
       operationId: postTamvRedefinePlan
       security:
         - AdminBearer: []

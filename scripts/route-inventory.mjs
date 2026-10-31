@@ -124,10 +124,21 @@ function collectRouteReferences() {
     references.get(routePath).push(basis);
   };
 
-  // Pruebas que citan literalmente la ruta.
+  // Pruebas que citan literalmente la ruta. El patrón es `/api/` a secas, no sólo
+  // `/api/v1/`: las superficies `/api/mcp`, `/api/isabella/*`, `/api/v3/*` y
+  // `/api/skills/*` también tienen prueba propia, y limitar el regex las declaraba
+  // "sin contrato" cuando el contrato sí existe (falso negativo, no estado real).
   for (const file of listFiles(TEST_DIR, (f) => /\.(test|spec)\.(ts|mjs|js)$/.test(f))) {
     const text = readText(file);
-    for (const m of text.matchAll(/["'`](\/api\/v1\/[^"'`\s]+)["'`]/g)) {
+    for (const m of text.matchAll(/["'`](\/api\/[^"'`\s]+)["'`]/g)) {
+      record(m[1], `test:${path.relative(REPO_ROOT, file).replace(/\\/g, "/")}`);
+    }
+    // Muchas pruebas citan la ruta junto con su método en una sola cadena
+    // (`'GET /api/skills/catalog'`, como clave del mapa de handlers). Eso también es
+    // evidencia de que la prueba ejercita la ruta, así que se registra igual.
+    for (const m of text.matchAll(
+      /["'`]\s*(?:GET|POST|PUT|PATCH|DELETE)\s+(\/api\/[^"'`\s]+)\s*["'`]/g,
+    )) {
       record(m[1], `test:${path.relative(REPO_ROOT, file).replace(/\\/g, "/")}`);
     }
   }
@@ -135,7 +146,7 @@ function collectRouteReferences() {
   // Documentación de API (blueprint canónico).
   if (fs.existsSync(API_BLUEPRINT)) {
     const text = readText(API_BLUEPRINT);
-    for (const m of text.matchAll(/`(?:GET|POST|PUT|PATCH|DELETE)\s+(\/api\/v1\/[^`\s]+)`/g)) {
+    for (const m of text.matchAll(/`(?:GET|POST|PUT|PATCH|DELETE)\s+(\/api\/[^`\s]+)`/g)) {
       record(m[1], `docs:${path.relative(REPO_ROOT, API_BLUEPRINT).replace(/\\/g, "/")}`);
     }
   }
@@ -144,7 +155,11 @@ function collectRouteReferences() {
 }
 
 function domainToken(routePath) {
-  const parts = routePath.split("/").filter((p) => p && p !== "api" && p !== "v1" && !p.startsWith(":"));
+  // Versiones de API (`v1`, `v3`, …) no son dominios: el token de dominio es el
+  // primer segmento con nombre, para poder cruzarlo con el contrato de tipo.
+  const parts = routePath
+    .split("/")
+    .filter((p) => p && p !== "api" && !/^v\d+$/.test(p) && !p.startsWith(":"));
   return parts[0] ?? "";
 }
 
