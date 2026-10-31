@@ -179,4 +179,55 @@ describe('IKES durable persistence contract', () => {
     expect(probe.healthy).toBe(false);
     expect(probe.reason).toContain('IKES_SUPABASE_HTTP_404');
   });
+
+  it('retries a failed hydration after the cooldown and recovers', async () => {
+    let attempts = 0;
+    const port: IKESEnginePersistencePort = {
+      async load() {
+        attempts += 1;
+        if (attempts === 1) throw new Error('This operation was aborted');
+        return { sources: [], claims: [] };
+      },
+      async saveSource() {},
+      async saveClaim() {},
+      async health() {
+        return { healthy: true, reason: 'ok' };
+      },
+    };
+    const engine = new IKESEngine(port);
+    await expect(engine.initPersistence()).rejects.toThrow('This operation was aborted');
+    const beforeCooldown = await engine.persistenceProbe({ retryCooldownMs: 60_000 });
+    expect(attempts).toBe(1);
+    expect(beforeCooldown.pending).toBe(false);
+    expect(beforeCooldown.healthy).toBe(false);
+    // A non-IKES provider error is sanitized, never echoed verbatim.
+    expect(beforeCooldown.reason).toContain('IKES_PERSISTENCE_HYDRATION_FAILED');
+    expect(beforeCooldown.reason).not.toContain('aborted');
+    const recovered = await engine.persistenceProbe({ retryCooldownMs: 0 });
+    expect(attempts).toBe(2);
+    expect(recovered.healthy).toBe(true);
+    expect(recovered.pending).toBe(false);
+  });
+
+  it('keeps reporting degraded when the retry also fails', async () => {
+    let attempts = 0;
+    const port: IKESEnginePersistencePort = {
+      async load() {
+        attempts += 1;
+        throw new Error('IKES_SUPABASE_HTTP_503');
+      },
+      async saveSource() {},
+      async saveClaim() {},
+      async health() {
+        return { healthy: true, reason: 'ok' };
+      },
+    };
+    const engine = new IKESEngine(port);
+    await expect(engine.initPersistence()).rejects.toThrow('IKES_SUPABASE_HTTP_503');
+    const probe = await engine.persistenceProbe({ retryCooldownMs: 0 });
+    expect(attempts).toBe(2);
+    expect(probe.pending).toBe(false);
+    expect(probe.healthy).toBe(false);
+    expect(probe.reason).toContain('IKES_SUPABASE_HTTP_503');
+  });
 });

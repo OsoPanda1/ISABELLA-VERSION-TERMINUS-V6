@@ -116,6 +116,8 @@ export interface IKESEnginePersistencePort {
 
 /** Default bound for a readiness probe waiting on startup hydration. */
 const DEFAULT_HYDRATION_PROBE_TIMEOUT_MS = 5_000;
+/** Minimum wait before a failed hydration is retried by the readiness probe. */
+const DEFAULT_HYDRATION_RETRY_COOLDOWN_MS = 30_000;
 
 /**
  * Resolves when `promise` settles or the timeout elapses, whichever comes
@@ -143,6 +145,7 @@ export class IKESEngine {
   /** In-flight hydration, shared so readiness can wait instead of flapping. */
   private hydrationPromise: Promise<void> | null = null;
   private hydrationFailure: string | null = null;
+  private lastHydrationAttemptAt = 0;
 
   constructor(persistence?: IKESEnginePersistencePort) {
     this.persistence = persistence;
@@ -153,6 +156,7 @@ export class IKESEngine {
     if (!this.persistence || this.persistenceInitialized) return;
     if (this.hydrationPromise) return this.hydrationPromise;
     const persistence = this.persistence;
+    this.lastHydrationAttemptAt = Date.now();
     this.hydrationPromise = (async () => {
       try {
         const snapshot = await persistence.load();
@@ -226,7 +230,9 @@ export class IKESEngine {
    * instead of publishing a transient `pending` that makes readiness flap.
    * `pending` means "still starting", never "silently healthy".
    */
-  async persistenceProbe(options: { hydrationTimeoutMs?: number } = {}): Promise<{
+  async persistenceProbe(
+    options: { hydrationTimeoutMs?: number; retryCooldownMs?: number } = {}
+  ): Promise<{
     healthy: boolean;
     backend: string;
     reason: string;
@@ -240,14 +246,36 @@ export class IKESEngine {
         pending: false,
       };
     }
+    const hydrationTimeoutMs = Math.max(
+      0,
+      options.hydrationTimeoutMs ?? DEFAULT_HYDRATION_PROBE_TIMEOUT_MS
+    );
     if (!this.persistenceInitialized && this.hydrationPromise) {
-      const timeoutMs = Math.max(
+      await waitForSettlement(this.hydrationPromise, hydrationTimeoutMs);
+    }
+    // Self-healing: a failed hydration leaves memory process-local until the
+    // next instance. The probe retries after a cooldown so a transient cold-start
+    // abort cannot degrade the dependency forever. The retry is bounded by the
+    // probe timeout and never throws out of the probe.
+    if (!this.persistenceInitialized && this.hydrationFailure) {
+      const cooldownMs = Math.max(
         0,
-        options.hydrationTimeoutMs ?? DEFAULT_HYDRATION_PROBE_TIMEOUT_MS
+        options.retryCooldownMs ?? DEFAULT_HYDRATION_RETRY_COOLDOWN_MS
       );
-      await waitForSettlement(this.hydrationPromise, timeoutMs);
+      if (Date.now() - this.lastHydrationAttemptAt >= cooldownMs) {
+        const retry = this.initPersistence().catch(() => undefined);
+        await waitForSettlement(retry, hydrationTimeoutMs);
+      }
     }
     if (!this.persistenceInitialized) {
+      if (this.hydrationPromise) {
+        return {
+          healthy: false,
+          backend: 'SUPABASE',
+          reason: 'IKES startup hydration is still in progress.',
+          pending: true,
+        };
+      }
       if (this.hydrationFailure) {
         const code = /^IKES_[A-Z0-9_]+$/u.test(this.hydrationFailure)
           ? this.hydrationFailure
