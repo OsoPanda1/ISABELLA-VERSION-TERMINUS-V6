@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
 
 /**
  * state: draft | engine-generated.
@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
  * futura omisión no deje una superficie abierta en producción, TODO registro en server.ts debe
  * cablear explícitamente una compuerta de autorización o declararse como superficie pública.
  */
-const server = readFileSync(new URL("../../src/server.ts", import.meta.url), "utf8");
+const server = readFileSync(new URL('../../src/server.ts', import.meta.url), 'utf8');
 
 function registerBlocks(source: string): { name: string; body: string }[] {
   const out: { name: string; body: string }[] = [];
@@ -18,23 +18,24 @@ function registerBlocks(source: string): { name: string; body: string }[] {
     let i = re.lastIndex;
     while (i < source.length && depth > 0) {
       const c = source[i];
-      if (c === "{") depth += 1;
-      else if (c === "}") depth -= 1;
+      if (c === '{') depth += 1;
+      else if (c === '}') depth -= 1;
       i += 1;
     }
-    out.push({ name: m[1] ?? "", body: source.slice(re.lastIndex, i) });
+    out.push({ name: m[1] ?? '', body: source.slice(re.lastIndex, i) });
   }
   return out;
 }
 
-describe("route group gate wiring", () => {
+describe('route group gate wiring', () => {
   const blocks = registerBlocks(server);
-  it("finds the registered route groups", () => {
+  it('finds the registered route groups', () => {
     expect(blocks.length).toBeGreaterThanOrEqual(15);
   });
-  it("every route group wires an explicit authorization gate or declares a public surface", () => {
+  it('every route group wires an explicit authorization gate or declares a public surface', () => {
     const AUTH_GATE = /\bauthorizeAdmin\b|\bauthorizeApiToken\b|\bisAdminAuthorized\b/;
-    const EXPLICIT_PUBLIC = /\bpublicSurface:\s*(?:"read-only-html-and-chat"|PLATFORM_PUBLIC_SURFACE)\b/;
+    const EXPLICIT_PUBLIC =
+      /\bpublicSurface:\s*(?:"read-only-html-and-chat"|PLATFORM_PUBLIC_SURFACE|SKILL_CATALOG_PUBLIC_SURFACE)\b/;
     const ungated = blocks
       .filter((b) => !AUTH_GATE.test(b.body) && !EXPLICIT_PUBLIC.test(b.body))
       .map((b) => b.name);

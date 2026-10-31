@@ -20,6 +20,13 @@ import { searchDomains } from './infra/vercel-domains';
 import { profitablePrice, profitGuard } from './economy/profit-guard';
 import { sovereignRag } from './inference/rag';
 import { boundedBudgetMs, DeadlineBudget, hedgedFirst } from './inference/deadline';
+import { createDefaultApiRateLimit, parseDefaultRateLimit } from './http/default-rate-limit';
+import {
+  correlationIdMiddleware,
+  failureCode,
+  respondWithFailure,
+  type FailureLogSink,
+} from './http/error-response';
 import { buildAsset, contentHash, serveAsset, type StaticAsset } from './http/static-assets';
 import express, { type Application, type NextFunction, type Request, type Response } from 'express';
 import {
@@ -215,7 +222,7 @@ import { registerPipelineRoutes } from './routes/pipeline';
 import { registerYunEventRoutes } from './routes/yun-events';
 import { registerEconomyRoutes } from './routes/economy';
 import { registerNativeEnginesRoutes } from './routes/native-engines';
-import { registerSkillCatalogRoutes } from './routes/skill-catalog';
+import { registerSkillCatalogRoutes, SKILL_CATALOG_PUBLIC_SURFACE } from './routes/skill-catalog';
 import { registerTreasuryRoutes } from './routes/treasury';
 import { registerOmegaRoutes } from './routes/omega';
 import { registerRevenueFabricRoutes } from './routes/revenue-fabric';
@@ -239,6 +246,9 @@ const latinoGenesis = new LatinoGenesis(SEED_LATAM);
 // Por privacidad, sólo se activa con opt-in explícito del operador:
 // ISABELLA_KEYLESS_FREE_PROVIDER=llm7,pollinations (o on/true/1 para el orden por defecto).
 app.disable('x-powered-by');
+// Identificador de correlación por request: es lo que permite atar un 500 del cliente a un
+// registro del servidor sin devolver el detalle interno en la respuesta.
+app.use(correlationIdMiddleware);
 // Hardening de cabeceras HTTP (fail-closed por defecto).
 app.use((req: Request, res: Response, next: NextFunction) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -1473,6 +1483,10 @@ const linguisticsLimiter = new FixedWindowRateLimiter(20, 60_000);
 // CPU por instancia, no de cortesía: 8 análisis/min por cliente es el techo razonable
 // en serverless antes de que el request entre en timeout.
 const tamvAudioLimiter = new FixedWindowRateLimiter(8, 60_000);
+// Evaluadores sin estado y sin escritura, pero cada solicitud recorre 12 etapas de gobernanza
+// o valida controles obligatorios: el costo es CPU, así que también llevan techo propio.
+const isaEvaluatorLimiter = new FixedWindowRateLimiter(10, 60_000);
+const opsDiagnosticLimiter = new FixedWindowRateLimiter(20, 60_000);
 // SCER · libro económico append-only (evidencia, no movimiento de fondos). En proceso;
 // la persistencia durable se delega al ledger BookPI en una iteración posterior.
 const economicLedger = new EconomicLedger();
@@ -1480,6 +1494,28 @@ const economicLedger = new EconomicLedger();
 // auditados en el mismo libro económico.
 const treasuryRuntime = new TreasuryRuntime(economicLedger);
 const affiliateLedger = new AffiliateLedger(economicLedger);
+
+const logRequestFailure: FailureLogSink = (entry) => {
+  console.error('[Genesis] request failure', {
+    correlationId: entry.correlationId,
+    status: entry.status,
+    code: entry.code,
+    detail: redactSecret(entry.cause instanceof Error ? entry.cause.message : String(entry.cause)),
+  });
+};
+
+// Red de seguridad: todo mutante bajo /api/ queda limitado aunque la ruta olvide su propio
+// limiter. Es un techo grueso y complementario, no un sustituto de los límites por ruta.
+const defaultMutatingApiLimiter = new FixedWindowRateLimiter(
+  parseDefaultRateLimit(process.env.API_DEFAULT_RATE_LIMIT_PER_MIN),
+  60_000
+);
+app.use(
+  createDefaultApiRateLimit({
+    limiter: defaultMutatingApiLimiter,
+    clientKey: (req: Request) => req.ip || 'unknown',
+  })
+);
 
 function enforceRateLimit(
   req: Request,
@@ -4526,9 +4562,7 @@ app.post('/api/v1/sanitization/scan', (req, res) => {
     });
     res.json({ success: true, sanitized: result });
   } catch (err) {
-    res
-      .status(400)
-      .json({ success: false, error: err instanceof Error ? err.message : String(err) });
+    respondWithFailure(res, 400, err, { log: logRequestFailure });
   }
 });
 
@@ -4662,12 +4696,12 @@ app.post('/api/v1/knowledge/admit', async (req, res) => {
       releaseBlockers: blockers,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'KNOWLEDGE_ADMISSION_FAILED';
+    const code = failureCode(err, 'KNOWLEDGE_ADMISSION_FAILED');
     const status =
-      message === 'IKES_PERSISTENCE_WRITE_FAILED' || message === 'IKES_PERSISTENCE_NOT_INITIALIZED'
+      code === 'IKES_PERSISTENCE_WRITE_FAILED' || code === 'IKES_PERSISTENCE_NOT_INITIALIZED'
         ? 503
         : 400;
-    res.status(status).json({ success: false, error: message });
+    respondWithFailure(res, status, err, { code, log: logRequestFailure });
   }
 });
 
@@ -4678,9 +4712,7 @@ app.post('/api/v1/governance/git', (req, res) => {
     const verdict = runtime.evaluateGit(req.body as Parameters<typeof runtime.evaluateGit>[0]);
     res.json({ success: true, evaluationOnly: true, executionPerformed: false, verdict });
   } catch (err) {
-    res
-      .status(400)
-      .json({ success: false, error: err instanceof Error ? err.message : String(err) });
+    respondWithFailure(res, 400, err, { log: logRequestFailure });
   }
 });
 
@@ -4701,9 +4733,7 @@ app.post('/api/v1/governance/quality-gates', (req, res) => {
     };
     res.status(202).json({ success: false, status: 'DECLARATIVE_ONLY', report });
   } catch (err) {
-    res
-      .status(400)
-      .json({ success: false, error: err instanceof Error ? err.message : String(err) });
+    respondWithFailure(res, 400, err, { log: logRequestFailure });
   }
 });
 
@@ -4723,9 +4753,7 @@ app.post('/api/v1/governance/deployment', (req, res) => {
     };
     res.status(202).json({ success: false, status: 'DECLARATIVE_ONLY', assessment });
   } catch (err) {
-    res
-      .status(400)
-      .json({ success: false, error: err instanceof Error ? err.message : String(err) });
+    respondWithFailure(res, 400, err, { log: logRequestFailure });
   }
 });
 
@@ -4758,9 +4786,7 @@ app.post('/api/v1/governance/verify-agent-app', (req, res) => {
       report,
     });
   } catch (err) {
-    res
-      .status(400)
-      .json({ success: false, error: err instanceof Error ? err.message : String(err) });
+    respondWithFailure(res, 400, err, { log: logRequestFailure });
   }
 });
 
@@ -4771,9 +4797,7 @@ app.post('/api/v1/governance/lifecycle-plan', (req, res) => {
     const plan = runtime.planLifecycle(req.body as Parameters<typeof runtime.planLifecycle>[0]);
     res.json({ success: true, status: 'PROPOSAL_ONLY', executionPerformed: false, plan });
   } catch (err) {
-    res
-      .status(400)
-      .json({ success: false, error: err instanceof Error ? err.message : String(err) });
+    respondWithFailure(res, 400, err, { log: logRequestFailure });
   }
 });
 
@@ -4804,9 +4828,7 @@ app.post('/api/v1/diff/observe', (req, res) => {
       metadataHash: snapshotMetadataHash(result),
     });
   } catch (err) {
-    res
-      .status(400)
-      .json({ success: false, error: err instanceof Error ? err.message : String(err) });
+    respondWithFailure(res, 400, err, { log: logRequestFailure });
   }
 });
 
@@ -4823,9 +4845,7 @@ app.post('/api/v1/sanitization/harden', (req, res) => {
     const result = runtime.harden(content);
     res.json({ success: !result.quarantineRequired, hardening: result });
   } catch (err) {
-    res
-      .status(400)
-      .json({ success: false, error: err instanceof Error ? err.message : String(err) });
+    respondWithFailure(res, 400, err, { log: logRequestFailure });
   }
 });
 
@@ -4840,9 +4860,7 @@ app.post('/api/v1/security/triangulate', (req, res) => {
     const hmacKey = typeof req.body?.hmacKey === 'string' ? req.body.hmacKey : undefined;
     res.json({ success: true, digest: runtime.triangulate(content, hmacKey) });
   } catch (err) {
-    res
-      .status(400)
-      .json({ success: false, error: err instanceof Error ? err.message : String(err) });
+    respondWithFailure(res, 400, err, { log: logRequestFailure });
   }
 });
 
@@ -4938,6 +4956,7 @@ async function currentOpsState() {
 // Production readiness calculator. Caller-supplied dependencies are diagnostic input,
 // not an authoritative statement about this running deployment.
 app.post('/api/v1/ops/readiness', (req, res) => {
+  if (!enforceRateLimit(req, res, opsDiagnosticLimiter, 'ops-readiness')) return;
   try {
     const dependencies = Array.isArray(req.body?.dependencies) ? req.body.dependencies : [];
     const readiness = runtime.readiness(dependencies);
@@ -4945,9 +4964,10 @@ app.post('/api/v1/ops/readiness', (req, res) => {
       .status(readiness.ready ? 200 : 503)
       .json({ success: readiness.ready, readiness, evidence: 'caller-supplied-diagnostic-input' });
   } catch (err) {
-    res
-      .status(400)
-      .json({ success: false, error: err instanceof Error ? err.message : String(err) });
+    respondWithFailure(res, 400, err, {
+      code: 'READINESS_EVALUATION_FAILED',
+      log: logRequestFailure,
+    });
   }
 });
 
@@ -5174,18 +5194,21 @@ app.get('/api/v1/ops/latency', (req, res) => {
 
 // ISA-API v40 pipeline evaluation (12 stages, fail-closed).
 app.post('/api/v1/isa/pipeline', (req, res) => {
+  if (!enforceRateLimit(req, res, isaEvaluatorLimiter, 'isa-pipeline')) return;
   try {
     const result = runtime.evaluateIsa(req.body ?? {});
     res.status(result.passed ? 200 : 403).json({ success: result.passed, result });
   } catch (err) {
-    res
-      .status(400)
-      .json({ success: false, error: err instanceof Error ? err.message : String(err) });
+    respondWithFailure(res, 400, err, {
+      code: 'ISA_PIPELINE_EVALUATION_FAILED',
+      log: logRequestFailure,
+    });
   }
 });
 
 // TAP v1.0 canonical act (build + validate with mandatory controls).
 app.post('/api/v1/isa/act', (req, res) => {
+  if (!enforceRateLimit(req, res, isaEvaluatorLimiter, 'isa-act')) return;
   try {
     const body = req.body ?? {};
     if (
@@ -5214,9 +5237,7 @@ app.post('/api/v1/isa/act', (req, res) => {
     const validation = runtime.validateAct(act);
     res.status(validation.valid ? 201 : 422).json({ success: validation.valid, act, validation });
   } catch (err) {
-    res
-      .status(400)
-      .json({ success: false, error: err instanceof Error ? err.message : String(err) });
+    respondWithFailure(res, 400, err, { log: logRequestFailure });
   }
 });
 
@@ -5289,9 +5310,7 @@ app.post('/api/v1/litle/attest', (req, res) => {
       profile: result.profile,
     });
   } catch (err) {
-    res
-      .status(400)
-      .json({ success: false, error: err instanceof Error ? err.message : String(err) });
+    respondWithFailure(res, 400, err, { log: logRequestFailure });
   }
 });
 
@@ -5557,9 +5576,9 @@ app.post('/api/v1/memory/verified', async (req, res) => {
     });
     res.status(201).json({ success: true, entry });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'VERIFIED_KNOWLEDGE_ADMISSION_FAILED',
+    respondWithFailure(res, 400, error, {
+      code: 'VERIFIED_KNOWLEDGE_ADMISSION_FAILED',
+      log: logRequestFailure,
     });
   }
 });
@@ -6384,6 +6403,7 @@ registerSkillCatalogRoutes({
   app,
   enforceRateLimit,
   rateLimiter: publicCognitionLimiter,
+  publicSurface: SKILL_CATALOG_PUBLIC_SURFACE,
 });
 
 // ── SCER Economy API v3 (state: draft | engine-generated) ─ núcleo económico aditivo:

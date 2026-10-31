@@ -343,7 +343,7 @@
     });
     html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
     html = html.replace(
-      /\[([^\]]{1,200})\]\(((?:https?:\/\/|\/)[^\s)]{1,600})\)/g,
+      /\[([^\]]{1,200})\]\(((?:https?:\/\/|\/(?![/\\]))[^\s)]{1,600})\)/g,
       (match, label, href) => {
         const external = href.startsWith('http');
         return `<a href="${href}"${external ? ' target="_blank" rel="noreferrer noopener"' : ''}>${label}</a>`;

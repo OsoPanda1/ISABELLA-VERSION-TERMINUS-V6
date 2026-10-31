@@ -6,6 +6,7 @@ import { capabilityRegistry } from '../../src/lib/lib/capability-registry';
 import {
   registerSkillCatalogRoutes,
   SKILL_CATALOG_DISCLOSURE,
+  SKILL_CATALOG_PUBLIC_SURFACE,
   SKILL_CATALOG_ROUTES_VERSION,
 } from '../../src/routes/skill-catalog';
 
@@ -28,6 +29,7 @@ function harness(allow = true) {
     app,
     enforceRateLimit: () => allow,
     rateLimiter: {} as FixedWindowRateLimiter,
+    publicSurface: SKILL_CATALOG_PUBLIC_SURFACE,
   });
   return { handlers };
 }
