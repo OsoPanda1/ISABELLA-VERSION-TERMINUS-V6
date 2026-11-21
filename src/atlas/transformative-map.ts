@@ -265,8 +265,16 @@ export function simulateTransformativeMap(input: TransformativeMapInput): Transf
       tension: weights > 0 ? weighted / weights : 0,
     };
   });
-  const sourcedEdges = input.hyperedges.filter((edge) => typeof edge.sourceRef === 'string' && SOURCE_REF.test(edge.sourceRef.trim())).length;
-  const sourcedAndLevelledEdges = input.hyperedges.filter((edge) => typeof edge.sourceRef === 'string' && SOURCE_REF.test(edge.sourceRef.trim()) && !!edge.evidenceLevel).length;
+  const activeEdges = input.hyperedges.filter((edge) => edge.disabled !== true);
+  const sourcedEdges = activeEdges.filter(
+    (edge) => typeof edge.sourceRef === 'string' && SOURCE_REF.test(edge.sourceRef.trim())
+  ).length;
+  const sourcedAndLevelledEdges = activeEdges.filter(
+    (edge) =>
+      typeof edge.sourceRef === 'string' &&
+      SOURCE_REF.test(edge.sourceRef.trim()) &&
+      !!edge.evidenceLevel
+  ).length;
   let sensitivity: TransformativeMapResult['sensitivity'];
   if (input.sensitivity) {
     const random = rng(20261101);
@@ -309,10 +317,10 @@ export function simulateTransformativeMap(input: TransformativeMapInput): Transf
     nodes,
     timeline,
     traceability: {
-      edges: input.hyperedges.length,
+      edges: activeEdges.length,
       sourcedEdges,
       sourcedAndLevelledEdges,
-      ratio: input.hyperedges.length ? sourcedAndLevelledEdges / input.hyperedges.length : 0,
+      ratio: activeEdges.length ? sourcedAndLevelledEdges / activeEdges.length : 0,
     },
     ...(sensitivity ? { sensitivity } : {}),
     digest: contentHash(canonicalInput),
