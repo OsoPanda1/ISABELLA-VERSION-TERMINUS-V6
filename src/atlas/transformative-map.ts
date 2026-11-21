@@ -90,7 +90,7 @@ const SCENARIOS = {
   B: { name: 'Transformación estructural', gain: 1, decay: 0.72, riskAmplification: 0.5 },
   C: { name: 'Mutación sistémica', gain: 1.3, decay: 0.85, riskAmplification: 1 },
 } as const;
-const DOMAIN_NAMES = ['Identidad', 'IA y cognición', 'Infraestructura', 'Narrativa y cultura', 'Economía', 'Gobernanza y evidencia'] as const;
+const DOMAIN_NAMES = ['IA y Cognición', 'Economía Soberana', 'Gobernanza', 'Clima y Biosfera', 'Salud y Vida', 'Seguridad'] as const;
 const SOURCE_REF = /^(?:https?:\/\/\S+|10\.\d{4,9}\/\S+)$/i;
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
