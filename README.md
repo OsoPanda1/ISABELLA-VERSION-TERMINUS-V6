@@ -178,3 +178,9 @@ Propietaria, todos los derechos reservados. Ver [`LICENSE`](LICENSE) y [`NOTICE.
 ---
 
 *Estado actualizado: 11 de noviembre de 2026. `engine-generated` — revisión humana pendiente.*
+
+## TAMV Atlas, Hyper Core y LITLE
+
+La consolidación de responsabilidades, procedencia y límites de autoridad de **Atlas**, **Hyper Core**, **LITLE** y la referencia externa **Little Trust Fabric** se documenta en [`docs/architecture/ATLAS-HYPERCORE-LITLE-INTEGRATION.md`](docs/architecture/ATLAS-HYPERCORE-LITLE-INTEGRATION.md). El catálogo tipado de módulos está en [`src/atlas/ecosystem-registry.ts`](src/atlas/ecosystem-registry.ts) y el inventario auditable de fuentes en [`docs/integration/ecosystem-modules.json`](docs/integration/ecosystem-modules.json).
+
+El catálogo no habilita ejecución externa ni certifica producción; el estado de cada módulo y las validaciones pendientes están documentados explícitamente.
