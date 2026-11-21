@@ -31,7 +31,7 @@ describe('TAMV Transformative Map HCU engine', () => {
     const first = simulateTransformativeMap(base);
     const reordered: TransformativeMapInput = {
       ...base,
-      atoms: base.atoms.map((atom) => ({ id: atom.id, name: atom.name, domain: atom.domain, impact: atom.impact, risk: atom.risk, evidence: atom.evidence })),
+      atoms: base.atoms.map((atom) => ({ evidence: atom.evidence, risk: atom.risk, impact: atom.impact, domain: atom.domain, name: atom.name, id: atom.id })),
     };
     expect(simulateTransformativeMap(reordered).digest).toBe(first.digest);
     expect(simulateTransformativeMap(base).timeline).toEqual(first.timeline);
