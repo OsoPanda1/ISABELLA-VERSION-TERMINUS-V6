@@ -47,8 +47,8 @@ const STACK_MODULES = [
     produces: ['candidate outputs', 'routing and prediction results', 'BookPI audit events where wired'],
     mayExecuteExternalActions: false,
     requiresGovernanceGate: true,
-  }),
-  Object.freeze({
+  },
+  {
     id: 'litle',
     canonicalName: 'LITLE Trust Fabric',
     status: 'experimental',
@@ -58,8 +58,8 @@ const STACK_MODULES = [
     produces: ['canonical LITLE ID', 'evidence root', 'epistemic profile', 'attestation and certificate'],
     mayExecuteExternalActions: false,
     requiresGovernanceGate: true,
-  }),
-  Object.freeze({
+  },
+  {
     id: 'little-trust-fabric',
     canonicalName: 'Little Trust Fabric (external reference)',
     status: 'reference-only',
