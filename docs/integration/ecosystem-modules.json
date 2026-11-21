@@ -179,7 +179,8 @@
         "scenario-comparison",
         "quarantine",
         "seeded-sensitivity-analysis",
-        "declared-provenance-validation"
+        "declared-provenance-validation",
+        "litle-structural-evidence-chain"
       ],
       "externalExecutionAuthority": false,
       "codeImported": false,
@@ -187,7 +188,14 @@
       "endpoint": "POST /api/v1/tamv/transformative-map/simulate",
       "uiRoute": "/tamv/transformative-map",
       "persistence": "none-request-scoped-computation",
-      "verificationLimit": "Source existence, scientific validity, authorship, peer review, signature and external anchoring are not verified by this module."
+      "verificationLimit": "Source existence, scientific validity, authorship, peer review, signature, persistence and external anchoring are not verified by this module.",
+      "outputs": [
+        "2026–2050 activation timeline",
+        "system tension index",
+        "SHA3-512 canonical input digest",
+        "LITLE structural evidence root (unattested)",
+        "optional 200-run sensitivity intervals"
+      ]
     }
   ]
 }
