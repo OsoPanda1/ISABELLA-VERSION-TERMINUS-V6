@@ -24,6 +24,10 @@ describe('TAMV Transformative Map HCU engine', () => {
     expect(result.nodes.find((node) => node.id === 'ia')?.activation).toBeGreaterThan(0);
     expect(result.digest).toMatch(/^[a-f0-9]{128}$/);
     expect(result.digestScope).toContain('not signature');
+    expect(result.litleEvidence.algorithm).toBe('SHA3-512');
+    expect(result.litleEvidence.rootHash).toMatch(/^[a-f0-9]{128}$/);
+    expect(result.litleEvidence.nodeCount).toBe(6);
+    expect(result.litleEvidence.scope).toContain('no source retrieval');
     expect(result.limitations).toContain('Activation is a relative model magnitude in [-1, 1], not a probability or physical measurement.');
   });
 
