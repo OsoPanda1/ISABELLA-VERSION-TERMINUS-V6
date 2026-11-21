@@ -25,8 +25,8 @@ export interface StackModuleDescriptor {
   readonly requiresGovernanceGate: true;
 }
 
-const STACK_MODULES: readonly StackModuleDescriptor[] = Object.freeze([
-  Object.freeze({
+const STACK_MODULES = [
+  {
     id: 'atlas',
     canonicalName: 'TAMV Atlas Trascendence',
     status: 'code-present-unverified',
@@ -36,8 +36,8 @@ const STACK_MODULES: readonly StackModuleDescriptor[] = Object.freeze([
     produces: ['document_uid', 'typed Atlas events', 'HCU graph records'],
     mayExecuteExternalActions: false,
     requiresGovernanceGate: true,
-  }),
-  Object.freeze({
+  },
+  {
     id: 'hypercore',
     canonicalName: 'Hyper Core / HyperCore',
     status: 'code-present-unverified',
@@ -69,8 +69,8 @@ const STACK_MODULES: readonly StackModuleDescriptor[] = Object.freeze([
     produces: ['architecture reference only'],
     mayExecuteExternalActions: false,
     requiresGovernanceGate: true,
-  }),
-] satisfies readonly StackModuleDescriptor[]);
+  },
+] as const satisfies readonly StackModuleDescriptor[];
 
 export function listTamvKnowledgeStackModules(): readonly StackModuleDescriptor[] {
   return STACK_MODULES;
