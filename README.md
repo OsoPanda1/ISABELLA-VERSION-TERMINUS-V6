@@ -184,3 +184,10 @@ Propietaria, todos los derechos reservados. Ver [`LICENSE`](LICENSE) y [`NOTICE.
 La consolidación de responsabilidades, procedencia y límites de autoridad de **Atlas**, **Hyper Core**, **LITLE** y la referencia externa **Little Trust Fabric** se documenta en [`docs/architecture/ATLAS-HYPERCORE-LITLE-INTEGRATION.md`](docs/architecture/ATLAS-HYPERCORE-LITLE-INTEGRATION.md). El catálogo tipado de módulos está en [`src/atlas/ecosystem-registry.ts`](src/atlas/ecosystem-registry.ts) y el inventario auditable de fuentes en [`docs/integration/ecosystem-modules.json`](docs/integration/ecosystem-modules.json).
 
 El catálogo no habilita ejecución externa ni certifica producción; el estado de cada módulo y las validaciones pendientes están documentados explícitamente.
+
+
+### Mapa Transformativo TAMV / HCU
+
+El motor clásico HCU está implementado en [`src/atlas/transformative-map.ts`](src/atlas/transformative-map.ts) y se registra en el catálogo Atlas. La interfaz de operación está disponible en `/tamv/transformative-map`; el endpoint de cálculo es `POST /api/v1/tamv/transformative-map/simulate`. Acepta átomos, hiperaristas, choques, cuarentena y escenarios A/B/C para el horizonte 2026–2050; la sensibilidad opcional ejecuta 200 corridas con semilla fija 20261101.
+
+El cálculo es request-scoped y no persiste datos, no publica y no emite certificados. El digest SHA3-512 cubre el input canónico y no equivale a firma, sello externo ni prueba científica. Los puntajes y parámetros no se consideran verificados por su sola inclusión en el modelo.
