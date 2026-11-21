@@ -52,4 +52,5 @@ En conflicto entre código y spec, **gana la spec** (§6 AGENTS.md); la divergen
 - Interfaz conectada al endpoint del runtime: `/tamv/transformative-map`.
 - API de cálculo sin persistencia ni efectos externos: `POST /api/v1/tamv/transformative-map/simulate`.
 - El HCU es un hipergrafo dirigido clásico con activación relativa en [-1, 1]. Puntajes, fuerzas y rezagos son declarados hasta su calibración; el digest no es firma ni anclaje externo.
+- El motor construye una cadena estructural LITLE SHA3-512 sobre los inputs declarados y el resultado. No recupera fuentes, no firma, no emite certificado y no persiste esa cadena.
 - Atlas identifica y organiza el expediente; LITLE aporta primitivas de hash/evidencia cuando se integren explícitamente; Hyper Core no recibe autoridad de ejecución; Genesis/CROWN conserva el gobierno de acciones.
