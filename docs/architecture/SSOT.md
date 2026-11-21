@@ -36,3 +36,11 @@ En conflicto entre código y spec, **gana la spec** (§6 AGENTS.md); la divergen
 - Los contratos de la Capa Genesis ([`../../openapi/`](../../openapi/), [`../../asyncapi/`](../../asyncapi/))
   son especificación, no endpoints en producción.
 - PQC: `BLOCKED_ENVIRONMENT`.
+
+
+## 5. Integración TAMV Atlas × Hyper Core × LITLE
+
+- Contrato de responsabilidades, hand-offs, fuentes y límites: [`ATLAS-HYPERCORE-LITLE-INTEGRATION.md`](ATLAS-HYPERCORE-LITLE-INTEGRATION.md).
+- Registro tipado de módulos: [`../../src/atlas/ecosystem-registry.ts`](../../src/atlas/ecosystem-registry.ts).
+- Registro de fuentes/procedencia: [`../integration/ecosystem-modules.json`](../integration/ecosystem-modules.json).
+- El registro es descriptivo; no sustituye CROWN, no autoriza efectos externos y no convierte código presente en capacidad verificada.
