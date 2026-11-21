@@ -9,6 +9,7 @@ describe('TAMV knowledge stack registry', () => {
   it('declares Atlas, Hyper Core, LITLE and the external Little Trust Fabric reference', () => {
     expect(listTamvKnowledgeStackModules().map((module) => module.id)).toEqual([
       'atlas',
+      'transformative-map',
       'hypercore',
       'litle',
       'little-trust-fabric',
