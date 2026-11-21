@@ -159,6 +159,35 @@
       ],
       "externalExecutionAuthority": false,
       "codeImported": false
+    },
+    {
+      "id": "transformative-map-hcu",
+      "canonicalName": "TAMV Transformative Map / HCU",
+      "status": "code-present-unverified",
+      "sourceRepository": "OsoPanda1/ISABELLA-VERSION-TERMINUS-V6",
+      "sourcePaths": [
+        "src/atlas/transformative-map.ts",
+        "src/ui/tamv-transformative-map.html",
+        "test/atlas/transformative-map.test.ts"
+      ],
+      "sourceArtifacts": [
+        "Mapa Transformativo TAMV.md",
+        "Mapa Transformativo TAMV.html"
+      ],
+      "responsibility": [
+        "classical-directed-hypergraph-simulation",
+        "scenario-comparison",
+        "quarantine",
+        "seeded-sensitivity-analysis",
+        "declared-provenance-validation"
+      ],
+      "externalExecutionAuthority": false,
+      "codeImported": false,
+      "adaptation": "Model and UI implementation adapted from the supplied source materials; no external runtime or unlicensed repository code is imported.",
+      "endpoint": "POST /api/v1/tamv/transformative-map/simulate",
+      "uiRoute": "/tamv/transformative-map",
+      "persistence": "none-request-scoped-computation",
+      "verificationLimit": "Source existence, scientific validity, authorship, peer review, signature and external anchoring are not verified by this module."
     }
   ]
 }
