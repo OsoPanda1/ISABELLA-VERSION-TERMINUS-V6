@@ -5,7 +5,7 @@
  * computing, telemetry, peer review, or a probability estimator. Parameters
  * and X/Y/Z scores are declared inputs until calibrated against evidence.
  */
-import { contentHash } from '../litle/evidence';
+import { buildEvidenceChain, contentHash, createEvidenceNode } from '../litle/evidence';
 
 export type HcuDomainIndex = 0 | 1 | 2 | 3 | 4 | 5;
 export type HcuScenario = 'A' | 'B' | 'C';
@@ -78,6 +78,7 @@ export interface TransformativeMapResult {
   readonly traceability: { readonly edges: number; readonly sourcedEdges: number; readonly sourcedAndLevelledEdges: number; readonly ratio: number };
   readonly sensitivity?: { readonly runs: 200; readonly seed: 20261101; readonly targetYear: number; readonly intervals: Readonly<Record<string, { readonly p10: number; readonly p50: number; readonly p90: number }>> };
   readonly digest: string;
+  readonly litleEvidence: { readonly algorithm: 'SHA3-512'; readonly rootHash: string; readonly nodeCount: number; readonly scope: 'structural chain over declared input; no source retrieval, attestation, signing or persistence' };
   readonly digestScope: 'SHA3-512 of canonical input; local integrity only, not signature or external anchor';
   readonly limitations: readonly string[];
 }
@@ -122,6 +123,7 @@ function validate(input: TransformativeMapInput): void {
     finiteRange(atom.risk, 0, 100, `atom_risk:${atom.id}`);
     finiteRange(atom.evidence, 0, 100, `atom_evidence:${atom.id}`);
     if (atom.tri !== undefined && (typeof atom.tri !== 'string' || atom.tri.length > 64)) fail(`atom_tri:${atom.id}`);
+    if (atom.note !== undefined && (typeof atom.note !== 'string' || atom.note.length > 4_000)) fail(`atom_note:${atom.id}`);
   }
   const validIds = ids;
   const edgeIds = new Set<string>();
@@ -308,6 +310,64 @@ export function simulateTransformativeMap(input: TransformativeMapInput): Transf
     targetYear,
     sensitivity: input.sensitivity === true,
   });
+  // Build an actual LITLE structural evidence chain over declared inputs and the computed result.
+  // This records provenance structure only; it neither fetches sources nor issues a certificate.
+  const evidenceNodes = [
+    createEvidenceNode({
+      id: 'hcu:input',
+      type: 'PROMPT',
+      content: canonicalInput,
+      metadata: { artifact: 'tamv-transformative-map-input', status: 'declared-unverified' },
+    }),
+    ...input.atoms.map((atom, index) =>
+      createEvidenceNode({
+        id: `hcu:atom:${index}`,
+        type: 'PROMPT',
+        content: canonical(atom),
+        parentIds: ['hcu:input'],
+        metadata: {
+          artifact: 'hcu-atom',
+          declaredEvidenceScore: String(atom.evidence),
+          sourceIdentity: atom.tri ?? 'not-declared',
+        },
+      })
+    ),
+    ...input.hyperedges.map((edge, index) =>
+      createEvidenceNode({
+        id: `hcu:edge:${index}`,
+        type: 'PROMPT',
+        content: canonical(edge),
+        parentIds: ['hcu:input'],
+        metadata: {
+          artifact: 'hcu-hyperedge',
+          sourceRef: edge.sourceRef ?? 'not-declared',
+          tqafLevel: edge.evidenceLevel ?? 'not-declared',
+          enabled: String(edge.disabled !== true),
+        },
+      })
+    ),
+    ...(input.shocks ?? []).map((shock, index) =>
+      createEvidenceNode({
+        id: `hcu:shock:${index}`,
+        type: 'PROMPT',
+        content: canonical(shock),
+        parentIds: ['hcu:input'],
+        metadata: { artifact: 'hcu-exogenous-shock', year: String(shock.year) },
+      })
+    ),
+  ];
+  const resultEvidenceParents = evidenceNodes
+    .filter((node) => node.id !== 'hcu:input')
+    .map((node) => node.id);
+  resultEvidenceParents.push('hcu:input');
+  const resultEvidenceNode = createEvidenceNode({
+    id: 'hcu:result',
+    type: 'MODEL',
+    content: canonical({ digest: contentHash(canonicalInput), targetYear, scenario: input.scenario, timeline }),
+    parentIds: resultEvidenceParents,
+    metadata: { artifact: 'hcu-simulation-result', verification: 'not-independent' },
+  });
+  const evidenceChain = buildEvidenceChain([...evidenceNodes, resultEvidenceNode]);
   return {
     schema: 'tamv.transformative-map.v1',
     model: 'HCU-classical-directed-hypergraph',
@@ -324,6 +384,12 @@ export function simulateTransformativeMap(input: TransformativeMapInput): Transf
     },
     ...(sensitivity ? { sensitivity } : {}),
     digest: contentHash(canonicalInput),
+    litleEvidence: {
+      algorithm: evidenceChain.algorithm,
+      rootHash: evidenceChain.rootHash,
+      nodeCount: evidenceChain.nodes.length,
+      scope: 'structural chain over declared input; no source retrieval, attestation, signing or persistence',
+    },
     digestScope: 'SHA3-512 of canonical input; local integrity only, not signature or external anchor',
     limitations: [
       'X/Y/Z-style scores are declarations supplied by the caller; this engine does not independently verify them.',
