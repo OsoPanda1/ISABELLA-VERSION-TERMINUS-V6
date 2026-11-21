@@ -66,3 +66,18 @@ The new `src/atlas/ecosystem-registry.ts` is a descriptive catalog for these bou
 This change has **not** been typechecked or executed in this environment. The tests are added as executable checks, not reported as passing. Before production claims, run `pnpm typecheck`, `pnpm test -- test/atlas/ecosystem-registry.test.ts`, the complete `pnpm test`, and the repository's required `pnpm validate` pipeline.
 
 Next engineering gates: verify actual Hyper Core → CROWN call paths; add end-to-end tests for Atlas event persistence and LITLE evidence tamper detection; validate secret/key handling and certificate semantics; define versioned adapters rather than cross-importing modules; and test retries, idempotency, authorization failures and controlled degradation against a disposable integration environment.
+
+
+## HCU / Mapa Transformativo TAMV — implementación de runtime
+
+El material de referencia `Mapa Transformativo TAMV.md` y `Mapa Transformativo TAMV.html` se ha traducido a un motor TypeScript testeable, una interfaz web y una API de cálculo dentro del runtime canónico. El modelo usa seis dominios (IA y Cognición, Economía Soberana, Gobernanza, Clima y Biosfera, Salud y Vida, Seguridad), átomos con puntajes declarados, hiperaristas con signo/fuerza/rezago, choques exógenos, cuarentena y escenarios A/B/C para 2026–2050.
+
+- Motor: `src/atlas/transformative-map.ts`; exportado por `src/atlas/index.ts`.
+- Interfaz: `src/ui/tamv-transformative-map.html`, servida en `/tamv/transformative-map`.
+- API: `POST /api/v1/tamv/transformative-map/simulate`; tiene rate limit dedicado, límites de cardinalidad/valores y no ejecuta efectos externos.
+- Sensibilidad: 200 corridas con semilla fija `20261101`; percentiles p10/p50/p90 del año seleccionado.
+- Evidencia: una hiperarista solo cuenta como trazable si declara una referencia con forma DOI/URL y un nivel N1/N2/N3. Esto es una validación sintáctica, no una comprobación de existencia, acceso o validez de la fuente.
+- Integridad: digest SHA3-512 del input canónico; no es firma digital, sello de tiempo confiable, anclaje externo ni certificación.
+- Persistencia: no implementada en esta ruta; la API devuelve `NONE_REQUEST_SCOPED_COMPUTATION`. La persistencia del expediente mediante Atlas y la atestación LITLE siguen siendo una etapa posterior y explícita.
+
+Los tests de motor cubren horizonte temporal, determinismo, cuarentena, trazabilidad declarada, sensibilidad y validación fail-closed. La existencia de tests no equivale a que hayan pasado: su estado debe confirmarse mediante CI o ejecución local.
