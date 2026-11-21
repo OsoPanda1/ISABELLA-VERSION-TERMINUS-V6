@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Mapa Transformativo TAMV · Isabella Genesis</title>
+<style>
+:root{color-scheme:light dark;--bg:#f5f4ef;--surface:#fff;--ink:#172331;--muted:#596777;--line:#d5d9df;--accent:#244e78;--ok:#226647;--warn:#8a5a00;--bad:#a12f2f;--mono:ui-monospace,SFMono-Regular,Consolas,monospace;--sans:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+@media(prefers-color-scheme:dark){:root{--bg:#0e141b;--surface:#151e28;--ink:#e7edf2;--muted:#a6b1bd;--line:#35414e;--accent:#8bb8e4;--ok:#7ac49b;--warn:#e0b45e;--bad:#ee8c84}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans)}a{color:var(--accent)}header,main,footer{max-width:1240px;margin:auto;padding:22px 18px}header{border-bottom:2px solid var(--accent)}.eyebrow,.mono{font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--muted)}h1,h2,h3,p{margin-top:0}h1{font-size:clamp(1.7rem,4vw,2.6rem);margin:.35rem 0}h2{font-size:1.3rem}h3{font-size:1rem}.lede{max-width:78ch;color:var(--muted)}.notice{padding:12px 14px;border-left:4px solid var(--warn);background:var(--surface);margin:16px 0}.layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,.8fr);gap:18px}.panel{background:var(--surface);border:1px solid var(--line);padding:16px;min-width:0}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{display:grid;gap:5px}.field span{font-size:13px;color:var(--muted)}textarea,select,input,button{font:inherit;color:var(--ink)}textarea,select,input{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:9px;width:100%;min-width:0}textarea{font:12px/1.45 var(--mono);min-height:175px;resize:vertical}.small textarea{min-height:96px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.btn{border:1px solid var(--line);background:var(--surface);padding:9px 13px;border-radius:4px;cursor:pointer}.btn.primary{background:var(--accent);color:var(--bg);font-weight:650}.btn:disabled{opacity:.55;cursor:wait}.status{min-height:2em;color:var(--muted);overflow-wrap:anywhere}.status.error{color:var(--bad)}.status.good{color:var(--ok)}.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.metric{border:1px solid var(--line);padding:10px}.metric b{display:block;font:600 1.25rem var(--mono)}.metric span{font-size:12px;color:var(--muted)}.chart{width:100%;height:auto;display:block;background:var(--bg);border:1px solid var(--line)}.node-list{display:grid;gap:7px}.node{border-bottom:1px solid var(--line);padding:8px 0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}.node small{display:block;color:var(--muted)}.digest{font:11px/1.5 var(--mono);overflow-wrap:anywhere;padding:10px;background:var(--bg);border:1px solid var(--line)}details{margin:12px 0}summary{cursor:pointer;font-weight:600}.footer-note{font-size:12px;color:var(--muted)}@media(max-width:850px){.layout{grid-template-columns:1fr}}@media(max-width:560px){.fields,.metrics{grid-template-columns:1fr}.panel{padding:12px}header,main,footer{padding-left:12px;padding-right:12px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">ISABELLA VILLASEÑOR AI · GENESIS / TERMINUS V6 · TAMV ATLAS TRASCENDENCE</div>
+  <h1>Mapa Transformativo TAMV</h1>
+  <p class="lede">Instrumento HCU para explorar escenarios sobre un hipergrafo dirigido, con procedencia declarada, cuarentena y simulación reproducible. Esta página se conecta al motor de Isabella; el cálculo es temporal y no persiste el expediente.</p>
+  <div class="notice"><b>Límite epistemológico:</b> X/Y/Z, fuerzas y rezagos son entradas declaradas, no mediciones verificadas. El digest detecta cambios en el input canónico; no es firma, sello externo, revisión por pares ni certificación científica.</div>
+</header>
+<main>
+<div class="layout">
+<section class="panel">
+<h2>Expediente de simulación</h2>
+<p class="footer-note">Los datos iniciales son demostrativos y editables. Las seis posiciones de dominio corresponden al prototipo TAMV: 0 IA y Cognición, 1 Economía Soberana, 2 Gobernanza, 3 Clima y Biosfera, 4 Salud y Vida, 5 Seguridad.</p>
+<div class="fields">
+<label class="field"><span>Escenario</span><select id="scenario"><option value="A">A · Expansión controlada</option><option value="B" selected>B · Transformación estructural</option><option value="C">C · Mutación sistémica</option></select></label>
+<label class="field"><span>Año de lectura (2026–2050)</span><input id="year" type="number" min="2026" max="2050" value="2032"></label>
+</div>
+<label class="field"><span>Átomos cognitivos · JSON</span><textarea id="atoms" spellcheck="false">[
+  {"id":"ia","name":"IA Generativa","domain":0,"impact":94,"risk":72,"evidence":70,"note":"Valor provisional del prototipo."},
+  {"id":"economia","name":"Economía Digital","domain":1,"impact":87,"risk":74,"evidence":60},
+  {"id":"gobernanza","name":"Gobernanza Global","domain":2,"impact":89,"risk":84,"evidence":65},
+  {"id":"clima","name":"Mitigación climática","domain":3,"impact":82,"risk":70,"evidence":45},
+  {"id":"salud","name":"Salud y Vida","domain":4,"impact":78,"risk":58,"evidence":40},
+  {"id":"seguridad","name":"Seguridad digital","domain":5,"impact":91,"risk":81,"evidence":55}
+]</textarea></label>
+<label class="field"><span>Hiperaristas dirigidas · JSON</span><textarea id="edges" spellcheck="false">[
+  {"id":"h1","label":"Transformación cognitiva-económica","sources":["ia","economia"],"targets":[{"id":"gobernanza","effect":1},{"id":"economia","effect":1}],"weight":0.35,"lag":2},
+  {"id":"h2","label":"Mitigación y resiliencia","sources":["clima","economia"],"targets":[{"id":"salud","effect":1},{"id":"clima","effect":1}],"weight":0.3,"lag":3},
+  {"id":"h3","label":"Confianza y seguridad","sources":["gobernanza","seguridad"],"targets":[{"id":"ia","effect":1},{"id":"seguridad","effect":1}],"weight":0.3,"lag":2}
+]</textarea></label>
+<div class="fields small">
+<label class="field"><span>Choques exógenos · JSON</span><textarea id="shocks" spellcheck="false">[{"nodeId":"ia","year":2026,"magnitude":1}]</textarea></label>
+<label class="field"><span>Cuarentena · IDs JSON</span><textarea id="quarantine" spellcheck="false">[]</textarea></label>
+</div>
+<label class="field"><span>Procedencia y TQAF</span><p class="footer-note">Para que una hiperarista cuente como trazable, añade en su objeto <code>sourceRef</code> con DOI o URL y <code>evidenceLevel</code> con N1, N2 o N3. El formato no acredita que la fuente exista o sea correcta.</p></label>
+<div class="actions"><button class="btn primary" id="simulate">Ejecutar simulación gobernada</button><button class="btn" id="export" disabled>Exportar resultado JSON</button><button class="btn" id="reset">Restaurar datos de ejemplo</button></div>
+<div id="status" class="status" role="status" aria-live="polite">Listo. La simulación solo calcula; no publica, no certifica y no persiste datos.</div>
+</section>
+<section class="panel">
+<h2>Resultado calculado</h2>
+<div class="metrics">
+<div class="metric"><b id="metric-year">—</b><span>Año de lectura</span></div>
+<div class="metric"><b id="metric-tension">—</b><span>Tensión sistémica relativa</span></div>
+<div class="metric"><b id="metric-trace">—</b><span>Aristas con fuente + nivel</span></div>
+</div>
+<h3 style="margin-top:18px">Activación por año</h3>
+<svg id="chart" class="chart" viewBox="0 0 720 250" role="img" aria-label="Gráfica de activación relativa de los átomos por año"><text x="20" y="30" fill="currentColor">Ejecuta una simulación para visualizar los escenarios.</text></svg>
+<h3 style="margin-top:18px">Nodos en el año seleccionado</h3>
+<div id="nodes" class="node-list"><p class="footer-note">Sin resultados aún.</p></div>
+<h3 style="margin-top:18px">Digest del expediente</h3>
+<div id="digest" class="digest">No calculado.</div>
+<p class="footer-note">Integridad local del input canónico mediante SHA3-512. No acredita autoría, verdad científica, marca de tiempo confiable ni anclaje externo.</p>
+</section>
+</div>
+<details><summary>Contrato de integración</summary>
+<p>Ruta de simulación: <code>POST /api/v1/tamv/transformative-map/simulate</code>. El motor valida límites, IDs únicos, referencias, pesos (0.05–1), rezagos (1–15), años (2026–2050) y magnitudes de choque (−1 a +1). La opción de sensibilidad ejecuta 200 iteraciones con semilla 20261101. El resultado no se almacena y no otorga autoridad de ejecución a Atlas, Hyper Core ni LITLE.</p>
+<p>Para conectar este resultado a un expediente duradero se necesita una iteración explícita con Atlas (documento/evento), LITLE (cadena de evidencia/atestación) y la política de Genesis/CROWN. Esta página no simula esa persistencia.</p>
+</details>
+</main>
+<footer><p class="footer-note">METAVERSO TAMV Online Network · Tecnología Avanzada Mexicana Versátil · Nodo Cero, Real del Monte, Hidalgo, México.</p></footer>
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const defaultAtoms=$('atoms').value,defaultEdges=$('edges').value,defaultShocks=$('shocks').value;
+let lastResult=null;
+function readJson(id){try{return JSON.parse($(id).value)}catch(e){throw new Error('JSON inválido en '+id+': '+e.message)}}
+function setStatus(message,kind){const node=$('status');node.textContent=message;node.className='status'+(kind?' '+kind:'')}
+function svg(tag,attrs){const n=document.createElementNS('http://www.w3.org/2000/svg',tag);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,String(v)));return n}
+function renderChart(result){
+ const chart=$('chart');chart.replaceChildren();const width=720,height=250,left=42,right=14,top=16,bottom=30,plotW=width-left-right,plotH=height-top-bottom;
+ [-1,-.5,0,.5,1].forEach(v=>{const y=top+(1-v)/2*plotH;chart.append(svg('line',{x1:left,y1:y,x2:width-right,y2:y,stroke:'currentColor','stroke-opacity':v===0?.3:.1}));const t=svg('text',{x:left-8,y:y+4,'text-anchor':'end','font-size':11,fill:'currentColor'});t.textContent=v.toFixed(1);chart.append(t)});
+ const atoms=result.nodes.filter(n=>n.kind==='atom').slice(0,8),colors=['#3274a1','#9a7418','#6a55a6','#2f7d58','#9a5280','#a5453d','#5b8b8b','#6d6d6d'];
+ atoms.forEach((atom,index)=>{const points=result.timeline.map((row,i)=>{const x=left+i/(result.timeline.length-1)*plotW,y=top+(1-row.activations[atom.id])/2*plotH;return (i?'L':'M')+x.toFixed(1)+' '+y.toFixed(1)}).join(' ');chart.append(svg('path',{d:points,fill:'none',stroke:colors[index%colors.length],'stroke-width':2}));});
+ [2026,2032,2040,2050].forEach(year=>{const x=left+(year-2026)/24*plotW;const t=svg('text',{x,y:height-8,'text-anchor':'middle','font-size':11,fill:'currentColor'});t.textContent=String(year);chart.append(t)});
+ const legend=svg('text',{x:left,y:top+10,'font-size':11,fill:'currentColor'});legend.textContent=atoms.map((a,i)=>a.name).join(' · ');chart.append(legend);
+}
+function render(result){
+ lastResult=result;$('export').disabled=false;$('metric-year').textContent=String(result.targetYear);
+ const row=result.timeline.find(r=>r.year===result.targetYear);$('metric-tension').textContent=row?row.tension.toFixed(3):'—';
+ $('metric-trace').textContent=result.traceability.sourcedAndLevelledEdges+'/'+result.traceability.edges;
+ $('digest').textContent=result.digest;renderChart(result);
+ const host=$('nodes');host.replaceChildren();
+ result.nodes.filter(n=>n.kind==='atom'||n.kind==='domain').forEach(n=>{const item=document.createElement('div');item.className='node';const left=document.createElement('div');const title=document.createElement('b');title.textContent=n.name;const sub=document.createElement('small');sub.textContent=n.id+' · '+(n.kind==='domain'?'dominio '+n.domain:'influencia '+n.impact.toFixed(0)+' · riesgo '+n.risk.toFixed(0)+' · evidencia declarada '+n.evidence.toFixed(0))+(n.quarantined?' · CUARENTENA':'');left.append(title,sub);const value=document.createElement('b');value.className='mono';value.textContent=n.activation.toFixed(3);item.append(left,value);host.append(item)});
+}
+$('simulate').addEventListener('click',async()=>{
+ const button=$('simulate');button.disabled=true;setStatus('Validando y calculando en Isabella Genesis…');
+ try{
+  const atoms=readJson('atoms'),edges=readJson('edges'),shocks=readJson('shocks'),quarantine=readJson('quarantine');
+  if(!Array.isArray(atoms)||!Array.isArray(edges)||!Array.isArray(shocks)||!Array.isArray(quarantine))throw new Error('Átomos, hiperaristas, choques y cuarentena deben ser arreglos JSON.');
+  const payload={atoms,hyperedges:edges,shocks,quarantine,scenario:$('scenario').value,targetYear:Number($('year').value),sensitivity:true};
+  const response=await fetch('/api/v1/tamv/transformative-map/simulate',{method:'POST',headers:{'content-type':'application/json',accept:'application/json'},body:JSON.stringify(payload)});
+  const body=await response.json();if(!response.ok||body.success!==true)throw new Error(body.error||('HTTP '+response.status));
+  render(body.result);setStatus('Simulación completada en el runtime. No se guardó ni se emitió certificado.','good');
+ }catch(error){setStatus(error instanceof Error?error.message:String(error),'error')}finally{button.disabled=false}
+});
+$('export').addEventListener('click',()=>{if(!lastResult)return;const blob=new Blob([JSON.stringify(lastResult,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='tamv-transformative-map-result.json';a.click();URL.revokeObjectURL(url)});
+$('reset').addEventListener('click',()=>{$('atoms').value=defaultAtoms;$('edges').value=defaultEdges;$('shocks').value=defaultShocks;$('quarantine').value='[]';$('scenario').value='B';$('year').value='2032';lastResult=null;$('export').disabled=true;$('metric-year').textContent='—';$('metric-tension').textContent='—';$('metric-trace').textContent='—';$('digest').textContent='No calculado.';$('nodes').innerHTML='<p class="footer-note">Sin resultados aún.</p>';setStatus('Datos de ejemplo restaurados.','')});
+})();
+</script>
+</body>
+</html>
