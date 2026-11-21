@@ -45,6 +45,15 @@ describe('TAMV Transformative Map HCU engine', () => {
     expect(simulateTransformativeMap(withoutLevel).traceability.ratio).toBe(0);
   });
 
+  it('excludes disabled hyperedges from the active traceability denominator', () => {
+    const result = simulateTransformativeMap({
+      ...base,
+      hyperedges: [{ ...base.hyperedges[0]!, disabled: true }],
+    });
+    expect(result.traceability.edges).toBe(0);
+    expect(result.traceability.ratio).toBe(0);
+  });
+
   it('quarantine stops outgoing propagation from a node while retaining its local shock', () => {
     const result = simulateTransformativeMap({ ...base, quarantine: ['ia'] });
     expect(result.nodes.find((node) => node.id === 'ia')?.quarantined).toBe(true);
