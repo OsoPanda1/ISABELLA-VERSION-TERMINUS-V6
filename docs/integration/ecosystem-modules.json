@@ -1,0 +1,201 @@
+{
+  "schemaVersion": "1.0.0",
+  "canonicalRuntime": "OsoPanda1/ISABELLA-VERSION-TERMINUS-V6",
+  "state": "draft",
+  "generatedAt": "2026-11-21",
+  "invariants": {
+    "capabilityAuthorityExecutionEvidenceLearningProductionAreDistinct": true,
+    "externalActionsRequireGovernance": true,
+    "sourceProvenanceRequired": true,
+    "unlicensedExternalCodeMustNotBeImported": true
+  },
+  "modules": [
+    {
+      "id": "atlas",
+      "canonicalName": "TAMV Atlas Trascendence",
+      "status": "code-present-unverified",
+      "sourceRepository": "OsoPanda1/ISABELLA-VERSION-TERMINUS-V6",
+      "sourcePaths": [
+        "src/atlas/documents.ts",
+        "src/atlas/events.ts",
+        "src/atlas/hcu-store.ts",
+        "src/atlas/persistence.ts"
+      ],
+      "responsibility": [
+        "canonical-document-identity",
+        "document-lifecycle",
+        "typed-events",
+        "knowledge-graph"
+      ],
+      "externalExecutionAuthority": false
+    },
+    {
+      "id": "hypercore",
+      "canonicalName": "Hyper Core / HyperCore",
+      "status": "code-present-unverified",
+      "sourceRepository": "OsoPanda1/ISABELLA-VERSION-TERMINUS-V6",
+      "sourcePaths": [
+        "src/hypercore/index.ts",
+        "src/hypercore/hypercore.ts",
+        "src/hypercore/context-compiler.ts",
+        "src/hypercore/adaptive-model-router.ts"
+      ],
+      "responsibility": [
+        "cognitive-processing",
+        "context-preparation",
+        "model-routing",
+        "prediction",
+        "optimization"
+      ],
+      "externalExecutionAuthority": false
+    },
+    {
+      "id": "litle",
+      "canonicalName": "LITLE Trust Fabric",
+      "status": "experimental",
+      "sourceRepository": "OsoPanda1/ISABELLA-VERSION-TERMINUS-V6",
+      "sourcePaths": [
+        "src/litle/id.ts",
+        "src/litle/evidence.ts",
+        "src/litle/epistemic.ts",
+        "src/litle/certificate.ts",
+        "src/litle/trust-fabric.ts"
+      ],
+      "responsibility": [
+        "work-identifiers",
+        "evidence-chains",
+        "epistemic-profiles",
+        "keyed-attestations"
+      ],
+      "externalExecutionAuthority": false
+    },
+    {
+      "id": "little-trust-fabric",
+      "canonicalName": "Little Trust Fabric",
+      "status": "reference-only",
+      "sourceRepository": "OsoPanda1/litle-trust-fabric-58c96208",
+      "licenseStatus": "not-defined-in-source-readme",
+      "sourcePaths": [
+        "README.md",
+        "package.json"
+      ],
+      "responsibility": [
+        "reference-trust-fabric-concepts",
+        "identity-and-policy-audit-primitives"
+      ],
+      "externalExecutionAuthority": false,
+      "codeImported": false
+    },
+    {
+      "id": "atlas-doctrine",
+      "canonicalName": "Atlas Doctrine v1",
+      "status": "reference-only",
+      "sourceRepository": "OsoPanda1/civilis-graph",
+      "sourcePaths": [
+        "docs/atlas-doctrine-v1.md"
+      ],
+      "responsibility": [
+        "security-doctrine",
+        "segmentation",
+        "telemetry",
+        "governance",
+        "controlled-degradation"
+      ],
+      "externalExecutionAuthority": false
+    },
+    {
+      "id": "tamv-atlas-digital-nexus",
+      "canonicalName": "TAMV Atlas draft",
+      "status": "reference-only",
+      "sourceRepository": "OsoPanda1/tamv-digital-nexus",
+      "sourcePaths": [
+        "docs/21_atlas_tamv.md"
+      ],
+      "sourceDocumentState": "under-construction",
+      "externalExecutionAuthority": false
+    },
+    {
+      "id": "hypercore-adapter-reference",
+      "canonicalName": "HyperCore adapter reference",
+      "status": "reference-only",
+      "sourceRepository": "OsoPanda1/isabella-ai-tina",
+      "sourcePaths": [
+        "src/lib/acceleration/hypercore-adapters.ts",
+        "docs/acceleration/HYPERCORE-IMPLEMENTATION-STATUS.md"
+      ],
+      "sourceStatus": "experimental",
+      "responsibility": [
+        "adapter-pattern-reference",
+        "governed-inference-pipeline"
+      ],
+      "externalExecutionAuthority": false,
+      "codeImported": false
+    },
+    {
+      "id": "atlas-spec-reference",
+      "canonicalName": "Atlas specification reference",
+      "status": "reference-only",
+      "sourceRepository": "OsoPanda1/mexican-ai-isabella",
+      "sourcePaths": [
+        "src/lib/atlas-spec.ts"
+      ],
+      "responsibility": [
+        "frozen-atlas-contract",
+        "node-zero-model"
+      ],
+      "externalExecutionAuthority": false,
+      "codeImported": false
+    },
+    {
+      "id": "atlas-ui-reference",
+      "canonicalName": "Atlas graph UI reference",
+      "status": "reference-only",
+      "sourceRepository": "OsoPanda1/tam-unifier-pro",
+      "sourcePaths": [
+        "src/pages/Atlas.tsx"
+      ],
+      "responsibility": [
+        "atlas-graph-user-interface"
+      ],
+      "externalExecutionAuthority": false,
+      "codeImported": false
+    },
+    {
+      "id": "transformative-map-hcu",
+      "canonicalName": "TAMV Transformative Map / HCU",
+      "status": "code-present-unverified",
+      "sourceRepository": "OsoPanda1/ISABELLA-VERSION-TERMINUS-V6",
+      "sourcePaths": [
+        "src/atlas/transformative-map.ts",
+        "src/ui/tamv-transformative-map.html",
+        "test/atlas/transformative-map.test.ts"
+      ],
+      "sourceArtifacts": [
+        "Mapa Transformativo TAMV.md",
+        "Mapa Transformativo TAMV.html"
+      ],
+      "responsibility": [
+        "classical-directed-hypergraph-simulation",
+        "scenario-comparison",
+        "quarantine",
+        "seeded-sensitivity-analysis",
+        "declared-provenance-validation",
+        "litle-structural-evidence-chain"
+      ],
+      "externalExecutionAuthority": false,
+      "codeImported": false,
+      "adaptation": "Model and UI implementation adapted from the supplied source materials; no external runtime or unlicensed repository code is imported.",
+      "endpoint": "POST /api/v1/tamv/transformative-map/simulate",
+      "uiRoute": "/tamv/transformative-map",
+      "persistence": "none-request-scoped-computation",
+      "verificationLimit": "Source existence, scientific validity, authorship, peer review, signature, persistence and external anchoring are not verified by this module.",
+      "outputs": [
+        "2026–2050 activation timeline",
+        "system tension index",
+        "SHA3-512 canonical input digest",
+        "LITLE structural evidence root (unattested)",
+        "optional 200-run sensitivity intervals"
+      ]
+    }
+  ]
+}

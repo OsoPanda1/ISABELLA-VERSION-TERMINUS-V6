@@ -36,3 +36,21 @@ En conflicto entre código y spec, **gana la spec** (§6 AGENTS.md); la divergen
 - Los contratos de la Capa Genesis ([`../../openapi/`](../../openapi/), [`../../asyncapi/`](../../asyncapi/))
   son especificación, no endpoints en producción.
 - PQC: `BLOCKED_ENVIRONMENT`.
+
+
+## 5. Integración TAMV Atlas × Hyper Core × LITLE
+
+- Contrato de responsabilidades, hand-offs, fuentes y límites: [`ATLAS-HYPERCORE-LITLE-INTEGRATION.md`](ATLAS-HYPERCORE-LITLE-INTEGRATION.md).
+- Registro tipado de módulos: [`../../src/atlas/ecosystem-registry.ts`](../../src/atlas/ecosystem-registry.ts).
+- Registro de fuentes/procedencia: [`../integration/ecosystem-modules.json`](../integration/ecosystem-modules.json).
+- El registro es descriptivo; no sustituye CROWN, no autoriza efectos externos y no convierte código presente en capacidad verificada.
+
+
+## 6. Mapa Transformativo TAMV / HCU
+
+- Motor determinista y validación de entradas: [`../../src/atlas/transformative-map.ts`](../../src/atlas/transformative-map.ts).
+- Interfaz conectada al endpoint del runtime: `/tamv/transformative-map`.
+- API de cálculo sin persistencia ni efectos externos: `POST /api/v1/tamv/transformative-map/simulate`.
+- El HCU es un hipergrafo dirigido clásico con activación relativa en [-1, 1]. Puntajes, fuerzas y rezagos son declarados hasta su calibración; el digest no es firma ni anclaje externo.
+- El motor construye una cadena estructural LITLE SHA3-512 sobre los inputs declarados y el resultado. No recupera fuentes, no firma, no emite certificado y no persiste esa cadena.
+- Atlas identifica y organiza el expediente; LITLE aporta primitivas de hash/evidencia cuando se integren explícitamente; Hyper Core no recibe autoridad de ejecución; Genesis/CROWN conserva el gobierno de acciones.

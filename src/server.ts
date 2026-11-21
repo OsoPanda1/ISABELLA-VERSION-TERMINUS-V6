@@ -90,6 +90,7 @@ import {
   verifyEvidenceChain,
   verifyCertificate,
 } from './litle';
+import { simulateTransformativeMap, type TransformativeMapInput } from './atlas/transformative-map';
 import { bookPiSecret } from './security/secrets';
 import { config } from './lib/lib/config';
 import { verifyBearerToken } from './security/api-token';
@@ -409,6 +410,7 @@ let chatPlusAsset: StaticAsset | null = null;
 let cognitionClientAsset: StaticAsset | null = null;
 let nexusJsAsset: StaticAsset | null = null;
 let universeMapAsset: StaticAsset | null = null;
+let transformativeMapAsset: StaticAsset | null = null;
 try {
   const rawHtml = fs.readFileSync(path.join(uiPath, 'index.html'), 'utf-8');
   const cinematicCss = fs.readFileSync(path.join(uiPath, 'cinematic.css'), 'utf-8');
@@ -439,6 +441,13 @@ try {
   universeMapAsset = buildAsset(universeMapJs, 'text/javascript; charset=utf-8');
 } catch {
   console.warn('[Genesis] Cinematic UI assets are unavailable at startup.');
+}
+// Isolated optional TAMV page loading: failure here must not disable the canonical Isabella UI.
+try {
+  const transformativeMapHtml = fs.readFileSync(path.join(uiPath, 'tamv-transformative-map.html'), 'utf-8');
+  transformativeMapAsset = buildAsset(transformativeMapHtml, 'text/html; charset=utf-8');
+} catch {
+  console.warn('[Genesis] TAMV Transformative Map UI is unavailable at startup.');
 }
 // ── Modo Terminus Blackout (state: draft | engine-generated) ────────────────────────────────
 // `KillSwitch` ya firmaba y verificaba órdenes, pero ninguna puerta del HTTP lo consultaba: un
@@ -509,6 +518,14 @@ app.get('/', (req, res) => {
     return;
   }
   serveAsset(req, res, htmlAsset, 'no-cache');
+});
+app.get('/tamv/transformative-map', (req, res) => {
+  if (transformativeMapAsset === null) {
+    res.status(404).type('html').send('<!doctype html><meta charset="utf-8"><title>Mapa TAMV no disponible</title><p>La interfaz del Mapa Transformativo TAMV no está disponible en este nodo.</p>');
+    return;
+  }
+  res.setHeader('Cache-Control', 'no-cache');
+  serveAsset(req, res, transformativeMapAsset, 'no-cache');
 });
 app.get('/styles/cinematic.css', (req, res) => {
   if (cssAsset === null) {
@@ -1501,6 +1518,8 @@ const federationLimiter = new FixedWindowRateLimiter(30, 60_000);
 app.use('/api/v1/cognition', createOptionalApiKeyAuthenticator(apiKeyStore));
 const publicProposalLimiter = new FixedWindowRateLimiter(10, 60_000);
 const publicScanLimiter = new FixedWindowRateLimiter(30, 60_000);
+// HCU sensitivity performs 200 deterministic runs; bound CPU per client and minute.
+const transformativeMapLimiter = new FixedWindowRateLimiter(6, 60_000);
 const publicEconomyLimiter = new FixedWindowRateLimiter(20, 60_000);
 const publicOmegaLimiter = new FixedWindowRateLimiter(20, 60_000);
 const linguisticsLimiter = new FixedWindowRateLimiter(20, 60_000);
@@ -2124,6 +2143,25 @@ app.get('/api/v1/healthz', (_req, res) => {
     evidence: report.evidence,
     checkedAt: report.readiness.checkedAt,
   });
+});
+
+app.post('/api/v1/tamv/transformative-map/simulate', (req, res) => {
+  if (!enforceRateLimit(req, res, transformativeMapLimiter, 'tamv-transformative-map-simulate')) return;
+  try {
+    const result = simulateTransformativeMap(req.body as TransformativeMapInput);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+      success: true,
+      persistence: 'NONE_REQUEST_SCOPED_COMPUTATION',
+      sourceVerification: 'NOT_PERFORMED',
+      signature: 'NOT_ISSUED',
+      result,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'TAMV_HCU_SIMULATION_FAILED';
+    const safeMessage = message.startsWith('TAMV_HCU_INVALID:') ? message : 'TAMV_HCU_SIMULATION_FAILED';
+    res.status(400).json({ success: false, error: safeMessage });
+  }
 });
 
 app.get('/api/v1/status', (_req, res) => {
