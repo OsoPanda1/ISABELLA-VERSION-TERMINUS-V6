@@ -9,7 +9,7 @@ export type StackModuleStatus =
   | 'experimental'
   | 'reference-only';
 
-export type StackModuleId = 'atlas' | 'hypercore' | 'litle' | 'little-trust-fabric';
+export type StackModuleId = 'atlas' | 'transformative-map' | 'hypercore' | 'litle' | 'little-trust-fabric';
 
 export interface StackModuleDescriptor {
   readonly id: StackModuleId;
@@ -34,6 +34,17 @@ const STACK_MODULES = [
     sourcePaths: ['src/atlas/documents.ts', 'src/atlas/events.ts', 'src/atlas/hcu-store.ts', 'src/atlas/persistence.ts'],
     consumes: ['canonical document metadata', 'federation identifiers', 'governed event payloads'],
     produces: ['document_uid', 'typed Atlas events', 'HCU graph records'],
+    mayExecuteExternalActions: false,
+    requiresGovernanceGate: true,
+  },
+  {
+    id: 'transformative-map',
+    canonicalName: 'TAMV Transformative Map / HCU',
+    status: 'code-present-unverified',
+    responsibility: 'Deterministic classical directed-hypergraph simulation, scenario comparison, quarantine and seeded sensitivity analysis.',
+    sourcePaths: ['src/atlas/transformative-map.ts', 'src/ui/tamv-transformative-map.html'],
+    consumes: ['declared atoms and X/Y/Z scores', 'directed hyperedges', 'source references and TQAF levels', 'exogenous shocks', 'quarantine set', 'scenario parameters'],
+    produces: ['2026–2050 activation timeline', 'system tension index', 'SHA3-512 input digest', 'optional 200-run sensitivity intervals'],
     mayExecuteExternalActions: false,
     requiresGovernanceGate: true,
   },
