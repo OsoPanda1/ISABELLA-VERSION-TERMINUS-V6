@@ -303,7 +303,7 @@ export function simulateTransformativeMap(input: TransformativeMapInput): Transf
   return {
     schema: 'tamv.transformative-map.v1',
     model: 'HCU-classical-directed-hypergraph',
-    yearRange: [START_YEAR, END_YEAR],
+    yearRange: [START_YEAR, END_YEAR] as const,
     scenario: { id: input.scenario, ...SCENARIOS[input.scenario] },
     targetYear,
     nodes,
