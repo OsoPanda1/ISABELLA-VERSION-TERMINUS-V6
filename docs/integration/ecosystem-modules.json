@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "1.0.0",
+  "canonicalRuntime": "OsoPanda1/ISABELLA-VERSION-TERMINUS-V6",
+  "state": "draft",
+  "generatedAt": "2026-11-21",
+  "invariants": {
+    "capabilityAuthorityExecutionEvidenceLearningProductionAreDistinct": true,
+    "externalActionsRequireGovernance": true,
+    "sourceProvenanceRequired": true,
+    "unlicensedExternalCodeMustNotBeImported": true
+  },
+  "modules": [
+    {
+      "id": "atlas",
+      "canonicalName": "TAMV Atlas Trascendence",
+      "status": "code-present-unverified",
+      "sourceRepository": "OsoPanda1/ISABELLA-VERSION-TERMINUS-V6",
+      "sourcePaths": ["src/atlas/documents.ts", "src/atlas/events.ts", "src/atlas/hcu-store.ts", "src/atlas/persistence.ts"],
+      "responsibility": ["canonical-document-identity", "document-lifecycle", "typed-events", "knowledge-graph"],
+      "externalExecutionAuthority": false
+    },
+    {
+      "id": "hypercore",
+      "canonicalName": "Hyper Core / HyperCore",
+      "status": "code-present-unverified",
+      "sourceRepository": "OsoPanda1/ISABELLA-VERSION-TERMINUS-V6",
+      "sourcePaths": ["src/hypercore/index.ts", "src/hypercore/hypercore.ts", "src/hypercore/context-compiler.ts", "src/hypercore/adaptive-model-router.ts"],
+      "responsibility": ["cognitive-processing", "context-preparation", "model-routing", "prediction", "optimization"],
+      "externalExecutionAuthority": false
+    },
+    {
+      "id": "litle",
+      "canonicalName": "LITLE Trust Fabric",
+      "status": "experimental",
+      "sourceRepository": "OsoPanda1/ISABELLA-VERSION-TERMINUS-V6",
+      "sourcePaths": ["src/litle/id.ts", "src/litle/evidence.ts", "src/litle/epistemic.ts", "src/litle/certificate.ts", "src/litle/trust-fabric.ts"],
+      "responsibility": ["work-identifiers", "evidence-chains", "epistemic-profiles", "keyed-attestations"],
+      "externalExecutionAuthority": false
+    },
+    {
+      "id": "little-trust-fabric",
+      "canonicalName": "Little Trust Fabric",
+      "status": "reference-only",
+      "sourceRepository": "OsoPanda1/litle-trust-fabric-58c96208",
+      "licenseStatus": "not-defined-in-source-readme",
+      "sourcePaths": ["README.md", "package.json"],
+      "responsibility": ["reference-trust-fabric-concepts", "identity-and-policy-audit-primitives"],
+      "externalExecutionAuthority": false,
+      "codeImported": false
+    },
+    {
+      "id": "atlas-doctrine",
+      "canonicalName": "Atlas Doctrine v1",
+      "status": "reference-only",
+      "sourceRepository": "OsoPanda1/civilis-graph",
+      "sourcePaths": ["docs/atlas-doctrine-v1.md"],
+      "responsibility": ["security-doctrine", "segmentation", "telemetry", "governance", "controlled-degradation"],
+      "externalExecutionAuthority": false
+    },
+    {
+      "id": "tamv-atlas-digital-nexus",
+      "canonicalName": "TAMV Atlas draft",
+      "status": "reference-only",
+      "sourceRepository": "OsoPanda1/tamv-digital-nexus",
+      "sourcePaths": ["docs/21_atlas_tamv.md"],
+      "sourceDocumentState": "under-construction",
+      "externalExecutionAuthority": false
+    }
+  ]
+}
